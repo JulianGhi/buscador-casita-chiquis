@@ -163,17 +163,39 @@ Av Juan B Alberdi 4600,Parque Avellaneda,105000,70,140,70,3,si,si,0,GOLDEN HAUS,
       state.loading = true;
       state.error = null;
       render();
-      try {
-        const corsProxy = 'https://corsproxy.io/?';
-        const response = await fetch(corsProxy + encodeURIComponent(url));
-        if (!response.ok) throw new Error(`HTTP ${response.status}`);
-        const text = await response.text();
-        state.rawData = text;
-        state.lastUpdate = new Date();
-      } catch (err) {
-        state.error = `Error cargando datos: ${err.message}`;
-        state.rawData = SAMPLE_CSV;
+
+      // Try multiple CORS proxies
+      const proxies = [
+        (u) => 'https://corsproxy.io/?' + encodeURIComponent(u),
+        (u) => 'https://api.allorigins.win/raw?url=' + encodeURIComponent(u),
+      ];
+
+      let success = false;
+      for (const makeUrl of proxies) {
+        try {
+          const proxyUrl = makeUrl(url);
+          console.log('Trying:', proxyUrl);
+          const response = await fetch(proxyUrl);
+          if (!response.ok) throw new Error(`HTTP ${response.status}`);
+          const text = await response.text();
+          if (text && text.includes('direccion')) {
+            state.rawData = text;
+            state.lastUpdate = new Date();
+            state.error = null;
+            success = true;
+            console.log('Success! Loaded', text.split('\n').length, 'lines');
+            break;
+          }
+        } catch (err) {
+          console.warn('Proxy failed:', err.message);
+        }
       }
+
+      if (!success) {
+        state.error = 'Error cargando datos. Probá recargar en unos segundos.';
+        if (!state.rawData) state.rawData = SAMPLE_CSV;
+      }
+
       state.loading = false;
       render();
     }
