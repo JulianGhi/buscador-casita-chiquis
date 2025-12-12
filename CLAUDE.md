@@ -116,6 +116,51 @@ Property:
 - **sqlalchemy**: ORM para SQLite
 - **typer + rich**: CLI bonito
 
+## Dashboard Web (docs/)
+
+Dashboard interactivo en GitHub Pages para visualizar y filtrar propiedades.
+
+### Estructura modular
+
+```
+docs/
+├── index.html          # Entry point buscador
+├── stats.html          # Página de estadísticas con gráfico
+├── css/styles.css      # Animaciones CSS
+└── js/
+    ├── config.js       # Configuración, defaults, state, localStorage
+    ├── utils.js        # Cálculos, parseCSV, badges, helpers
+    ├── api.js          # fetchData, fetchDolarBNA, auto-refresh
+    ├── components.js   # Todos los render* (header, table, cards, modal)
+    ├── app.js          # Event handlers, render(), init() del buscador
+    └── stats.js        # Lógica específica de stats (Chart.js)
+```
+
+### Funcionalidades del dashboard
+
+- **Vista tabla/cards** con filtros (status, barrio, activo, apto crédito)
+- **Score de candidato** (0 = no pasa filtros, >0 = candidato viable)
+- **Vista detallada** con:
+  - Slider de negociación de precio (0-15%)
+  - Slider de dólar estimado ($900-$1500)
+  - Desglose completo de costos (escribano, sellos, etc.)
+  - Características y amenities
+- **Página de stats** con gráfico precio vs m²
+- **Cotización dólar BNA** en tiempo real
+
+### Agregar propiedades (flujo completo)
+
+```bash
+source .venv/bin/activate
+python sheets/sync_sheet.py pull      # 1. Traer datos de Google Sheets
+# (agregar link en el JSON o en el Sheet)
+python sheets/sync_sheet.py scrape    # 2. Scrapear datos de los links
+python sheets/sync_sheet.py view      # 3. Preview cambios
+python sheets/sync_sheet.py push      # 4. Subir a Google Sheets
+```
+
+Ver `sheets/README.md` para documentación completa del sync.
+
 ## Para Continuar Desarrollo
 
 1. **Mejorar parsing de Zonaprop**: Los selectores CSS pueden cambiar
