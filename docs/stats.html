@@ -1,0 +1,582 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Stats - Casita Chiquis</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📊</text></svg>">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body class="bg-slate-100 min-h-screen">
+  <div id="root" class="p-4 md:p-6 max-w-6xl mx-auto">
+    <div class="mb-6">
+      <div class="flex items-center justify-between">
+        <div>
+          <h1 class="text-2xl font-bold text-slate-800">📊 Stats - Casita Chiquis</h1>
+          <p class="text-sm text-slate-500">Análisis de propiedades</p>
+        </div>
+        <a href="index.html" class="px-4 py-2 bg-slate-200 text-slate-700 rounded-lg hover:bg-slate-300 text-sm">← Volver</a>
+      </div>
+    </div>
+
+    <!-- Config ponderación -->
+    <div class="bg-white rounded-xl shadow-sm p-4 md:p-6 mb-6">
+      <div class="flex items-center justify-between mb-4">
+        <h2 class="text-lg font-semibold text-slate-700">⚖️ Ponderación de características</h2>
+        <div class="flex gap-2">
+          <button onclick="setChartMode('m2')" id="btnM2" class="px-3 py-1 text-sm rounded-lg bg-blue-500 text-white">Precio vs M²</button>
+          <button onclick="setChartMode('score')" id="btnScore" class="px-3 py-1 text-sm rounded-lg bg-slate-200 text-slate-700">Precio vs Score</button>
+        </div>
+      </div>
+      <div class="grid grid-cols-2 md:grid-cols-4 gap-4" id="weightSliders">
+        <!-- Filled by JS -->
+      </div>
+      <div id="scoreFormula" class="mt-4 p-3 bg-slate-50 rounded-lg text-xs text-slate-600 hidden">
+        <strong>Score</strong> = (m² × peso) + (terraza × peso) + (apto crédito × peso) + ...
+      </div>
+    </div>
+
+    <!-- Chart container -->
+    <div class="bg-white rounded-xl shadow-sm p-4 md:p-6 mb-6">
+      <h2 class="text-lg font-semibold text-slate-700 mb-4" id="chartTitle">Precio vs M² cubiertos</h2>
+      <div class="relative" style="height: 500px;">
+        <canvas id="scatterChart"></canvas>
+      </div>
+      <div class="mt-4 flex flex-wrap gap-4 text-sm text-slate-600">
+        <div class="flex items-center gap-2">
+          <span class="w-3 h-3 rounded-full bg-green-500"></span>
+          <span>Entra en presupuesto</span>
+        </div>
+        <div class="flex items-center gap-2">
+          <span class="w-3 h-3 rounded-full bg-red-500"></span>
+          <span>No entra</span>
+        </div>
+        <div class="flex items-center gap-2">
+          <span class="w-3 h-3 rounded-full bg-slate-300"></span>
+          <span>Sin precio/m²</span>
+        </div>
+      </div>
+      <p class="mt-2 text-xs text-slate-400" id="chartHint">💡 Propiedades abajo-derecha = más m² por menos precio = mejor valor</p>
+    </div>
+
+    <!-- Stats summary -->
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6" id="statsGrid">
+      <!-- Filled by JS -->
+    </div>
+
+    <!-- Table with top opportunities -->
+    <div class="bg-white rounded-xl shadow-sm p-4 md:p-6">
+      <h2 class="text-lg font-semibold text-slate-700 mb-4" id="topTableTitle">🏆 Mejores oportunidades (menor $/m²)</h2>
+      <div class="overflow-x-auto">
+        <table class="w-full text-sm" id="topTable">
+          <thead class="bg-slate-50">
+            <tr>
+              <th class="px-3 py-2 text-left">Dirección</th>
+              <th class="px-3 py-2 text-left">Barrio</th>
+              <th class="px-3 py-2 text-right">Precio</th>
+              <th class="px-3 py-2 text-right">M²</th>
+              <th class="px-3 py-2 text-right">$/m²</th>
+              <th class="px-3 py-2 text-center">vs Barrio</th>
+            </tr>
+          </thead>
+          <tbody id="topTableBody">
+            <!-- Filled by JS -->
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // Config (same as main page)
+    const DEFAULT_CONFIG = {
+      CREDITO_ARS: 126000000,
+      DOLAR_BASE: 1450,
+      PRESUPUESTO: 25000,
+      ESCRIBANO: 0.0242,
+      SELLOS_EXENTO: 140000,
+      SELLOS: 0.0175,
+      REGISTRALES: 0.004,
+      INMOB: 0.0484,
+      HIPOTECA: 0.01,
+      CERTIFICADOS: 300,
+    };
+
+    const DEFAULT_REF_M2 = {
+      "Flores": 1953, "Parque Chacabuco": 1951, "Liniers": 1857, "Monte Castro": 1854,
+      "Floresta": 1683, "Parque Avellaneda": 1750, "Villa Luro": 1785, "Vélez Sarsfield": 1663,
+      "Mataderos": 1629, "Paternal": 1897, "Caballito": 2357, "Villa Crespo": 2150,
+      "Villa del Parque": 2063, "Villa Devoto": 2348, "Boedo": 1876
+    };
+
+    function loadConfig() {
+      try {
+        const saved = localStorage.getItem('casita_config');
+        if (saved) return { ...DEFAULT_CONFIG, ...JSON.parse(saved) };
+        return { ...DEFAULT_CONFIG };
+      } catch { return { ...DEFAULT_CONFIG }; }
+    }
+
+    function loadRefM2() {
+      try {
+        const saved = localStorage.getItem('casita_ref_m2');
+        return saved ? JSON.parse(saved) : { ...DEFAULT_REF_M2 };
+      } catch { return { ...DEFAULT_REF_M2 }; }
+    }
+
+    const CONFIG = loadConfig();
+    const REF_M2 = loadRefM2();
+
+    function getCreditoUSD() {
+      return Math.round(CONFIG.CREDITO_ARS / CONFIG.DOLAR_BASE);
+    }
+
+    const API_KEY = 'AIzaSyClZvK5NbmLEtxi9tqf1fcKxRIKEUqYnu0';
+    const SHEET_ID = '16n92ghEe8Vr1tiLdqbccF3i97kiwhHin9OPWY-O50L4';
+
+    let chart = null;
+    let chartMode = 'm2'; // 'm2' or 'score'
+    let allProperties = [];
+
+    // Weight configuration
+    const DEFAULT_WEIGHTS = {
+      m2_cub: { label: 'M² cubiertos', weight: 5, type: 'numeric', multiplier: 10 },
+      m2_tot: { label: 'M² totales', weight: 3, type: 'numeric', multiplier: 5 },
+      terraza: { label: 'Terraza', weight: 5, type: 'boolean', points: 100 },
+      apto_credito: { label: 'Apto crédito', weight: 8, type: 'boolean', points: 100 },
+      luminosidad: { label: 'Luminosidad', weight: 4, type: 'scale', values: { 'excelente': 100, 'buena': 70, 'regular': 40, 'poca': 10 } },
+      estado: { label: 'Estado', weight: 5, type: 'scale', values: { 'estrenar': 100, 'excelente': 90, 'bueno': 70, 'regular': 40, 'malo': 10 } },
+      bajo_mercado: { label: 'Bajo mercado', weight: 6, type: 'custom' },
+      expensas_bajas: { label: 'Sin expensas', weight: 3, type: 'custom' },
+    };
+
+    let weights = { ...DEFAULT_WEIGHTS };
+
+    function loadWeights() {
+      try {
+        const saved = localStorage.getItem('casita_weights');
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          Object.keys(parsed).forEach(k => {
+            if (weights[k]) weights[k].weight = parsed[k];
+          });
+        }
+      } catch {}
+    }
+
+    function saveWeights() {
+      const toSave = {};
+      Object.keys(weights).forEach(k => { toSave[k] = weights[k].weight; });
+      localStorage.setItem('casita_weights', JSON.stringify(toSave));
+    }
+
+    function renderWeightSliders() {
+      const container = document.getElementById('weightSliders');
+      container.innerHTML = Object.entries(weights).map(([key, config]) => `
+        <div class="flex flex-col gap-1">
+          <div class="flex justify-between text-xs">
+            <span class="text-slate-600">${config.label}</span>
+            <span class="font-bold text-blue-600">${config.weight}</span>
+          </div>
+          <input type="range" min="0" max="10" value="${config.weight}"
+            onchange="updateWeight('${key}', this.value)"
+            oninput="updateWeight('${key}', this.value)"
+            class="w-full h-1.5 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-blue-500" />
+        </div>
+      `).join('');
+    }
+
+    function updateWeight(key, value) {
+      weights[key].weight = parseInt(value);
+      saveWeights();
+      renderWeightSliders();
+      if (chartMode === 'score') {
+        recalculateAndRender();
+      }
+    }
+
+    function calculateScore(p) {
+      let score = 0;
+
+      // M² cubiertos
+      if (p._m2 > 0) {
+        score += p._m2 * weights.m2_cub.weight * (weights.m2_cub.multiplier / 10);
+      }
+
+      // M² totales
+      const m2tot = parseFloat(p.m2_tot) || 0;
+      if (m2tot > 0) {
+        score += m2tot * weights.m2_tot.weight * (weights.m2_tot.multiplier / 10);
+      }
+
+      // Terraza
+      if (p.terraza?.toLowerCase() === 'si') {
+        score += weights.terraza.weight * (weights.terraza.points / 10);
+      }
+
+      // Apto crédito
+      if (p.apto_credito?.toLowerCase() === 'si') {
+        score += weights.apto_credito.weight * (weights.apto_credito.points / 10);
+      }
+
+      // Luminosidad
+      const lum = p.luminosidad?.toLowerCase();
+      if (lum && weights.luminosidad.values[lum]) {
+        score += weights.luminosidad.weight * (weights.luminosidad.values[lum] / 10);
+      }
+
+      // Estado
+      const estado = p.estado?.toLowerCase();
+      if (estado && weights.estado.values[estado]) {
+        score += weights.estado.weight * (weights.estado.values[estado] / 10);
+      }
+
+      // Bajo mercado (if _vsRef < -0.12)
+      if (p._vsRef !== null && p._vsRef < -0.12) {
+        score += weights.bajo_mercado.weight * 10;
+      }
+
+      // Sin expensas
+      const expensas = parseFloat(p.expensas) || 0;
+      if (expensas === 0) {
+        score += weights.expensas_bajas.weight * 10;
+      }
+
+      return Math.round(score);
+    }
+
+    function setChartMode(mode) {
+      chartMode = mode;
+      document.getElementById('btnM2').className = mode === 'm2'
+        ? 'px-3 py-1 text-sm rounded-lg bg-blue-500 text-white'
+        : 'px-3 py-1 text-sm rounded-lg bg-slate-200 text-slate-700 hover:bg-slate-300';
+      document.getElementById('btnScore').className = mode === 'score'
+        ? 'px-3 py-1 text-sm rounded-lg bg-blue-500 text-white'
+        : 'px-3 py-1 text-sm rounded-lg bg-slate-200 text-slate-700 hover:bg-slate-300';
+      document.getElementById('chartTitle').textContent = mode === 'm2'
+        ? 'Precio vs M² cubiertos'
+        : 'Precio vs Score ponderado';
+      document.getElementById('chartHint').textContent = mode === 'm2'
+        ? '💡 Propiedades abajo-derecha = más m² por menos precio = mejor valor'
+        : '💡 Propiedades abajo-derecha = mayor score por menos precio = mejor oportunidad';
+      document.getElementById('scoreFormula').classList.toggle('hidden', mode === 'm2');
+      document.getElementById('topTableTitle').textContent = mode === 'm2'
+        ? '🏆 Mejores oportunidades (menor $/m²)'
+        : '🏆 Mejores oportunidades (mayor score)';
+      recalculateAndRender();
+    }
+
+    function recalculateAndRender() {
+      if (allProperties.length > 0) {
+        renderChart(allProperties);
+        renderTopTable(allProperties);
+      }
+    }
+
+    async function fetchData() {
+      const API_URL = `https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}/values/A:V?key=${API_KEY}`;
+
+      try {
+        const response = await fetch(API_URL);
+        if (!response.ok) throw new Error('API error');
+        const data = await response.json();
+
+        if (!data.values || data.values.length < 2) throw new Error('No data');
+
+        const headers = data.values[0].map(h => h.toLowerCase().replace(/\s+/g, '_'));
+        const rows = data.values.slice(1)
+          .map((row, idx) => {
+            const obj = { _idx: idx };
+            headers.forEach((h, i) => { obj[h] = row[i] || ''; });
+            return obj;
+          })
+          .filter(row => row.direccion || row.barrio || row.link);
+
+        return rows.map(calculateProperty);
+      } catch (err) {
+        console.error('Error:', err);
+        return [];
+      }
+    }
+
+    function calculateProperty(p) {
+      const precio = parseFloat(p.precio) || 0;
+      const m2 = parseFloat(p.m2_cub) || 0;
+      const barrio = p.barrio;
+      const tieneInmob = p.inmobiliaria && p.inmobiliaria.trim() !== '';
+      const creditoUSD = getCreditoUSD();
+
+      const calc = {
+        ...p,
+        _precio: precio,
+        _m2: m2,
+        _preciom2: m2 > 0 ? Math.round(precio / m2) : 0,
+        _ref: REF_M2[barrio] || 0
+      };
+
+      calc._vsRef = (calc._preciom2 > 0 && calc._ref > 0)
+        ? (calc._preciom2 - calc._ref) / calc._ref
+        : null;
+      calc._tu10 = Math.max(precio - creditoUSD, precio * 0.1);
+      calc._escr = Math.round(precio * CONFIG.ESCRIBANO);
+      calc._sell = precio <= CONFIG.SELLOS_EXENTO ? 0 : Math.round(precio * CONFIG.SELLOS);
+      calc._reg = Math.round(precio * CONFIG.REGISTRALES);
+      calc._inmob = tieneInmob ? Math.round(precio * CONFIG.INMOB) : 0;
+      calc._hip = Math.round(precio * CONFIG.HIPOTECA);
+      calc._cert = CONFIG.CERTIFICADOS;
+      calc._total = calc._tu10 + calc._escr + calc._sell + calc._reg + calc._inmob + calc._hip + calc._cert;
+      calc._ok = calc._total <= CONFIG.PRESUPUESTO;
+
+      return calc;
+    }
+
+    function renderChart(properties) {
+      const ctx = document.getElementById('scatterChart').getContext('2d');
+
+      // Filter properties with price
+      const validProps = chartMode === 'm2'
+        ? properties.filter(p => p._precio > 0 && p._m2 > 0)
+        : properties.filter(p => p._precio > 0);
+
+      const data = validProps.map(p => {
+        const score = calculateScore(p);
+        return {
+          x: chartMode === 'm2' ? p._m2 : score,
+          y: p._precio,
+          label: p.direccion || 'Sin dirección',
+          barrio: p.barrio || 'Sin barrio',
+          preciom2: p._preciom2,
+          score: score,
+          ok: p._ok,
+          vsRef: p._vsRef
+        };
+      });
+
+      // Calculate trend line
+      const n = data.length;
+      if (n > 1) {
+        const sumX = data.reduce((a, b) => a + b.x, 0);
+        const sumY = data.reduce((a, b) => a + b.y, 0);
+        const sumXY = data.reduce((a, b) => a + b.x * b.y, 0);
+        const sumX2 = data.reduce((a, b) => a + b.x * b.x, 0);
+
+        const slope = (n * sumXY - sumX * sumY) / (n * sumX2 - sumX * sumX);
+        const intercept = (sumY - slope * sumX) / n;
+
+        const minX = Math.min(...data.map(d => d.x));
+        const maxX = Math.max(...data.map(d => d.x));
+
+        var trendData = [
+          { x: minX, y: slope * minX + intercept },
+          { x: maxX, y: slope * maxX + intercept }
+        ];
+      }
+
+      if (chart) chart.destroy();
+
+      chart = new Chart(ctx, {
+        type: 'scatter',
+        data: {
+          datasets: [
+            {
+              label: 'Propiedades',
+              data: data,
+              backgroundColor: data.map(d => d.ok ? 'rgba(34, 197, 94, 0.7)' : 'rgba(239, 68, 68, 0.7)'),
+              borderColor: data.map(d => d.ok ? 'rgb(22, 163, 74)' : 'rgb(220, 38, 38)'),
+              borderWidth: 2,
+              pointRadius: 8,
+              pointHoverRadius: 12,
+            },
+            {
+              label: 'Tendencia',
+              data: trendData || [],
+              type: 'line',
+              borderColor: 'rgba(100, 116, 139, 0.5)',
+              borderWidth: 2,
+              borderDash: [5, 5],
+              pointRadius: 0,
+              fill: false,
+            }
+          ]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: {
+              display: false
+            },
+            tooltip: {
+              callbacks: {
+                label: function(context) {
+                  const d = context.raw;
+                  const vsRef = d.vsRef !== null ? ` (${d.vsRef > 0 ? '+' : ''}${Math.round(d.vsRef * 100)}% vs barrio)` : '';
+                  if (chartMode === 'score') {
+                    return [
+                      d.label,
+                      d.barrio,
+                      `$${d.y.toLocaleString()}`,
+                      `Score: ${d.score} pts`,
+                      d.preciom2 > 0 ? `$${d.preciom2.toLocaleString()}/m²${vsRef}` : ''
+                    ].filter(Boolean);
+                  }
+                  return [
+                    d.label,
+                    d.barrio,
+                    `$${d.y.toLocaleString()} · ${d.x}m²`,
+                    `$${d.preciom2.toLocaleString()}/m²${vsRef}`
+                  ];
+                }
+              }
+            }
+          },
+          scales: {
+            x: {
+              title: {
+                display: true,
+                text: chartMode === 'm2' ? 'M² cubiertos' : 'Score ponderado (pts)',
+                font: { weight: 'bold' }
+              },
+              grid: {
+                color: 'rgba(0,0,0,0.05)'
+              }
+            },
+            y: {
+              title: {
+                display: true,
+                text: 'Precio (USD)',
+                font: { weight: 'bold' }
+              },
+              grid: {
+                color: 'rgba(0,0,0,0.05)'
+              },
+              ticks: {
+                callback: function(value) {
+                  return '$' + (value / 1000) + 'k';
+                }
+              }
+            }
+          }
+        }
+      });
+    }
+
+    function renderStats(properties) {
+      const valid = properties.filter(p => p._precio > 0);
+      const withM2 = valid.filter(p => p._m2 > 0);
+
+      const stats = {
+        total: properties.length,
+        conPrecio: valid.length,
+        entran: valid.filter(p => p._ok).length,
+        avgPrecio: valid.length > 0 ? Math.round(valid.reduce((a, b) => a + b._precio, 0) / valid.length) : 0,
+        avgM2: withM2.length > 0 ? Math.round(withM2.reduce((a, b) => a + b._m2, 0) / withM2.length) : 0,
+        avgPrecioM2: withM2.length > 0 ? Math.round(withM2.reduce((a, b) => a + b._preciom2, 0) / withM2.length) : 0,
+        minPrecio: valid.length > 0 ? Math.min(...valid.map(p => p._precio)) : 0,
+        maxPrecio: valid.length > 0 ? Math.max(...valid.map(p => p._precio)) : 0,
+      };
+
+      document.getElementById('statsGrid').innerHTML = `
+        <div class="bg-white rounded-xl p-4 shadow-sm">
+          <div class="text-2xl font-bold text-blue-600">${stats.total}</div>
+          <div class="text-xs text-slate-500">Total propiedades</div>
+        </div>
+        <div class="bg-white rounded-xl p-4 shadow-sm">
+          <div class="text-2xl font-bold text-green-600">${stats.entran}</div>
+          <div class="text-xs text-slate-500">Entran en presupuesto</div>
+        </div>
+        <div class="bg-white rounded-xl p-4 shadow-sm">
+          <div class="text-2xl font-bold text-purple-600">$${stats.avgPrecioM2.toLocaleString()}</div>
+          <div class="text-xs text-slate-500">$/m² promedio</div>
+        </div>
+        <div class="bg-white rounded-xl p-4 shadow-sm">
+          <div class="text-2xl font-bold text-slate-600">${stats.avgM2}m²</div>
+          <div class="text-xs text-slate-500">M² promedio</div>
+        </div>
+      `;
+    }
+
+    function renderTopTable(properties) {
+      // Different sorting based on mode
+      let sorted;
+      if (chartMode === 'score') {
+        // Sort by score descending (highest score first)
+        sorted = properties
+          .filter(p => p._precio > 0)
+          .map(p => ({ ...p, _score: calculateScore(p) }))
+          .sort((a, b) => b._score - a._score)
+          .slice(0, 10);
+      } else {
+        // Sort by $/m² ascending (best deals first)
+        sorted = properties
+          .filter(p => p._precio > 0 && p._m2 > 0)
+          .sort((a, b) => a._preciom2 - b._preciom2)
+          .slice(0, 10);
+      }
+
+      // Update table headers based on mode
+      const headers = chartMode === 'score'
+        ? `<th class="px-3 py-2 text-left">Dirección</th>
+           <th class="px-3 py-2 text-left">Barrio</th>
+           <th class="px-3 py-2 text-right">Precio</th>
+           <th class="px-3 py-2 text-right">M²</th>
+           <th class="px-3 py-2 text-right">Score</th>
+           <th class="px-3 py-2 text-center">Entra</th>`
+        : `<th class="px-3 py-2 text-left">Dirección</th>
+           <th class="px-3 py-2 text-left">Barrio</th>
+           <th class="px-3 py-2 text-right">Precio</th>
+           <th class="px-3 py-2 text-right">M²</th>
+           <th class="px-3 py-2 text-right">$/m²</th>
+           <th class="px-3 py-2 text-center">vs Barrio</th>`;
+
+      document.querySelector('#topTable thead tr').innerHTML = headers;
+
+      document.getElementById('topTableBody').innerHTML = sorted.map(p => {
+        if (chartMode === 'score') {
+          return `
+            <tr class="border-b border-slate-100 ${p._ok ? 'bg-green-50/50' : ''}">
+              <td class="px-3 py-2 font-medium">${p.direccion || '<span class="text-slate-400">Sin dirección</span>'}</td>
+              <td class="px-3 py-2 text-slate-600">${p.barrio || '-'}</td>
+              <td class="px-3 py-2 text-right font-mono">$${p._precio.toLocaleString()}</td>
+              <td class="px-3 py-2 text-right">${p._m2 || '-'}</td>
+              <td class="px-3 py-2 text-right font-mono font-bold text-purple-600">${p._score} pts</td>
+              <td class="px-3 py-2 text-center">${p._ok ? '<span class="text-green-600">✓</span>' : '<span class="text-red-600">✗</span>'}</td>
+            </tr>
+          `;
+        }
+
+        const vsRef = p._vsRef !== null
+          ? `<span class="${p._vsRef < -0.12 ? 'text-green-600' : p._vsRef > 0.12 ? 'text-red-600' : 'text-yellow-600'}">${p._vsRef > 0 ? '+' : ''}${Math.round(p._vsRef * 100)}%</span>`
+          : '<span class="text-slate-400">-</span>';
+
+        return `
+          <tr class="border-b border-slate-100 ${p._ok ? 'bg-green-50/50' : ''}">
+            <td class="px-3 py-2 font-medium">${p.direccion || '<span class="text-slate-400">Sin dirección</span>'}</td>
+            <td class="px-3 py-2 text-slate-600">${p.barrio || '-'}</td>
+            <td class="px-3 py-2 text-right font-mono">$${p._precio.toLocaleString()}</td>
+            <td class="px-3 py-2 text-right">${p._m2}</td>
+            <td class="px-3 py-2 text-right font-mono font-bold">$${p._preciom2.toLocaleString()}</td>
+            <td class="px-3 py-2 text-center">${vsRef}</td>
+          </tr>
+        `;
+      }).join('');
+    }
+
+    // Initialize
+    async function init() {
+      loadWeights();
+      renderWeightSliders();
+
+      const properties = await fetchData();
+      allProperties = properties; // Store for recalculation when weights change
+
+      renderChart(properties);
+      renderStats(properties);
+      renderTopTable(properties);
+    }
+
+    init();
+  </script>
+</body>
+</html>
