@@ -475,10 +475,10 @@ Av Juan B Alberdi 4600,Parque Avellaneda,105000,70,140,70,3,si,si,0,GOLDEN HAUS,
     function renderHelpPanel() {
       const sheetUrl = 'https://docs.google.com/spreadsheets/d/16n92ghEe8Vr1tiLdqbccF3i97kiwhHin9OPWY-O50L4';
       return `
-        <div class="bg-white rounded-xl p-4 shadow-sm mb-4 border border-purple-200">
+        <div>
           <div class="flex items-center justify-between mb-3">
-            <h3 class="font-medium text-purple-700">Como usar</h3>
-            <button onclick="state.showHelp=false;render()" class="text-slate-400 hover:text-slate-600">&times;</button>
+            <h3 class="font-medium text-purple-700">❓ Cómo usar</h3>
+            <button onclick="state.showHelp=false;render()" class="text-slate-400 hover:text-slate-600 text-xl">&times;</button>
           </div>
 
           <div class="space-y-4 text-sm text-slate-600">
@@ -537,9 +537,9 @@ Av Juan B Alberdi 4600,Parque Avellaneda,105000,70,140,70,3,si,si,0,GOLDEN HAUS,
         : 'px-3 py-1.5 text-sm text-slate-500 hover:text-slate-700 cursor-pointer';
 
       return `
-        <div class="bg-white rounded-xl p-4 shadow-sm mb-4 border border-slate-200">
+        <div>
           <div class="flex items-center justify-between mb-3">
-            <h3 class="font-medium text-slate-700">Configuración</h3>
+            <h3 class="font-medium text-slate-700">⚙️ Configuración</h3>
             <button onclick="resetConfig()" class="text-xs text-red-500 hover:text-red-700">Resetear todo</button>
           </div>
 
@@ -669,14 +669,15 @@ Av Juan B Alberdi 4600,Parque Avellaneda,105000,70,140,70,3,si,si,0,GOLDEN HAUS,
               </div>
             </div>
           </div>
+
+          <!-- Config/Help panels inside header -->
+          ${state.showConfig ? `<div class="border-t border-slate-200 bg-slate-50"><div class="max-w-7xl mx-auto px-4 py-3">${renderConfigPanel()}</div></div>` : ''}
+          ${state.showHelp ? `<div class="border-t border-slate-200 bg-purple-50"><div class="max-w-7xl mx-auto px-4 py-3">${renderHelpPanel()}</div></div>` : ''}
         </header>
 
         <!-- Main Content -->
         <div class="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 p-3 md:p-6 pt-28 md:pt-24">
           <div class="max-w-7xl mx-auto">
-            ${state.showConfig ? renderConfigPanel() : ''}
-
-            ${state.showHelp ? renderHelpPanel() : ''}
 
             ${state.error ? `<div class="bg-red-50 border border-red-200 text-red-700 px-4 py-2 rounded-lg mb-4 text-sm">${escapeHtml(state.error)}</div>` : ''}
 
