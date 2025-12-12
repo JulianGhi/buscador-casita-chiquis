@@ -26,6 +26,7 @@
       INMOB: 0.0484,
       HIPOTECA: 0.01,
       CERTIFICADOS: 300,
+      AUTO_REFRESH: 60,  // segundos, 0 = desactivado
     };
 
     const DEFAULT_REF_M2 = {
@@ -82,8 +83,39 @@
       sortBy: 'precio',
       sortDir: 'asc',
       showConfig: false,
-      configTab: 'general'
+      configTab: 'general',
+      autoRefreshEnabled: CONFIG.AUTO_REFRESH > 0,
+      nextRefresh: null
     };
+
+    let autoRefreshInterval = null;
+
+    function startAutoRefresh() {
+      stopAutoRefresh();
+      if (CONFIG.AUTO_REFRESH > 0 && state.manualUrl) {
+        state.autoRefreshEnabled = true;
+        autoRefreshInterval = setInterval(() => {
+          fetchData(state.manualUrl);
+        }, CONFIG.AUTO_REFRESH * 1000);
+      }
+    }
+
+    function stopAutoRefresh() {
+      if (autoRefreshInterval) {
+        clearInterval(autoRefreshInterval);
+        autoRefreshInterval = null;
+      }
+      state.autoRefreshEnabled = false;
+    }
+
+    function toggleAutoRefresh() {
+      if (state.autoRefreshEnabled) {
+        stopAutoRefresh();
+      } else {
+        startAutoRefresh();
+      }
+      render();
+    }
 
     function parseCSV(text) {
       const lines = text.trim().split('\n');
@@ -287,7 +319,7 @@
             </div>
 
             <!-- Crédito y Presupuesto -->
-            <div class="grid grid-cols-2 gap-4">
+            <div class="grid grid-cols-2 md:grid-cols-3 gap-4">
               <div>
                 <label class="block text-xs text-slate-500 mb-1">Monto crédito hipotecario (USD)</label>
                 <input type="number" value="${CONFIG.CREDITO}" onchange="updateConfig('CREDITO', parseInt(this.value))" class="w-full px-3 py-2 border rounded-lg text-sm" />
@@ -295,6 +327,10 @@
               <div>
                 <label class="block text-xs text-slate-500 mb-1">Presupuesto gastos (USD)</label>
                 <input type="number" value="${CONFIG.PRESUPUESTO}" onchange="updateConfig('PRESUPUESTO', parseInt(this.value))" class="w-full px-3 py-2 border rounded-lg text-sm" />
+              </div>
+              <div>
+                <label class="block text-xs text-slate-500 mb-1">Auto-refresh (seg, 0=off)</label>
+                <input type="number" value="${CONFIG.AUTO_REFRESH}" onchange="updateConfig('AUTO_REFRESH', parseInt(this.value)); stopAutoRefresh();" class="w-full px-3 py-2 border rounded-lg text-sm" />
               </div>
             </div>
           ` : ''}
@@ -373,6 +409,7 @@
               <div class="flex items-center gap-2">
                 ${state.lastUpdate ? `<span class="text-xs text-slate-400">${state.lastUpdate.toLocaleTimeString()}</span>` : ''}
                 <button onclick="fetchData(state.manualUrl)" class="px-3 py-1.5 bg-blue-500 text-white text-sm rounded-lg hover:bg-blue-600 disabled:opacity-50" ${state.loading ? 'disabled' : ''}>${state.loading ? '...' : '↻'}</button>
+                <button onclick="toggleAutoRefresh()" class="px-3 py-1.5 ${state.autoRefreshEnabled ? 'bg-green-500 text-white' : 'bg-slate-200 text-slate-700'} text-sm rounded-lg hover:opacity-80" title="Auto-refresh cada ${CONFIG.AUTO_REFRESH}s">${state.autoRefreshEnabled ? '⏸' : '▶'}</button>
                 <button onclick="state.showConfig=!state.showConfig;render()" class="px-3 py-1.5 ${state.showConfig ? 'bg-blue-500 text-white' : 'bg-slate-200 text-slate-700'} text-sm rounded-lg hover:opacity-80">⚙️</button>
               </div>
             </div>
