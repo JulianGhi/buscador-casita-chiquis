@@ -102,7 +102,8 @@ Av Juan B Alberdi 4600,Parque Avellaneda,105000,70,140,70,3,si,si,0,GOLDEN HAUS,
       configTab: 'general',
       autoRefreshEnabled: CONFIG.AUTO_REFRESH > 0,
       selectedProperty: null,
-      viewMode: 'auto'
+      viewMode: 'auto',
+      negotiationPct: 0
     };
 
     let autoRefreshInterval = null;
@@ -326,11 +327,18 @@ Av Juan B Alberdi 4600,Parque Avellaneda,105000,70,140,70,3,si,si,0,GOLDEN HAUS,
 
     function showDetail(idx) {
       state.selectedProperty = idx;
+      state.negotiationPct = 0;
       render();
     }
 
     function closeDetail() {
       state.selectedProperty = null;
+      state.negotiationPct = 0;
+      render();
+    }
+
+    function updateNegotiation(pct) {
+      state.negotiationPct = parseFloat(pct);
       render();
     }
 
@@ -383,14 +391,29 @@ Av Juan B Alberdi 4600,Parque Avellaneda,105000,70,140,70,3,si,si,0,GOLDEN HAUS,
 
     function renderDetailModal(p) {
       if (!p) return '';
+
+      // Calcular valores negociados
+      const negPct = state.negotiationPct / 100;
+      const precioNeg = Math.round(p._precio * (1 - negPct));
+      const tu10Neg = Math.max(precioNeg - CONFIG.CREDITO, precioNeg * 0.1);
+      const escrNeg = Math.round(precioNeg * CONFIG.ESCRIBANO);
+      const sellNeg = precioNeg <= CONFIG.SELLOS_EXENTO ? 0 : Math.round(precioNeg * CONFIG.SELLOS);
+      const regNeg = Math.round(precioNeg * CONFIG.REGISTRALES);
+      const inmobNeg = p.inmobiliaria ? Math.round(precioNeg * CONFIG.INMOB) : 0;
+      const hipNeg = Math.round(precioNeg * CONFIG.HIPOTECA);
+      const totalNeg = tu10Neg + escrNeg + sellNeg + regNeg + inmobNeg + hipNeg + CONFIG.CERTIFICADOS;
+      const okNeg = totalNeg <= CONFIG.PRESUPUESTO;
+      const difNeg = CONFIG.PRESUPUESTO - totalNeg;
+      const ahorro = p._total - totalNeg;
+
       return `
         <div class="fixed inset-0 modal-backdrop z-50 flex items-center justify-center p-4" onclick="if(event.target===this)closeDetail()">
           <div class="bg-white rounded-2xl shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
             <!-- Header -->
             <div class="sticky top-0 bg-white border-b px-6 py-4 flex justify-between items-start">
               <div>
-                <h2 class="text-xl font-bold text-slate-800">${escapeHtml(p.direccion)}</h2>
-                <p class="text-slate-500">${escapeHtml(p.barrio)}</p>
+                <h2 class="text-xl font-bold text-slate-800">${escapeHtml(p.direccion) || '<span class="text-slate-400">Sin dirección</span>'}</h2>
+                <p class="text-slate-500">${escapeHtml(p.barrio) || 'Sin barrio'}</p>
               </div>
               <button onclick="closeDetail()" class="text-slate-400 hover:text-slate-600 text-2xl">&times;</button>
             </div>
@@ -404,10 +427,45 @@ Av Juan B Alberdi 4600,Parque Avellaneda,105000,70,140,70,3,si,si,0,GOLDEN HAUS,
                 ${p.link ? `<a href="${escapeHtml(p.link)}" target="_blank" class="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded hover:bg-blue-200">Ver aviso ↗</a>` : ''}
               </div>
 
+              <!-- Slider de negociación -->
+              ${p._precio > 0 ? `
+              <div class="bg-gradient-to-r from-orange-50 to-amber-50 rounded-xl p-4 border border-orange-200">
+                <div class="flex items-center justify-between mb-2">
+                  <span class="text-sm font-medium text-orange-800">🤝 Negociar precio</span>
+                  <span class="text-lg font-bold ${state.negotiationPct > 0 ? 'text-orange-600' : 'text-slate-400'}">${state.negotiationPct > 0 ? '-' + (state.negotiationPct % 1 === 0 ? state.negotiationPct : state.negotiationPct.toFixed(1)) + '%' : 'Sin descuento'}</span>
+                </div>
+                <input type="range" min="0" max="12" step="0.5" value="${state.negotiationPct}"
+                  onchange="updateNegotiation(this.value)"
+                  oninput="updateNegotiation(this.value)"
+                  class="w-full h-2 bg-orange-200 rounded-lg appearance-none cursor-pointer accent-orange-500" />
+                <div class="flex justify-between text-xs text-orange-600 mt-1">
+                  <span>Publicado</span>
+                  <span>-12%</span>
+                </div>
+                ${state.negotiationPct > 0 ? `
+                <div class="mt-3 pt-3 border-t border-orange-200 grid grid-cols-2 gap-4 text-sm">
+                  <div>
+                    <span class="text-orange-600">Precio original:</span>
+                    <span class="line-through text-slate-400 ml-1">$${p._precio.toLocaleString()}</span>
+                  </div>
+                  <div>
+                    <span class="text-orange-600">Precio negociado:</span>
+                    <span class="font-bold text-orange-700 ml-1">$${precioNeg.toLocaleString()}</span>
+                  </div>
+                </div>
+                ` : ''}
+              </div>
+              ` : ''}
+
               <!-- Números principales -->
               <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
                 <div class="bg-slate-50 rounded-xl p-3 text-center">
-                  <div class="text-2xl font-bold text-slate-800">$${p._precio > 0 ? p._precio.toLocaleString() : '-'}</div>
+                  ${state.negotiationPct > 0 && p._precio > 0 ? `
+                    <div class="text-sm line-through text-slate-400">$${p._precio.toLocaleString()}</div>
+                    <div class="text-2xl font-bold text-orange-600">$${precioNeg.toLocaleString()}</div>
+                  ` : `
+                    <div class="text-2xl font-bold text-slate-800">$${p._precio > 0 ? p._precio.toLocaleString() : '-'}</div>
+                  `}
                   <div class="text-xs text-slate-500">Precio</div>
                 </div>
                 <div class="bg-slate-50 rounded-xl p-3 text-center">
@@ -419,61 +477,94 @@ Av Juan B Alberdi 4600,Parque Avellaneda,105000,70,140,70,3,si,si,0,GOLDEN HAUS,
                   <div class="text-xs text-slate-500">$/m² ${p._ref ? `(ref: ${p._ref})` : ''}</div>
                 </div>
                 <div class="bg-slate-50 rounded-xl p-3 text-center">
-                  <div class="text-2xl font-bold ${p._ok ? 'text-green-600' : 'text-red-600'}">$${p._total.toLocaleString()}</div>
-                  <div class="text-xs text-slate-500">Gastos ${p._ok ? '✓' : '✗'}</div>
+                  ${state.negotiationPct > 0 && p._precio > 0 ? `
+                    <div class="text-sm line-through text-slate-400">$${p._total.toLocaleString()}</div>
+                    <div class="text-2xl font-bold ${okNeg ? 'text-green-600' : 'text-red-600'}">$${totalNeg.toLocaleString()}</div>
+                  ` : `
+                    <div class="text-2xl font-bold ${p._ok ? 'text-green-600' : 'text-red-600'}">$${p._total.toLocaleString()}</div>
+                  `}
+                  <div class="text-xs text-slate-500">A juntar ${(state.negotiationPct > 0 ? okNeg : p._ok) ? '✓' : '✗'}</div>
                 </div>
               </div>
 
               <!-- Características -->
               <div>
-                <h3 class="text-sm font-medium text-slate-700 mb-2">Características</h3>
-                <div class="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
-                  <div><span class="text-slate-400">Ambientes:</span> ${p.amb || '-'}</div>
-                  <div><span class="text-slate-400">m² total:</span> ${p.m2_tot || '-'}</div>
-                  <div><span class="text-slate-400">m² terraza:</span> ${p.m2_terr || '-'}</div>
-                  <div><span class="text-slate-400">Terraza:</span> ${p.terraza || '-'}</div>
-                  <div><span class="text-slate-400">Expensas:</span> ${p.expensas ? '$' + p.expensas : '-'}</div>
-                  <div><span class="text-slate-400">Antigüedad:</span> ${p.antiguedad || '-'}</div>
-                  <div><span class="text-slate-400">Estado:</span> ${p.estado || '-'}</div>
-                  <div><span class="text-slate-400">Luminosidad:</span> ${p.luminosidad || '-'}</div>
+                <h3 class="text-sm font-medium text-slate-700 mb-3 pb-1 border-b border-slate-100">Características</h3>
+                <div class="grid grid-cols-2 md:grid-cols-4 gap-x-6 gap-y-2 text-sm">
+                  <div class="flex justify-between"><span class="text-slate-400">Ambientes</span><span class="text-slate-700">${p.amb || '-'}</span></div>
+                  <div class="flex justify-between"><span class="text-slate-400">m² total</span><span class="text-slate-700">${p.m2_tot || '-'}</span></div>
+                  <div class="flex justify-between"><span class="text-slate-400">m² terraza</span><span class="text-slate-700">${p.m2_terr || '-'}</span></div>
+                  <div class="flex justify-between"><span class="text-slate-400">Terraza</span><span class="text-slate-700">${p.terraza || '-'}</span></div>
+                  <div class="flex justify-between"><span class="text-slate-400">Expensas</span><span class="text-slate-700">${p.expensas ? '$' + p.expensas : '-'}</span></div>
+                  <div class="flex justify-between"><span class="text-slate-400">Antigüedad</span><span class="text-slate-700">${p.antiguedad || '-'}</span></div>
+                  <div class="flex justify-between"><span class="text-slate-400">Estado</span><span class="text-slate-700">${p.estado || '-'}</span></div>
+                  <div class="flex justify-between"><span class="text-slate-400">Luminosidad</span><span class="text-slate-700">${p.luminosidad || '-'}</span></div>
                 </div>
               </div>
 
-              <!-- Desglose gastos -->
+              <!-- Lo que necesitás poner -->
               <div>
-                <h3 class="text-sm font-medium text-slate-700 mb-2">Desglose de gastos</h3>
+                <h3 class="text-sm font-medium text-slate-700 mb-3 pb-1 border-b border-slate-100">
+                  Lo que necesitás poner
+                  ${state.negotiationPct > 0 ? `<span class="text-orange-500 text-xs ml-2">(con -${state.negotiationPct % 1 === 0 ? state.negotiationPct : state.negotiationPct.toFixed(1)}%)</span>` : ''}
+                </h3>
                 <div class="bg-slate-50 rounded-xl p-4 text-sm">
-                  <div class="grid grid-cols-2 gap-2">
-                    <div class="flex justify-between"><span class="text-slate-500">Tu 10%:</span><span class="font-mono">$${p._tu10.toLocaleString()}</span></div>
-                    <div class="flex justify-between"><span class="text-slate-500">Escribano:</span><span class="font-mono">$${p._escr.toLocaleString()}</span></div>
-                    <div class="flex justify-between"><span class="text-slate-500">Sellos:</span><span class="font-mono">$${p._sell.toLocaleString()}</span></div>
-                    <div class="flex justify-between"><span class="text-slate-500">Registrales:</span><span class="font-mono">$${p._reg.toLocaleString()}</span></div>
-                    <div class="flex justify-between"><span class="text-slate-500">Inmobiliaria:</span><span class="font-mono">$${p._inmob.toLocaleString()}</span></div>
-                    <div class="flex justify-between"><span class="text-slate-500">Hipoteca:</span><span class="font-mono">$${p._hip.toLocaleString()}</span></div>
-                    <div class="flex justify-between"><span class="text-slate-500">Certificados:</span><span class="font-mono">$${p._cert.toLocaleString()}</span></div>
-                    <div class="flex justify-between border-t pt-2 font-bold ${p._ok ? 'text-green-600' : 'text-red-600'}"><span>TOTAL:</span><span class="font-mono">$${p._total.toLocaleString()}</span></div>
+                  <!-- Tu aporte -->
+                  <div class="flex justify-between py-2 mb-2 bg-blue-50 rounded-lg px-3">
+                    <span class="text-blue-700 font-medium">Tu aporte (10% o más)</span>
+                    <span class="font-mono font-bold text-blue-700">
+                      ${state.negotiationPct > 0 ? `<span class="line-through text-blue-300 text-sm mr-1">$${p._tu10.toLocaleString()}</span>` : ''}
+                      $${(state.negotiationPct > 0 ? tu10Neg : p._tu10).toLocaleString()}
+                    </span>
                   </div>
-                  <div class="mt-2 text-center text-sm ${p._dif >= 0 ? 'text-green-600' : 'text-red-500'}">
-                    ${p._dif >= 0 ? `Te sobran $${p._dif.toLocaleString()}` : `Te faltan $${Math.abs(p._dif).toLocaleString()}`}
+
+                  <!-- Gastos de escrituración -->
+                  <div class="text-xs text-slate-400 uppercase tracking-wide mb-2 mt-3">Gastos de escrituración</div>
+                  <div class="grid grid-cols-2 gap-x-8 gap-y-1">
+                    <div class="flex justify-between py-1 border-b border-slate-100"><span class="text-slate-500">Escribano</span><span class="font-mono text-slate-700">$${(state.negotiationPct > 0 ? escrNeg : p._escr).toLocaleString()}</span></div>
+                    <div class="flex justify-between py-1 border-b border-slate-100"><span class="text-slate-500">Sellos</span><span class="font-mono text-slate-700">$${(state.negotiationPct > 0 ? sellNeg : p._sell).toLocaleString()}</span></div>
+                    <div class="flex justify-between py-1 border-b border-slate-100"><span class="text-slate-500">Registrales</span><span class="font-mono text-slate-700">$${(state.negotiationPct > 0 ? regNeg : p._reg).toLocaleString()}</span></div>
+                    <div class="flex justify-between py-1 border-b border-slate-100"><span class="text-slate-500">Hipoteca</span><span class="font-mono text-slate-700">$${(state.negotiationPct > 0 ? hipNeg : p._hip).toLocaleString()}</span></div>
+                    <div class="flex justify-between py-1 border-b border-slate-100"><span class="text-slate-500">Certificados</span><span class="font-mono text-slate-700">$${p._cert.toLocaleString()}</span></div>
+                    <div class="flex justify-between py-1"><span class="text-slate-500">Inmobiliaria</span><span class="font-mono text-slate-700">$${(state.negotiationPct > 0 ? inmobNeg : p._inmob).toLocaleString()}</span></div>
+                  </div>
+
+                  <!-- Total -->
+                  <div class="flex justify-between mt-4 pt-3 border-t-2 border-slate-300 font-bold text-lg ${(state.negotiationPct > 0 ? okNeg : p._ok) ? 'text-green-600' : 'text-red-600'}">
+                    <span>TOTAL A JUNTAR</span>
+                    <span class="font-mono">
+                      ${state.negotiationPct > 0 ? `<span class="line-through text-slate-400 text-sm mr-1">$${p._total.toLocaleString()}</span>` : ''}
+                      $${(state.negotiationPct > 0 ? totalNeg : p._total).toLocaleString()}
+                    </span>
+                  </div>
+                  ${state.negotiationPct > 0 ? `
+                  <div class="mt-2 text-center text-xs text-orange-600 bg-orange-50 rounded py-1">
+                    Ahorrás $${ahorro.toLocaleString()} negociando -${state.negotiationPct % 1 === 0 ? state.negotiationPct : state.negotiationPct.toFixed(1)}%
+                  </div>
+                  ` : ''}
+                  <div class="mt-3 text-center text-sm font-medium ${(state.negotiationPct > 0 ? difNeg : p._dif) >= 0 ? 'text-green-600 bg-green-50' : 'text-red-500 bg-red-50'} rounded-lg py-2">
+                    ${(state.negotiationPct > 0 ? difNeg : p._dif) >= 0
+                      ? `Te sobran $${(state.negotiationPct > 0 ? difNeg : p._dif).toLocaleString()}`
+                      : `Te faltan $${Math.abs(state.negotiationPct > 0 ? difNeg : p._dif).toLocaleString()}`}
                   </div>
                 </div>
               </div>
 
               <!-- Gestión -->
               <div>
-                <h3 class="text-sm font-medium text-slate-700 mb-2">Gestión</h3>
-                <div class="grid grid-cols-2 gap-3 text-sm">
-                  <div><span class="text-slate-400">Inmobiliaria:</span> ${p.inmobiliaria || '-'}</div>
-                  <div><span class="text-slate-400">Contacto:</span> ${p.contacto || '-'}</div>
-                  <div><span class="text-slate-400">Fecha contacto:</span> ${p.fecha_contacto || '-'}</div>
-                  <div><span class="text-slate-400">Fecha visita:</span> ${p.fecha_visita || '-'}</div>
+                <h3 class="text-sm font-medium text-slate-700 mb-3 pb-1 border-b border-slate-100">Gestión</h3>
+                <div class="grid grid-cols-2 gap-x-6 gap-y-2 text-sm">
+                  <div class="flex justify-between"><span class="text-slate-400">Inmobiliaria</span><span class="text-slate-700">${p.inmobiliaria || '-'}</span></div>
+                  <div class="flex justify-between"><span class="text-slate-400">Contacto</span><span class="text-slate-700">${p.contacto || '-'}</span></div>
+                  <div class="flex justify-between"><span class="text-slate-400">Fecha contacto</span><span class="text-slate-700">${p.fecha_contacto || '-'}</span></div>
+                  <div class="flex justify-between"><span class="text-slate-400">Fecha visita</span><span class="text-slate-700">${p.fecha_visita || '-'}</span></div>
                 </div>
               </div>
 
               <!-- Rating -->
               ${p.rating ? `
               <div>
-                <h3 class="text-sm font-medium text-slate-700 mb-2">Rating</h3>
+                <h3 class="text-sm font-medium text-slate-700 mb-3 pb-1 border-b border-slate-100">Rating</h3>
                 <div class="text-2xl text-yellow-500">${ratingStars(p.rating)}</div>
               </div>
               ` : ''}
@@ -481,8 +572,8 @@ Av Juan B Alberdi 4600,Parque Avellaneda,105000,70,140,70,3,si,si,0,GOLDEN HAUS,
               <!-- Notas -->
               ${p.notas ? `
               <div>
-                <h3 class="text-sm font-medium text-slate-700 mb-2">Notas</h3>
-                <p class="text-sm text-slate-600 bg-slate-50 rounded-xl p-4">${escapeHtml(p.notas)}</p>
+                <h3 class="text-sm font-medium text-slate-700 mb-3 pb-1 border-b border-slate-100">Notas</h3>
+                <p class="text-sm text-slate-600 bg-slate-50 rounded-xl p-4 leading-relaxed">${escapeHtml(p.notas)}</p>
               </div>
               ` : ''}
             </div>
@@ -577,7 +668,7 @@ Av Juan B Alberdi 4600,Parque Avellaneda,105000,70,140,70,3,si,si,0,GOLDEN HAUS,
                 <li><span class="font-mono bg-slate-100 px-1 rounded">precio</span> - En USD, solo el numero (ej: 95000)</li>
                 <li><span class="font-mono bg-slate-100 px-1 rounded">m2_cub</span> - Metros cubiertos, para calcular $/m2</li>
                 <li><span class="font-mono bg-slate-100 px-1 rounded">expensas</span> - En pesos, 0 si no tiene</li>
-                <li><span class="font-mono bg-slate-100 px-1 rounded">inmobiliaria</span> - Si tiene, se suma comision a gastos</li>
+                <li><span class="font-mono bg-slate-100 px-1 rounded">inmobiliaria</span> - Si tiene, se suma comisión al total</li>
                 <li><span class="font-mono bg-slate-100 px-1 rounded">link</span> - URL del aviso</li>
                 <li><span class="font-mono bg-slate-100 px-1 rounded">notas</span> - Cualquier comentario</li>
               </ul>
@@ -610,7 +701,7 @@ Av Juan B Alberdi 4600,Parque Avellaneda,105000,70,140,70,3,si,si,0,GOLDEN HAUS,
 
           <div class="flex border-b border-slate-200 mb-4">
             <button onclick="state.configTab='general';render()" class="${tabClass('general')}">General</button>
-            <button onclick="state.configTab='gastos';render()" class="${tabClass('gastos')}">Gastos</button>
+            <button onclick="state.configTab='gastos';render()" class="${tabClass('gastos')}">Escrituración</button>
             <button onclick="state.configTab='barrios';render()" class="${tabClass('barrios')}">Barrios $/m²</button>
           </div>
 
@@ -621,7 +712,7 @@ Av Juan B Alberdi 4600,Parque Avellaneda,105000,70,140,70,3,si,si,0,GOLDEN HAUS,
                 <input type="number" value="${CONFIG.CREDITO}" onchange="updateConfig('CREDITO', parseInt(this.value))" class="w-full px-3 py-2 border rounded-lg text-sm" />
               </div>
               <div>
-                <label class="block text-xs text-slate-500 mb-1">Presupuesto gastos (USD)</label>
+                <label class="block text-xs text-slate-500 mb-1">Tengo para poner (USD)</label>
                 <input type="number" value="${CONFIG.PRESUPUESTO}" onchange="updateConfig('PRESUPUESTO', parseInt(this.value))" class="w-full px-3 py-2 border rounded-lg text-sm" />
               </div>
               <div>
@@ -723,7 +814,7 @@ Av Juan B Alberdi 4600,Parque Avellaneda,105000,70,140,70,3,si,si,0,GOLDEN HAUS,
             <div class="flex flex-wrap items-center justify-between gap-3">
               <div>
                 <h1 class="text-xl md:text-2xl font-bold text-slate-800">🏠 Buscador Casita Chiquis <span class="emoji-float">👩</span><span class="emoji-heart">❤️</span><span class="emoji-float">🧔‍♂️</span><span class="emoji-float">🐱</span><span class="emoji-float">🐈</span></h1>
-                <p class="text-xs text-slate-500">Crédito $${CONFIG.CREDITO.toLocaleString()} · Presupuesto $${CONFIG.PRESUPUESTO.toLocaleString()}</p>
+                <p class="text-xs text-slate-500">Crédito $${CONFIG.CREDITO.toLocaleString()} · Tengo $${CONFIG.PRESUPUESTO.toLocaleString()}</p>
               </div>
               <div class="flex items-center gap-2">
                 <a href="https://docs.google.com/spreadsheets/d/${SHEET_ID}" target="_blank" class="px-3 py-1.5 bg-green-600 text-white text-sm rounded-lg hover:bg-green-700 font-medium" title="Abrir Google Sheet para cargar datos">📝 Cargar datos</a>
@@ -769,9 +860,9 @@ Av Juan B Alberdi 4600,Parque Avellaneda,105000,70,140,70,3,si,si,0,GOLDEN HAUS,
                   <option value="descartado" ${state.filterStatus === 'descartado' ? 'selected' : ''}>Descartado</option>
                 </select>
                 <select onchange="state.filterOk=this.value;render()" class="border border-slate-200 rounded-lg px-2 py-1.5 text-sm bg-white">
-                  <option value="todos" ${state.filterOk === 'todos' ? 'selected' : ''}>Presupuesto: Todos</option>
-                  <option value="ok" ${state.filterOk === 'ok' ? 'selected' : ''}>✓ Entra</option>
-                  <option value="no" ${state.filterOk === 'no' ? 'selected' : ''}>✗ No entra</option>
+                  <option value="todos" ${state.filterOk === 'todos' ? 'selected' : ''}>A juntar: Todos</option>
+                  <option value="ok" ${state.filterOk === 'ok' ? 'selected' : ''}>✓ Me alcanza</option>
+                  <option value="no" ${state.filterOk === 'no' ? 'selected' : ''}>✗ No me alcanza</option>
                 </select>
                 <select onchange="state.filterBarrio=this.value;render()" class="border border-slate-200 rounded-lg px-2 py-1.5 text-sm bg-white">
                   <option value="todos" ${state.filterBarrio === 'todos' ? 'selected' : ''}>Barrio: Todos</option>
@@ -786,7 +877,7 @@ Av Juan B Alberdi 4600,Parque Avellaneda,105000,70,140,70,3,si,si,0,GOLDEN HAUS,
                   <select onchange="state.sortBy=this.value;render()" class="border border-slate-200 rounded-lg px-2 py-1.5 text-sm bg-white">
                     <option value="completeness" ${state.sortBy === 'completeness' ? 'selected' : ''}>Completitud</option>
                     <option value="precio" ${state.sortBy === 'precio' ? 'selected' : ''}>Precio</option>
-                    <option value="total" ${state.sortBy === 'total' ? 'selected' : ''}>Gastos</option>
+                    <option value="total" ${state.sortBy === 'total' ? 'selected' : ''}>A juntar</option>
                     <option value="dif" ${state.sortBy === 'dif' ? 'selected' : ''}>Diferencia</option>
                     <option value="preciom2" ${state.sortBy === 'preciom2' ? 'selected' : ''}>$/m²</option>
                   </select>
@@ -821,7 +912,7 @@ Av Juan B Alberdi 4600,Parque Avellaneda,105000,70,140,70,3,si,si,0,GOLDEN HAUS,
                         <th class="px-3 py-2.5 text-right font-medium text-slate-600">m²</th>
                         <th class="px-3 py-2.5 text-right font-medium text-slate-600">$/m²</th>
                         <th class="px-3 py-2.5 text-center font-medium text-slate-600" title="Diferencia vs precio promedio del barrio">vs Barrio</th>
-                        <th class="px-3 py-2.5 text-right font-medium text-slate-600">Gastos</th>
+                        <th class="px-3 py-2.5 text-right font-medium text-slate-600">A juntar</th>
                         <th class="px-3 py-2.5 text-center font-medium text-slate-600">OK</th>
                         <th class="px-3 py-2.5 text-center font-medium text-slate-600">Status</th>
                         <th class="px-3 py-2.5 text-center font-medium text-slate-600">Activo</th>
