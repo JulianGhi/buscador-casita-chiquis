@@ -162,25 +162,32 @@ Av Juan B Alberdi 4600,Parque Avellaneda,105000,70,140,70,3,si,si,0,GOLDEN HAUS,
       const SHEET_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vT-bXC7r4bVh2Hc6Wovv-EFfb30nUMB5X3HA4NQoSTAZ-r6di3dhUEsdUNSHhebr8ezg0dIbw8nAA8S/pub?output=csv';
 
       try {
-        // Add cache-busting parameter
-        const response = await fetch(SHEET_URL + '&_t=' + Date.now());
+        // Fetch with no-cache headers
+        const response = await fetch(SHEET_URL, {
+          cache: 'no-store',
+          headers: { 'Cache-Control': 'no-cache' }
+        });
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
 
         const text = await response.text();
 
         // Validate it's real CSV data with expected headers
         if (!text || !text.startsWith('direccion,barrio,')) {
-          throw new Error('Invalid data format');
+          throw new Error('Datos inválidos recibidos');
         }
 
         // Count valid rows (non-empty)
         const lines = text.trim().split('\n');
         const validRows = lines.slice(1).filter(line => {
           const cols = line.split(',');
-          return cols[0] || cols[1] || cols[2]; // direccion, barrio, or link
+          return cols[0] || cols[1] || cols[2];
         });
 
-        console.log(`Loaded ${validRows.length} properties from Sheet`);
+        console.log(`✓ Cargadas ${validRows.length} propiedades desde Sheet`);
+
+        // Save to localStorage as backup
+        localStorage.setItem('casita_data', text);
+        localStorage.setItem('casita_data_time', Date.now().toString());
 
         state.rawData = text;
         state.lastUpdate = new Date();
@@ -188,13 +195,37 @@ Av Juan B Alberdi 4600,Parque Avellaneda,105000,70,140,70,3,si,si,0,GOLDEN HAUS,
         state.error = null;
 
       } catch (err) {
-        console.error('Fetch failed:', err.message);
-        state.error = 'Error cargando datos: ' + err.message;
-        if (!state.rawData) state.rawData = SAMPLE_CSV;
+        console.error('✗ Fetch falló:', err.message);
+
+        // Try to load from localStorage backup
+        const cached = localStorage.getItem('casita_data');
+        if (cached && cached.startsWith('direccion,barrio,')) {
+          console.log('→ Usando datos guardados en cache');
+          state.rawData = cached;
+          state.dataSource = 'cache';
+          state.error = null;
+        } else {
+          state.error = 'Error cargando datos: ' + err.message;
+          if (!state.rawData) state.rawData = SAMPLE_CSV;
+        }
       }
 
       state.loading = false;
       render();
+    }
+
+    // Load cached data on startup
+    function loadCachedData() {
+      const cached = localStorage.getItem('casita_data');
+      if (cached && cached.startsWith('direccion,barrio,')) {
+        state.rawData = cached;
+        state.dataSource = 'cache';
+        const cacheTime = localStorage.getItem('casita_data_time');
+        if (cacheTime) {
+          state.lastUpdate = new Date(parseInt(cacheTime));
+        }
+        render();
+      }
     }
 
     function getProperties() {
@@ -738,7 +769,8 @@ Av Juan B Alberdi 4600,Parque Avellaneda,105000,70,140,70,3,si,si,0,GOLDEN HAUS,
       `;
     }
 
-    // Initial load
+    // Initial load - show cached data first, then fetch fresh
+    loadCachedData();
     fetchData();
   </script>
 </body>
