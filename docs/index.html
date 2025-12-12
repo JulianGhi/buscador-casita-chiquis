@@ -200,7 +200,7 @@ Av Juan B Alberdi 4600,Parque Avellaneda,105000,70,140,70,3,si,si,0,GOLDEN HAUS,
 
         // Log first column of each row to see what addresses we got
         const direcciones = validRows.map(line => line.split(',')[0] || '(vacío)');
-        console.log('Direcciones:', direcciones);
+        console.log('Direcciones:', direcciones.join(' | '));
 
         state.rawData = text;
         state.lastUpdate = new Date();
@@ -636,7 +636,7 @@ Av Juan B Alberdi 4600,Parque Avellaneda,105000,70,140,70,3,si,si,0,GOLDEN HAUS,
                 <span class="text-slate-500">${state.autoRefreshEnabled ? '· Auto ●' : ''}</span>
               </div>
               <div class="text-slate-400">
-                ${stats.total} props · ${stats.activos} activas · ${stats.entran} entran · <span class="text-slate-600">v3</span>
+                ${stats.total} props · ${stats.activos} activas · ${stats.entran} entran · <span class="text-slate-600">v4</span>
               </div>
             </div>
           </div>
