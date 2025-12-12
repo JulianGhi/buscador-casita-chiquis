@@ -148,7 +148,7 @@ Av Juan B Alberdi 4600,Parque Avellaneda,105000,70,140,70,3,si,si,0,GOLDEN HAUS,
       const barrio = p.barrio;
       const tieneInmob = p.inmobiliaria && p.inmobiliaria.trim() !== '';
       const calc = { ...p, _precio: precio, _m2: m2, _preciom2: m2 > 0 ? Math.round(precio / m2) : 0, _ref: REF_M2[barrio] || 0 };
-      calc._vsRef = calc._ref > 0 ? (calc._preciom2 - calc._ref) / calc._ref : 0;
+      calc._vsRef = (calc._preciom2 > 0 && calc._ref > 0) ? (calc._preciom2 - calc._ref) / calc._ref : null;
       calc._tu10 = Math.max(precio - CONFIG.CREDITO, precio * 0.1);
       calc._escr = Math.round(precio * CONFIG.ESCRIBANO);
       calc._sell = precio <= CONFIG.SELLOS_EXENTO ? 0 : Math.round(precio * CONFIG.SELLOS);
@@ -265,7 +265,7 @@ Av Juan B Alberdi 4600,Parque Avellaneda,105000,70,140,70,3,si,si,0,GOLDEN HAUS,
     }
 
     function evalIcon(vsRef) {
-      if (!vsRef && vsRef !== 0) return '<span class="text-slate-300 text-xs">-</span>';
+      if (vsRef === null || vsRef === undefined) return '<span class="text-slate-300 text-xs italic">s/d</span>';
       const pct = Math.round(vsRef * 100);
       const sign = pct > 0 ? '+' : '';
       if (vsRef < -CONFIG.MARGEN_REF) return `<span class="text-green-600 text-xs font-medium" title="Bajo mercado">${sign}${pct}%</span>`;
