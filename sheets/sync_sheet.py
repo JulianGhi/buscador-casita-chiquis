@@ -31,10 +31,12 @@ SCOPES = [
 SHEET_ID = '16n92ghEe8Vr1tiLdqbccF3i97kiwhHin9OPWY-O50L4'
 WORKSHEET_NAME = 'Propiedades'
 LOCAL_FILE = Path('data/sheet_data.json')
+CACHE_FILE = Path('data/scrape_cache.json')
 
 # Columnas que el scraper puede llenar
 SCRAPEABLE_COLS = ['precio', 'm2_cub', 'm2_tot', 'amb', 'barrio', 'direccion',
-                   'expensas', 'terraza', 'antiguedad', 'activo']
+                   'expensas', 'terraza', 'antiguedad', 'apto_credito', 'tipo', 'activo',
+                   'cocheras', 'disposicion', 'piso', 'ascensor', 'balcon', 'luminosidad']
 
 
 def get_client():
@@ -114,31 +116,94 @@ def scrape_argenprop(url):
         soup = BeautifulSoup(resp.text, 'lxml')
         data = {}
 
-        precio = soup.select_one('.titlebar__price')
+        # Precio
+        precio = soup.select_one('.titlebar__price, .property-price')
         if precio:
             txt = precio.text.strip()
             match = re.search(r'[\d.]+', txt.replace('.', ''))
             if match:
                 data['precio'] = match.group()
 
-        ubicacion = soup.select_one('.titlebar__address')
+        # Dirección
+        ubicacion = soup.select_one('.titlebar__address, .property-main h1')
         if ubicacion:
             data['direccion'] = ubicacion.text.strip()
 
-        for li in soup.select('.property-features li'):
+        # Descripción principal (tipo, m2, dormitorios, antigüedad)
+        desc = soup.select_one('.property-description, .property-main-features')
+        if desc:
+            desc_text = desc.text.lower()
+            # Tipo
+            if 'ph' in desc_text.split():
+                data['tipo'] = 'ph'
+            elif 'departamento' in desc_text or 'depto' in desc_text:
+                data['tipo'] = 'depto'
+            elif 'casa' in desc_text:
+                data['tipo'] = 'casa'
+            elif 'local' in desc_text:
+                data['tipo'] = 'local'
+            # m2 cubiertos
+            m2_match = re.search(r'(\d+)\s*m[²2]\s*cub', desc_text)
+            if m2_match:
+                data['m2_cub'] = m2_match.group(1)
+            # Dormitorios -> ambientes aproximado
+            dorm_match = re.search(r'(\d+)\s*dormitorio', desc_text)
+            if dorm_match:
+                data['amb'] = str(int(dorm_match.group(1)) + 1)  # +1 por living
+            # Antigüedad
+            ant_match = re.search(r'(\d+)\s*años', desc_text)
+            if ant_match:
+                data['antiguedad'] = ant_match.group(1)
+
+        # Features detallados
+        for li in soup.select('.property-features li, .property-features-item'):
             txt = li.text.strip().lower()
-            if 'm² cub' in txt or 'm2 cub' in txt:
+            if 'm² cub' in txt or 'm2 cub' in txt or 'sup. cubierta' in txt:
                 match = re.search(r'(\d+)', txt)
                 if match:
                     data['m2_cub'] = match.group(1)
-            elif 'm² tot' in txt or 'm2 tot' in txt:
+            elif 'm² tot' in txt or 'm2 tot' in txt or 'sup. total' in txt:
                 match = re.search(r'(\d+)', txt)
                 if match:
                     data['m2_tot'] = match.group(1)
-            elif 'ambiente' in txt:
+            elif 'ambiente' in txt and 'cant' in txt:
                 match = re.search(r'(\d+)', txt)
                 if match:
                     data['amb'] = match.group(1)
+            elif 'antigüedad' in txt or 'antiguedad' in txt:
+                match = re.search(r'(\d+)', txt)
+                if match:
+                    data['antiguedad'] = match.group(1)
+            elif txt == 'terraza':
+                data['terraza'] = 'si'
+            elif txt == 'balcón' or txt == 'balcon':
+                data['balcon'] = 'si'
+            elif 'cochera' in txt:
+                match = re.search(r'(\d+)', txt)
+                data['cocheras'] = match.group(1) if match else '1'
+            elif 'expensas' in txt:
+                match = re.search(r'(\d+)', txt.replace('.', ''))
+                if match:
+                    data['expensas'] = match.group(1)
+
+        # Inmobiliaria
+        inmob = soup.select_one('.property-contact__title, .property-sidebar h3, [class*="contact"] h3')
+        if inmob:
+            data['inmobiliaria'] = inmob.text.strip()
+
+        # Barrio (del breadcrumb o container)
+        location = soup.select_one('.property-container')
+        if location:
+            txt = location.text
+            # Buscar barrio en texto como "Capital Federal, Parque Avellaneda"
+            barrios_conocidos = ['Floresta', 'Flores', 'Caballito', 'Parque Chacabuco', 'Parque Avellaneda',
+                                 'Villa Luro', 'Liniers', 'Mataderos', 'Villa Crespo', 'Paternal',
+                                 'Villa del Parque', 'Villa Devoto', 'Monte Castro', 'Velez Sarsfield',
+                                 'Vélez Sarsfield', 'Boedo', 'Almagro', 'Palermo', 'Belgrano']
+            for barrio in barrios_conocidos:
+                if barrio.lower() in txt.lower():
+                    data['barrio'] = barrio
+                    break
 
         return data
     except Exception as e:
@@ -248,34 +313,119 @@ def scrape_mercadolibre(url):
                     match = re.search(r'(\d+)', v)
                     if match:
                         data['expensas'] = match.group(1)
+                elif 'apto cr' in h or 'apto_cr' in h:
+                    # "Apto crédito: Sí/No"
+                    data['apto_credito'] = 'si' if 'sí' in v.lower() or 'si' in v.lower() else 'no'
+                elif 'tipo de' in h:
+                    # "Tipo de departamento", "Tipo de casa", etc.
+                    data['tipo'] = v.lower()
+                elif 'cochera' in h:
+                    match = re.search(r'(\d+)', v)
+                    if match:
+                        data['cocheras'] = match.group(1)
+                elif 'disposición' in h or 'disposicion' in h:
+                    data['disposicion'] = v.lower()
+                elif 'número de piso' in h or 'piso de la unidad' in h:
+                    match = re.search(r'(\d+)', v)
+                    if match:
+                        data['piso'] = match.group(1)
+                elif 'ascensor' in h:
+                    data['ascensor'] = 'si' if 'sí' in v.lower() or 'si' in v.lower() else 'no'
+                elif h == 'balcón' or h == 'balcon':
+                    data['balcon'] = 'si' if 'sí' in v.lower() or 'si' in v.lower() else 'no'
+                elif h == 'terraza':
+                    data['terraza'] = 'si' if 'sí' in v.lower() or 'si' in v.lower() else 'no'
 
-        # Terraza/balcón del título
+        # Info del título y URL
         title = soup.select_one('h1.ui-pdp-title')
-        if title:
-            title_lower = title.text.lower()
+        title_lower = title.text.lower() if title else ''
+        url_lower = url.lower()
+        # Combinar título y URL para buscar tipo
+        search_text = title_lower + ' ' + url_lower
+
+        # Descripción completa
+        desc_elem = soup.select_one('.ui-pdp-description__content')
+        desc_text = desc_elem.text.lower() if desc_elem else ''
+
+        # Combinar título y descripción para búsquedas
+        full_text = title_lower + ' ' + desc_text
+
+        if title_lower:
             if 'terraza' in title_lower or 'balcon' in title_lower or 'balcón' in title_lower:
                 data['terraza'] = 'si'
             if 'sin expensas' in title_lower or 'sin exp' in title_lower:
                 data['expensas'] = '0'
+
+        # Luminosidad (de título o descripción)
+        if 'luminoso' in full_text or 'muy luminoso' in full_text or 'luz natural' in full_text:
+            data['luminosidad'] = 'si'
+
+        # Tipo de propiedad (del título o URL) - orden de prioridad
+        if '-ph-' in search_text or ' ph ' in search_text or 'p.h' in search_text:
+            data['tipo'] = 'ph'
+        elif 'duplex' in search_text or 'dúplex' in search_text:
+            data['tipo'] = 'duplex'
+        elif 'triplex' in search_text:
+            data['tipo'] = 'triplex'
+        elif 'loft' in search_text:
+            data['tipo'] = 'loft'
+        elif '/casa.' in url_lower or '-casa-' in search_text:
+            data['tipo'] = 'casa'
+        elif 'piso' in search_text:
+            data['tipo'] = 'piso'
+        elif '/departamento.' in url_lower or 'depto' in title_lower:
+            data['tipo'] = 'depto'
 
         return data
     except Exception as e:
         return {'_error': str(e)}
 
 
-def scrape_link(url):
-    """Scrapea un link según su dominio"""
+# =============================================================================
+# CACHE - Guarda resultados de scraping localmente
+# =============================================================================
+
+def load_cache():
+    """Carga el cache de scraping"""
+    if CACHE_FILE.exists():
+        with open(CACHE_FILE, 'r', encoding='utf-8') as f:
+            return json.load(f)
+    return {}
+
+def save_cache(cache):
+    """Guarda el cache de scraping"""
+    CACHE_FILE.parent.mkdir(exist_ok=True)
+    with open(CACHE_FILE, 'w', encoding='utf-8') as f:
+        json.dump(cache, f, ensure_ascii=False, indent=2)
+
+def scrape_link(url, use_cache=True, cache=None):
+    """Scrapea un link según su dominio. Usa cache si está disponible."""
     if not url or not url.startswith('http'):
-        return None
+        return None, False  # data, from_cache
 
+    # Verificar cache
+    if use_cache and cache and url in cache:
+        cached = cache[url]
+        # Cache válido si no tiene error o tiene _offline
+        if '_error' not in cached or cached.get('_offline'):
+            return cached, True
+
+    # Scrapear
+    data = None
     if 'argenprop.com' in url:
-        return scrape_argenprop(url)
+        data = scrape_argenprop(url)
     elif 'mercadolibre' in url:
-        return scrape_mercadolibre(url)
-    return None
+        data = scrape_mercadolibre(url)
+
+    # Guardar en cache si hay resultado
+    if data and cache is not None:
+        data['_cached_at'] = time.strftime('%Y-%m-%d %H:%M:%S')
+        cache[url] = data
+
+    return data, False
 
 
-def cmd_scrape(check_all=False):
+def cmd_scrape(check_all=False, no_cache=False):
     """Scrapea links del archivo local y actualiza los datos"""
     if not LOCAL_FILE.exists():
         print(f"❌ No existe {LOCAL_FILE}")
@@ -287,6 +437,10 @@ def cmd_scrape(check_all=False):
 
     headers = data['headers']
     rows = data['rows']
+
+    # Cargar cache
+    cache = load_cache() if not no_cache else {}
+    cache_hits = 0
 
     # Encontrar filas que necesitan scraping
     to_scrape = []
@@ -307,6 +461,8 @@ def cmd_scrape(check_all=False):
         return
 
     print(f"🔍 Scrapeando {len(to_scrape)} links...")
+    if not no_cache:
+        print(f"   (usando cache de {len(cache)} links)")
     updated = 0
     offline = 0
 
@@ -316,11 +472,15 @@ def cmd_scrape(check_all=False):
         row_num = row.get('_row', idx + 2)
         print(f"   Fila {row_num}: {direccion}...")
 
-        scraped = scrape_link(link)
+        scraped, from_cache = scrape_link(link, use_cache=not no_cache, cache=cache)
 
         if scraped is None:
             print(f"      ⏭️  Dominio no soportado")
             continue
+
+        if from_cache:
+            cache_hits += 1
+            print(f"      📦 Cache", end='')
 
         if '_error' in scraped:
             error = scraped['_error']
@@ -362,7 +522,13 @@ def cmd_scrape(check_all=False):
     with open(LOCAL_FILE, 'w', encoding='utf-8') as f:
         json.dump(data, f, ensure_ascii=False, indent=2)
 
+    # Guardar cache
+    if not no_cache:
+        save_cache(cache)
+
     print(f"\n✅ {updated} filas actualizadas en {LOCAL_FILE}")
+    if cache_hits:
+        print(f"📦 {cache_hits} desde cache, {len(to_scrape) - cache_hits} scrapeados")
     if offline:
         print(f"📴 {offline} links marcados como NO activos")
     print(f"   Revisá con: python sync_sheet.py view")
@@ -809,13 +975,15 @@ Flujo de trabajo:
                        help='[view] Verifica si los links están online')
     parser.add_argument('--all', action='store_true',
                        help='[scrape] Scrapea todos los links (no solo los que faltan datos)')
+    parser.add_argument('--no-cache', action='store_true',
+                       help='[scrape] Ignora el cache y re-scrapea todo')
 
     args = parser.parse_args()
 
     if args.command == 'pull':
         cmd_pull()
     elif args.command == 'scrape':
-        cmd_scrape(check_all=args.all)
+        cmd_scrape(check_all=args.all, no_cache=args.no_cache)
     elif args.command == 'view':
         cmd_view(check_links=args.check_links)
     elif args.command == 'diff':

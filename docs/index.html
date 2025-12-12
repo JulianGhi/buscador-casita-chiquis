@@ -51,6 +51,69 @@
       "Villa del Parque": 2063, "Villa Devoto": 2348, "Boedo": 1876
     };
 
+    // Condiciones binarias (si no cumple = al fondo)
+    const DEFAULT_CONDITIONS = {
+      activo:        { label: 'Activo',         enabled: true, desc: 'Solo publicaciones online' },
+      apto_credito:  { label: 'Apto crédito',   enabled: true, desc: 'Solo las que aceptan crédito' },
+      ok_presupuesto:{ label: 'En presupuesto', enabled: true, desc: 'Solo las que podés pagar' },
+    };
+
+    // Preferencias ponderadas (ajustan el score)
+    const DEFAULT_WEIGHTS = {
+      bajo_mercado:  { label: 'Bajo mercado',   weight: 7,  desc: 'Precio bajo vs promedio barrio' },
+      m2:            { label: 'M² cubiertos',   weight: 5,  desc: 'Más m² = mejor' },
+      terraza:       { label: 'Terraza',        weight: 5,  desc: 'Tiene terraza' },
+      balcon:        { label: 'Balcón',         weight: 3,  desc: 'Tiene balcón' },
+      cochera:       { label: 'Cochera',        weight: 4,  desc: 'Tiene cochera' },
+      luminosidad:   { label: 'Luminoso',       weight: 4,  desc: 'Es luminoso' },
+      frente:        { label: 'Al frente',      weight: 3,  desc: 'Disposición frente' },
+    };
+
+    function loadConditions() {
+      try {
+        const saved = localStorage.getItem('casita_conditions');
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          const conditions = JSON.parse(JSON.stringify(DEFAULT_CONDITIONS));
+          Object.keys(parsed).forEach(k => {
+            if (conditions[k]) conditions[k].enabled = parsed[k];
+          });
+          return conditions;
+        }
+        return JSON.parse(JSON.stringify(DEFAULT_CONDITIONS));
+      } catch { return JSON.parse(JSON.stringify(DEFAULT_CONDITIONS)); }
+    }
+
+    function saveConditions(conditions) {
+      const toSave = {};
+      Object.keys(conditions).forEach(k => { toSave[k] = conditions[k].enabled; });
+      localStorage.setItem('casita_conditions', JSON.stringify(toSave));
+    }
+
+    function loadWeights() {
+      try {
+        const saved = localStorage.getItem('casita_weights');
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          const weights = JSON.parse(JSON.stringify(DEFAULT_WEIGHTS));
+          Object.keys(parsed).forEach(k => {
+            if (weights[k]) weights[k].weight = parsed[k];
+          });
+          return weights;
+        }
+        return JSON.parse(JSON.stringify(DEFAULT_WEIGHTS));
+      } catch { return JSON.parse(JSON.stringify(DEFAULT_WEIGHTS)); }
+    }
+
+    function saveWeights(weights) {
+      const toSave = {};
+      Object.keys(weights).forEach(k => { toSave[k] = weights[k].weight; });
+      localStorage.setItem('casita_weights', JSON.stringify(toSave));
+    }
+
+    let CONDITIONS = loadConditions();
+    let WEIGHTS = loadWeights();
+
     function loadConfig() {
       try {
         const saved = localStorage.getItem('casita_config');
@@ -88,6 +151,20 @@
     function getCreditoUSD(dolar = null) {
       const tc = dolar || CONFIG.DOLAR_BASE;
       return Math.round(CONFIG.CREDITO_ARS / tc);
+    }
+
+    // Calcula rango de precios de propiedades que podemos comprar
+    function getPrecioRange(dolar = null) {
+      const credito = getCreditoUSD(dolar);
+      // Precio mínimo: el banco cubre máximo 90%, entonces precio_min = crédito / 0.9
+      const precioMin = Math.round(credito / 0.9);
+      // Precio máximo: crédito + lo que tenemos - gastos (~10% del precio)
+      // total = precio - crédito + gastos ≈ precio - crédito + precio * 0.10
+      // presupuesto = precio * 1.10 - crédito
+      // precio = (presupuesto + crédito) / 1.10
+      const gastosRate = CONFIG.ESCRIBANO + CONFIG.SELLOS + CONFIG.REGISTRALES + CONFIG.INMOB + CONFIG.HIPOTECA;
+      const precioMax = Math.round((CONFIG.PRESUPUESTO + credito) / (1 + gastosRate));
+      return { min: precioMin, max: precioMax };
     }
 
     // Consulta dólar BNA venta desde API
@@ -144,7 +221,7 @@ Av Juan B Alberdi 4600,Parque Avellaneda,105000,70,140,70,3,si,si,0,GOLDEN HAUS,
       filterBarrio: 'todos',
       filterActivo: 'todos',
       showHelp: false,
-      sortBy: 'completeness',
+      sortBy: 'score',
       sortDir: 'desc',
       showConfig: false,
       configTab: 'general',
@@ -229,6 +306,61 @@ Av Juan B Alberdi 4600,Parque Avellaneda,105000,70,140,70,3,si,si,0,GOLDEN HAUS,
       calc._ok = calc._total <= CONFIG.PRESUPUESTO;
       calc._dif = CONFIG.PRESUPUESTO - calc._total;
       calc._completeness = [p.direccion, p.barrio, precio > 0, m2 > 0].filter(Boolean).length;
+
+      // Score de candidato (sistema de tiers + preferencias)
+      let score = 0;
+      const activo = (p.activo || '').toLowerCase();
+      const aptoCredito = (p.apto_credito || '').toLowerCase();
+      const W = WEIGHTS;  // Preferencias ponderadas
+
+      // === SISTEMA DE TIERS (capas jerárquicas) ===
+      // Cada tier separa por 10000 pts para que las preferencias no mezclen tiers
+      const TIER_GAP = 10000;
+
+      if (!p.link) {
+        // Sin link = tier más bajo
+        score = -5 * TIER_GAP;
+      } else if (activo === 'no') {
+        // TIER 4: Inactivo (abajo de todo)
+        score = -4 * TIER_GAP;
+      } else if (aptoCredito === 'no') {
+        // TIER 3: Activo pero NO apto crédito
+        score = -3 * TIER_GAP;
+      } else if (!calc._ok && precio > 0) {
+        // TIER 2: Activo + Apto crédito pero NO en presupuesto
+        score = -2 * TIER_GAP;
+      } else {
+        // TIER 1: Activo + Apto crédito + En presupuesto (los mejores)
+        score = 0;
+      }
+
+      // === PREFERENCIAS PONDERADAS (dentro de cada tier) ===
+      // Valor vs mercado
+      if (calc._vsRef !== null && W.bajo_mercado.weight > 0) {
+        if (calc._vsRef < -0.15) score += 15 * W.bajo_mercado.weight;
+        else if (calc._vsRef < -0.05) score += 8 * W.bajo_mercado.weight;
+        else if (calc._vsRef < 0) score += 3 * W.bajo_mercado.weight;
+        else if (calc._vsRef > 0.15) score -= 5 * W.bajo_mercado.weight;
+      }
+
+      // M² (más es mejor)
+      if (W.m2.weight > 0) {
+        if (m2 >= 70) score += 4 * W.m2.weight;
+        else if (m2 >= 50) score += 2 * W.m2.weight;
+        else if (m2 >= 40) score += 1 * W.m2.weight;
+      }
+
+      // Características
+      if (p.terraza?.toLowerCase() === 'si') score += 10 * W.terraza.weight;
+      if (p.balcon?.toLowerCase() === 'si') score += 10 * W.balcon.weight;
+      if (parseInt(p.cocheras) > 0) score += 10 * W.cochera.weight;
+      if (p.luminosidad?.toLowerCase() === 'si') score += 10 * W.luminosidad.weight;
+      if (p.disposicion?.toLowerCase() === 'frente') score += 10 * W.frente.weight;
+
+      // Datos completos (menor peso)
+      score += calc._completeness * 3;
+
+      calc._score = score;
       return calc;
     }
 
@@ -243,7 +375,7 @@ Av Juan B Alberdi 4600,Parque Avellaneda,105000,70,140,70,3,si,si,0,GOLDEN HAUS,
       state.error = null;
       render();
 
-      const API_URL = `https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}/values/A:V?key=${API_KEY}`;
+      const API_URL = `https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}/values/A:AH?key=${API_KEY}`;
       console.log('Using Sheets API');
 
       try {
@@ -350,11 +482,19 @@ Av Juan B Alberdi 4600,Parque Avellaneda,105000,70,140,70,3,si,si,0,GOLDEN HAUS,
     }
 
     function activoBadge(activo) {
-      if (!activo) return '<span class="text-slate-300 text-xs italic">activo?</span>';
+      if (!activo) return '<span class="text-slate-300">?</span>';
       const s = activo.toLowerCase();
-      if (s === 'si') return '<span class="text-xs bg-green-100 text-green-700 px-1.5 py-0.5 rounded">Activo</span>';
-      if (s === 'no') return '<span class="text-xs bg-red-100 text-red-700 px-1.5 py-0.5 rounded">Baja</span>';
-      return `<span class="text-xs bg-yellow-100 text-yellow-700 px-1.5 py-0.5 rounded">${activo}</span>`;
+      if (s === 'si') return '<span class="text-green-600 text-lg">✓</span>';
+      if (s === 'no') return '<span class="text-red-600 text-lg">✗</span>';
+      return `<span class="text-yellow-600">${activo}</span>`;
+    }
+
+    function aptoCreditoBadge(apto) {
+      if (!apto) return '<span class="text-slate-300">?</span>';
+      const s = apto.toLowerCase();
+      if (s === 'si') return '<span class="text-green-600 text-lg">✓</span>';
+      if (s === 'no') return '<span class="text-amber-600 text-lg">✗</span>';
+      return `<span class="text-yellow-600">${apto}</span>`;
     }
 
     function statusBadge(status) {
@@ -429,6 +569,28 @@ Av Juan B Alberdi 4600,Parque Avellaneda,105000,70,140,70,3,si,si,0,GOLDEN HAUS,
       render();
     }
 
+    function updateWeight(key, value) {
+      WEIGHTS[key].weight = parseInt(value);
+      saveWeights(WEIGHTS);
+      render();
+    }
+
+    function toggleCondition(key, enabled) {
+      CONDITIONS[key].enabled = enabled;
+      saveConditions(CONDITIONS);
+      render();
+    }
+
+    function resetWeights() {
+      if (confirm('¿Resetear condiciones y preferencias a valores por defecto?')) {
+        CONDITIONS = JSON.parse(JSON.stringify(DEFAULT_CONDITIONS));
+        WEIGHTS = JSON.parse(JSON.stringify(DEFAULT_WEIGHTS));
+        saveConditions(CONDITIONS);
+        saveWeights(WEIGHTS);
+        render();
+      }
+    }
+
     function addBarrio() {
       const nombre = prompt('Nombre del barrio:');
       if (nombre && nombre.trim()) {
@@ -453,8 +615,12 @@ Av Juan B Alberdi 4600,Parque Avellaneda,105000,70,140,70,3,si,si,0,GOLDEN HAUS,
       if (confirm('¿Resetear toda la configuración a los valores por defecto?')) {
         CONFIG = { ...DEFAULT_CONFIG };
         REF_M2 = { ...DEFAULT_REF_M2 };
+        CONDITIONS = JSON.parse(JSON.stringify(DEFAULT_CONDITIONS));
+        WEIGHTS = JSON.parse(JSON.stringify(DEFAULT_WEIGHTS));
         saveConfig(CONFIG);
         saveRefM2(REF_M2);
+        saveConditions(CONDITIONS);
+        saveWeights(WEIGHTS);
         state.manualUrl = CONFIG.SHEET_URL;
         render();
       }
@@ -602,14 +768,21 @@ Av Juan B Alberdi 4600,Parque Avellaneda,105000,70,140,70,3,si,si,0,GOLDEN HAUS,
               <div>
                 <h3 class="text-sm font-medium text-slate-700 mb-3 pb-1 border-b border-slate-100">Características</h3>
                 <div class="grid grid-cols-2 md:grid-cols-4 gap-x-6 gap-y-2 text-sm">
+                  <div class="flex justify-between"><span class="text-slate-400">Tipo</span><span class="text-slate-700 font-medium">${p.tipo ? p.tipo.toUpperCase() : '-'}</span></div>
                   <div class="flex justify-between"><span class="text-slate-400">Ambientes</span><span class="text-slate-700">${p.amb || '-'}</span></div>
+                  <div class="flex justify-between"><span class="text-slate-400">m² cubiertos</span><span class="text-slate-700">${p.m2_cub || '-'}</span></div>
                   <div class="flex justify-between"><span class="text-slate-400">m² total</span><span class="text-slate-700">${p.m2_tot || '-'}</span></div>
-                  <div class="flex justify-between"><span class="text-slate-400">m² terraza</span><span class="text-slate-700">${p.m2_terr || '-'}</span></div>
-                  <div class="flex justify-between"><span class="text-slate-400">Terraza</span><span class="text-slate-700">${p.terraza || '-'}</span></div>
-                  <div class="flex justify-between"><span class="text-slate-400">Expensas</span><span class="text-slate-700">${p.expensas ? '$' + p.expensas : '-'}</span></div>
-                  <div class="flex justify-between"><span class="text-slate-400">Antigüedad</span><span class="text-slate-700">${p.antiguedad || '-'}</span></div>
+                  <div class="flex justify-between"><span class="text-slate-400">Piso</span><span class="text-slate-700">${p.piso !== undefined && p.piso !== '' ? (p.piso === '0' ? 'PB' : p.piso + '°') : '-'}</span></div>
+                  <div class="flex justify-between"><span class="text-slate-400">Disposición</span><span class="text-slate-700">${p.disposicion || '-'}</span></div>
+                  <div class="flex justify-between"><span class="text-slate-400">Antigüedad</span><span class="text-slate-700">${p.antiguedad ? p.antiguedad + ' años' : '-'}</span></div>
                   <div class="flex justify-between"><span class="text-slate-400">Estado</span><span class="text-slate-700">${p.estado || '-'}</span></div>
-                  <div class="flex justify-between"><span class="text-slate-400">Luminosidad</span><span class="text-slate-700">${p.luminosidad || '-'}</span></div>
+                  <div class="flex justify-between"><span class="text-slate-400">Expensas</span><span class="text-slate-700">${p.expensas ? '$' + parseInt(p.expensas).toLocaleString() : '-'}</span></div>
+                  <div class="flex justify-between"><span class="text-slate-400">Cocheras</span><span class="text-slate-700">${p.cocheras || '0'}</span></div>
+                  <div class="flex justify-between"><span class="text-slate-400">Terraza</span><span class="${p.terraza?.toLowerCase() === 'si' ? 'text-green-600' : 'text-slate-700'}">${p.terraza || '-'}</span></div>
+                  <div class="flex justify-between"><span class="text-slate-400">Balcón</span><span class="${p.balcon?.toLowerCase() === 'si' ? 'text-green-600' : 'text-slate-700'}">${p.balcon || '-'}</span></div>
+                  <div class="flex justify-between"><span class="text-slate-400">Ascensor</span><span class="${p.ascensor?.toLowerCase() === 'si' ? 'text-green-600' : p.ascensor?.toLowerCase() === 'no' ? 'text-red-500' : 'text-slate-700'}">${p.ascensor || '-'}</span></div>
+                  <div class="flex justify-between"><span class="text-slate-400">Luminosidad</span><span class="${p.luminosidad?.toLowerCase() === 'si' ? 'text-green-600' : 'text-slate-700'}">${p.luminosidad || '-'}</span></div>
+                  <div class="flex justify-between"><span class="text-slate-400">m² terraza</span><span class="text-slate-700">${p.m2_terr || '-'}</span></div>
                 </div>
               </div>
 
@@ -705,8 +878,19 @@ Av Juan B Alberdi 4600,Parque Avellaneda,105000,70,140,70,3,si,si,0,GOLDEN HAUS,
           ${filtered.map(p => {
             const completePct = p._completeness * 25;
             const barColor = p._completeness >= 3 ? 'bg-green-500' : p._completeness >= 2 ? 'bg-yellow-500' : 'bg-red-400';
+            const isInactivo = (p.activo || '').toLowerCase() === 'no';
+            const noAptoCredito = (p.apto_credito || '').toLowerCase() !== 'si';
+            const cardStyle = isInactivo
+              ? 'bg-red-50 border-2 border-red-200 opacity-70'
+              : noAptoCredito
+                ? 'bg-amber-50 border-2 border-amber-200 opacity-80'
+                : 'bg-white';
+            const warnings = [];
+            if (isInactivo) warnings.push('<span class="text-red-600">INACTIVO</span>');
+            if (noAptoCredito) warnings.push('<span class="text-amber-600">NO APTO CRÉDITO</span>');
             return `
-              <div class="bg-white rounded-xl p-4 shadow-sm cursor-pointer hover:shadow-md transition-shadow" onclick="showDetail(${p._idx})">
+              <div class="${cardStyle} rounded-xl p-4 shadow-sm cursor-pointer hover:shadow-md transition-shadow" onclick="showDetail(${p._idx})">
+                ${warnings.length ? '<div class="text-xs font-medium mb-1">' + warnings.join(' · ') + '</div>' : ''}
                 <!-- Barra completitud -->
                 <div class="flex items-center gap-2 mb-2">
                   <div class="flex-1 h-1.5 bg-slate-200 rounded-full overflow-hidden">
@@ -812,14 +996,19 @@ Av Juan B Alberdi 4600,Parque Avellaneda,105000,70,140,70,3,si,si,0,GOLDEN HAUS,
       return `
         <div>
           <div class="flex items-center justify-between mb-3">
-            <h3 class="font-medium text-slate-700">⚙️ Configuración</h3>
-            <button onclick="resetConfig()" class="text-xs text-red-500 hover:text-red-700">Resetear todo</button>
-          </div>
-
-          <div class="flex border-b border-slate-200 mb-4">
-            <button onclick="state.configTab='general';render()" class="${tabClass('general')}">General</button>
-            <button onclick="state.configTab='gastos';render()" class="${tabClass('gastos')}">Escrituración</button>
-            <button onclick="state.configTab='barrios';render()" class="${tabClass('barrios')}">Barrios $/m²</button>
+            <div class="flex items-center gap-4">
+              <h3 class="font-medium text-slate-700">⚙️ Configuración</h3>
+              <div class="flex border-b border-slate-200">
+                <button onclick="state.configTab='general';render()" class="${tabClass('general')}">General</button>
+                <button onclick="state.configTab='gastos';render()" class="${tabClass('gastos')}">Escrituración</button>
+                <button onclick="state.configTab='barrios';render()" class="${tabClass('barrios')}">Barrios $/m²</button>
+                <button onclick="state.configTab='pesos';render()" class="${tabClass('pesos')}">⚖️ Pesos</button>
+              </div>
+            </div>
+            <div class="flex items-center gap-3">
+              <button onclick="resetConfig()" class="text-xs text-slate-400 hover:text-red-500">Reset todo</button>
+              <button onclick="state.showConfig=false;render()" class="p-1 text-slate-400 hover:text-slate-600 hover:bg-slate-200 rounded" title="Cerrar">✕</button>
+            </div>
           </div>
 
           ${state.configTab === 'general' ? `
@@ -839,6 +1028,10 @@ Av Juan B Alberdi 4600,Parque Avellaneda,105000,70,140,70,3,si,si,0,GOLDEN HAUS,
               <div>
                 <label class="block text-xs text-slate-500 mb-1">Tengo para poner (USD)</label>
                 <input type="number" value="${CONFIG.PRESUPUESTO}" onchange="updateConfig('PRESUPUESTO', parseInt(this.value))" class="w-full px-3 py-2 border rounded-lg text-sm" />
+              </div>
+              <div>
+                <label class="block text-xs text-slate-500 mb-1">= Rango de precios</label>
+                <div class="px-3 py-2 bg-slate-100 rounded-lg text-sm font-mono text-slate-700">$${getPrecioRange().min.toLocaleString()} - $${getPrecioRange().max.toLocaleString()}</div>
               </div>
               <div>
                 <label class="block text-xs text-slate-500 mb-1">Auto-refresh (seg, 0=off)</label>
@@ -896,6 +1089,35 @@ Av Juan B Alberdi 4600,Parque Avellaneda,105000,70,140,70,3,si,si,0,GOLDEN HAUS,
                   <button onclick="deleteBarrio('${escapeHtml(barrio)}')" class="text-red-400 hover:text-red-600 text-sm">✕</button>
                 </div>
               `).join('')}
+            </div>
+          ` : ''}
+
+          ${state.configTab === 'pesos' ? `
+            <!-- Tiers + Preferencias compacto -->
+            <div class="flex flex-wrap items-center gap-2 text-xs mb-3">
+              <span class="font-medium text-slate-600">Orden fijo:</span>
+              <span class="bg-green-100 text-green-700 px-1.5 py-0.5 rounded">1. Activo+Apto+OK$</span>
+              <span class="bg-yellow-100 text-yellow-700 px-1.5 py-0.5 rounded">2. Activo+Apto+Caro</span>
+              <span class="bg-orange-100 text-orange-700 px-1.5 py-0.5 rounded">3. Activo+NoApto</span>
+              <span class="bg-red-100 text-red-700 px-1.5 py-0.5 rounded">4. Inactivo</span>
+              <span class="text-slate-400 ml-2">→ Dentro de cada capa ordena por:</span>
+            </div>
+            <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-7 gap-2">
+              ${Object.entries(WEIGHTS).map(([key, config]) => `
+                <div class="flex flex-col">
+                  <div class="flex items-center justify-between text-xs mb-0.5">
+                    <span class="text-slate-600 truncate" title="${config.desc}">${config.label}</span>
+                    <span class="font-bold text-blue-600 ml-1">${config.weight}</span>
+                  </div>
+                  <input type="range" min="0" max="10" value="${config.weight}"
+                    onchange="updateWeight('${key}', this.value)"
+                    oninput="updateWeight('${key}', this.value)"
+                    class="w-full h-1.5 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-blue-500" />
+                </div>
+              `).join('')}
+            </div>
+            <div class="mt-2 text-right">
+              <button onclick="resetWeights()" class="text-xs text-slate-400 hover:text-red-500">Reset</button>
             </div>
           ` : ''}
         </div>
@@ -968,21 +1190,23 @@ Av Juan B Alberdi 4600,Parque Avellaneda,105000,70,140,70,3,si,si,0,GOLDEN HAUS,
           <!-- Main Header -->
           <div class="max-w-7xl mx-auto px-4 py-3">
             <div class="flex flex-wrap items-center justify-between gap-3">
-              <div>
-                <h1 class="text-xl md:text-2xl font-bold text-slate-800">🏠 Buscador Casita Chiquis <span class="emoji-float">👩</span><span class="emoji-heart">❤️</span><span class="emoji-float">🧔‍♂️</span><span class="emoji-float">🐱</span><span class="emoji-float">🐈</span></h1>
-                <p class="text-xs text-slate-500">Crédito $${getCreditoUSD().toLocaleString()} USD · Tengo $${CONFIG.PRESUPUESTO.toLocaleString()}</p>
+              <div class="flex items-center gap-4">
+                <h1 class="text-xl font-bold text-slate-800">🏠 Casita Chiquis <span class="emoji-float text-sm">👩❤️🧔‍♂️🐱🐈</span></h1>
+                <nav class="flex bg-slate-100 rounded-lg p-1">
+                  <span class="px-3 py-1.5 text-sm rounded-md bg-white shadow-sm text-slate-700 font-medium">Buscador</span>
+                  <a href="stats.html" class="px-3 py-1.5 text-sm rounded-md text-slate-600 hover:bg-white/50">📊 Stats</a>
+                </nav>
               </div>
               <div class="flex items-center gap-2">
-                <a href="https://docs.google.com/spreadsheets/d/${SHEET_ID}" target="_blank" class="px-3 py-1.5 bg-green-600 text-white text-sm rounded-lg hover:bg-green-700 font-medium" title="Abrir Google Sheet para cargar datos">📝 Cargar datos</a>
-                <a href="stats.html" class="px-3 py-1.5 bg-purple-600 text-white text-sm rounded-lg hover:bg-purple-700 font-medium" title="Ver estadísticas y análisis">📊 Stats</a>
-                <span class="w-px h-6 bg-slate-200"></span>
-                <button onclick="fetchData()" class="px-3 py-1.5 bg-blue-500 text-white text-sm rounded-lg hover:bg-blue-600 disabled:opacity-50" ${state.loading ? 'disabled' : ''} title="Actualizar datos desde Sheet">${state.loading ? '...' : '↻'}</button>
-                <button onclick="toggleAutoRefresh()" class="px-3 py-1.5 ${state.autoRefreshEnabled ? 'bg-green-500 text-white' : 'bg-slate-200 text-slate-700'} text-sm rounded-lg hover:opacity-80" title="Auto-refresh cada ${CONFIG.AUTO_REFRESH}s">${state.autoRefreshEnabled ? '⏸' : '▶'}</button>
+                <a href="https://docs.google.com/spreadsheets/d/${SHEET_ID}" target="_blank" class="px-3 py-1.5 bg-green-600 text-white text-sm rounded-lg hover:bg-green-700" title="Abrir Google Sheet">📝 Sheet</a>
+                <button onclick="fetchData()" class="px-3 py-1.5 bg-blue-500 text-white text-sm rounded-lg hover:bg-blue-600 disabled:opacity-50" ${state.loading ? 'disabled' : ''} title="Actualizar datos">${state.loading ? '...' : '↻'}</button>
+                <button onclick="toggleAutoRefresh()" class="px-3 py-1.5 ${state.autoRefreshEnabled ? 'bg-green-500 text-white' : 'bg-slate-200 text-slate-700'} text-sm rounded-lg hover:opacity-80" title="Auto-refresh">${state.autoRefreshEnabled ? '⏸' : '▶'}</button>
                 <span class="w-px h-6 bg-slate-200"></span>
                 <button onclick="state.showHelp=!state.showHelp;render()" class="px-3 py-1.5 ${state.showHelp ? 'bg-purple-500 text-white' : 'bg-slate-200 text-slate-700'} text-sm rounded-lg hover:opacity-80" title="Ayuda">?</button>
-                <button onclick="state.showConfig=!state.showConfig;render()" class="px-3 py-1.5 ${state.showConfig ? 'bg-blue-500 text-white' : 'bg-slate-200 text-slate-700'} text-sm rounded-lg hover:opacity-80" title="Configuración">⚙️</button>
+                <button onclick="state.showConfig=!state.showConfig;render()" class="px-3 py-1.5 ${state.showConfig ? 'bg-blue-500 text-white' : 'bg-slate-200 text-slate-700'} text-sm rounded-lg hover:opacity-80" title="Config">⚙️</button>
               </div>
             </div>
+            <p class="text-xs text-slate-500 mt-1">Crédito $${getCreditoUSD().toLocaleString()} USD · Tengo $${CONFIG.PRESUPUESTO.toLocaleString()} · Busco $${getPrecioRange().min.toLocaleString()} - $${getPrecioRange().max.toLocaleString()}</p>
           </div>
 
           <!-- Config/Help panels inside header -->
@@ -1032,6 +1256,7 @@ Av Juan B Alberdi 4600,Parque Avellaneda,105000,70,140,70,3,si,si,0,GOLDEN HAUS,
                 </select>
                 <div class="flex items-center gap-1 ml-auto">
                   <select onchange="state.sortBy=this.value;render()" class="border border-slate-200 rounded-lg px-2 py-1.5 text-sm bg-white">
+                    <option value="score" ${state.sortBy === 'score' ? 'selected' : ''}>⭐ Mejor candidato</option>
                     <option value="completeness" ${state.sortBy === 'completeness' ? 'selected' : ''}>Completitud</option>
                     <option value="precio" ${state.sortBy === 'precio' ? 'selected' : ''}>Precio</option>
                     <option value="total" ${state.sortBy === 'total' ? 'selected' : ''}>A juntar</option>
@@ -1062,39 +1287,42 @@ Av Juan B Alberdi 4600,Parque Avellaneda,105000,70,140,70,3,si,si,0,GOLDEN HAUS,
                   <table class="w-full text-sm">
                     <thead class="bg-slate-50 border-b border-slate-200">
                       <tr>
-                        <th class="px-2 py-2.5 text-center font-medium text-slate-600 w-16" title="Completitud de datos">%</th>
+                        <th class="px-2 py-2.5 text-center font-medium text-slate-600">Activo</th>
+                        <th class="px-2 py-2.5 text-center font-medium text-slate-600" title="Apto Crédito">Apto</th>
+                        <th class="px-2 py-2.5 text-center font-medium text-slate-600">Status</th>
                         <th class="px-3 py-2.5 text-left font-medium text-slate-600">Dirección</th>
                         <th class="px-3 py-2.5 text-left font-medium text-slate-600">Barrio</th>
+                        <th class="px-2 py-2.5 text-center font-medium text-slate-600">Tipo</th>
                         <th class="px-3 py-2.5 text-right font-medium text-slate-600">Precio</th>
-                        <th class="px-3 py-2.5 text-right font-medium text-slate-600">m²</th>
+                        <th class="px-2 py-2.5 text-right font-medium text-slate-600">m²</th>
                         <th class="px-3 py-2.5 text-right font-medium text-slate-600">$/m²</th>
-                        <th class="px-3 py-2.5 text-center font-medium text-slate-600" title="Diferencia vs precio promedio del barrio">vs Barrio</th>
+                        <th class="px-2 py-2.5 text-center font-medium text-slate-600" title="Diferencia vs precio promedio del barrio">vs Ref</th>
                         <th class="px-3 py-2.5 text-right font-medium text-slate-600">A juntar</th>
-                        <th class="px-3 py-2.5 text-center font-medium text-slate-600">OK</th>
-                        <th class="px-3 py-2.5 text-center font-medium text-slate-600">Status</th>
-                        <th class="px-3 py-2.5 text-center font-medium text-slate-600">Activo</th>
+                        <th class="px-2 py-2.5 text-center font-medium text-slate-600">OK</th>
+                        <th class="px-2 py-2.5 text-center font-medium text-slate-600" title="Cocheras">🚗</th>
                       </tr>
                     </thead>
                     <tbody class="divide-y divide-slate-100">
                       ${filtered.map((p, i) => {
                         const barColor = p._completeness >= 3 ? 'bg-green-500' : p._completeness >= 2 ? 'bg-yellow-500' : 'bg-red-400';
+                        const isInactivo = (p.activo || '').toLowerCase() === 'no';
+                        const noApto = (p.apto_credito || '').toLowerCase() !== 'si';
+                        const rowBg = isInactivo ? 'bg-red-100/70 opacity-60' : noApto ? 'bg-amber-50/70' : (p._ok ? 'bg-green-50/30' : '');
                         return `
-                        <tr class="hover:bg-slate-50 transition-colors cursor-pointer ${p._ok ? 'bg-green-50/30' : ''}" onclick="showDetail(${p._idx})">
-                          <td class="px-2 py-2.5">
-                            <div class="w-10 h-1.5 bg-slate-200 rounded-full mx-auto">
-                              <div class="h-full ${barColor} rounded-full" style="width: ${p._completeness * 25}%"></div>
-                            </div>
-                          </td>
+                        <tr class="hover:bg-slate-100 transition-colors cursor-pointer ${rowBg}" onclick="showDetail(${p._idx})">
+                          <td class="px-2 py-2.5 text-center">${activoBadge(p.activo)}</td>
+                          <td class="px-2 py-2.5 text-center">${aptoCreditoBadge(p.apto_credito)}</td>
+                          <td class="px-2 py-2.5 text-center">${statusBadge(p.status)}</td>
                           <td class="px-3 py-2.5"><span class="font-medium text-slate-800">${p.direccion ? escapeHtml(p.direccion) : '<span class="text-slate-300 text-xs italic">sin dir</span>'}</span></td>
-                          <td class="px-3 py-2.5 text-slate-600">${p.barrio ? escapeHtml(p.barrio) : '<span class="text-slate-300 text-xs italic">sin barrio</span>'}</td>
-                          <td class="px-3 py-2.5 text-right font-mono text-slate-800">${p._precio > 0 ? '$' + p._precio.toLocaleString() : '<span class="text-slate-300 text-xs italic">$?</span>'}</td>
-                          <td class="px-3 py-2.5 text-right text-slate-600">${p._m2 ? p._m2 : '<span class="text-slate-300 text-xs italic">m²?</span>'}</td>
+                          <td class="px-3 py-2.5 text-slate-600">${p.barrio ? escapeHtml(p.barrio) : '<span class="text-slate-300 text-xs italic">-</span>'}</td>
+                          <td class="px-2 py-2.5 text-center text-xs text-slate-600">${p.tipo ? escapeHtml(p.tipo.toUpperCase()) : '<span class="text-slate-300">-</span>'}</td>
+                          <td class="px-3 py-2.5 text-right font-mono text-slate-800">${p._precio > 0 ? '$' + p._precio.toLocaleString() : '<span class="text-slate-300">-</span>'}</td>
+                          <td class="px-2 py-2.5 text-right text-slate-600">${p._m2 ? p._m2 : '<span class="text-slate-300">-</span>'}</td>
                           <td class="px-3 py-2.5 text-right font-mono text-slate-600">${p._preciom2 > 0 ? '$' + p._preciom2.toLocaleString() : '<span class="text-slate-300">-</span>'}</td>
-                          <td class="px-3 py-2.5 text-center">${evalIcon(p._vsRef)}</td>
-                          <td class="px-3 py-2.5 text-right"><div class="font-mono text-slate-800">${p._precio > 0 ? '$' + p._total.toLocaleString() : '<span class="text-slate-300">-</span>'}</div></td>
-                          <td class="px-3 py-2.5 text-center">${p._precio > 0 ? okPill(p._ok) : '<span class="text-slate-300">-</span>'}</td>
-                          <td class="px-3 py-2.5 text-center">${statusBadge(p.status)}</td>
-                          <td class="px-3 py-2.5 text-center">${activoBadge(p.activo)}</td>
+                          <td class="px-2 py-2.5 text-center">${evalIcon(p._vsRef)}</td>
+                          <td class="px-3 py-2.5 text-right font-mono text-slate-800">${p._precio > 0 ? '$' + p._total.toLocaleString() : '<span class="text-slate-300">-</span>'}</td>
+                          <td class="px-2 py-2.5 text-center">${p._precio > 0 ? okPill(p._ok) : '<span class="text-slate-300">-</span>'}</td>
+                          <td class="px-2 py-2.5 text-center">${p.cocheras ? (p.cocheras !== '0' ? '<span class="text-green-600">✓</span>' : '<span class="text-slate-300">-</span>') : '<span class="text-slate-300">-</span>'}</td>
                         </tr>
                       `;}).join('')}
                     </tbody>
