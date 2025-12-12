@@ -62,18 +62,14 @@ function calculateProperty(p) {
   const activo = (p.activo || '').toLowerCase();
   const aptoCredito = (p.apto_credito || '').toLowerCase();
   const W = WEIGHTS;
-  const TIER_GAP = 10000;
 
-  if (!p.link) {
-    score = -5 * TIER_GAP;
-  } else if (activo === 'no') {
-    score = -4 * TIER_GAP;
-  } else if (aptoCredito === 'no') {
-    score = -3 * TIER_GAP;
-  } else if (!calc._ok && precio > 0) {
-    score = -2 * TIER_GAP;
-  } else {
+  // Filtros básicos: si no pasa, score = 0
+  const pasaFiltros = p.link && activo !== 'no' && aptoCredito !== 'no' && (calc._ok || precio === 0);
+
+  if (!pasaFiltros) {
     score = 0;
+  } else {
+    score = 10; // Base para los que pasan filtros
   }
 
   if (calc._vsRef !== null && W.bajo_mercado.weight > 0) {

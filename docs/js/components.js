@@ -218,7 +218,7 @@ function renderTable(filtered) {
                 <td class="px-2 py-2.5 text-center">${evalIcon(p._vsRef)}</td>
                 <td class="px-3 py-2.5 text-right font-mono text-slate-800">${p._precio > 0 ? '$' + p._total.toLocaleString() : '<span class="text-slate-300">-</span>'}</td>
                 <td class="px-2 py-2.5 text-center">${p._precio > 0 ? okPill(p._ok) : '<span class="text-slate-300">-</span>'}</td>
-                <td class="px-2 py-2.5 text-center"><span class="text-xs font-mono ${p._score > 50 ? 'text-green-600 font-bold' : p._score > 0 ? 'text-green-500' : p._score < -10000 ? 'text-red-400' : 'text-slate-400'}">${p._score}</span></td>
+                <td class="px-2 py-2.5 text-center"><span class="text-xs font-mono ${p._score > 50 ? 'text-green-600 font-bold' : p._score > 0 ? 'text-green-500' : 'text-slate-400'}">${p._score}</span></td>
                 <td class="px-2 py-2.5 text-center">${p.cocheras ? (p.cocheras !== '0' ? '<span class="text-green-600">✓</span>' : '<span class="text-slate-300">-</span>') : '<span class="text-slate-300">-</span>'}</td>
               </tr>
             `;}).join('')}
@@ -270,7 +270,7 @@ function renderCards(filtered) {
               ${statusBadge(p.status)}
               ${activoBadge(p.activo)}
               ${evalIcon(p._vsRef)}
-              <span class="text-xs font-mono px-1.5 py-0.5 rounded ${p._score > 50 ? 'bg-green-100 text-green-700 font-bold' : p._score > 0 ? 'bg-green-50 text-green-600' : p._score < -10000 ? 'bg-red-50 text-red-400' : 'bg-slate-100 text-slate-400'}">⭐${p._score}</span>
+              <span class="text-xs font-mono px-1.5 py-0.5 rounded ${p._score > 50 ? 'bg-green-100 text-green-700 font-bold' : p._score > 0 ? 'bg-green-50 text-green-600' : 'bg-slate-100 text-slate-400'}">⭐${p._score}</span>
             </div>
           </div>
         `;
