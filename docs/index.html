@@ -13,7 +13,8 @@
 <body class="bg-slate-50">
   <div id="root"></div>
   <script>
-    const CONFIG = {
+    // Defaults
+    const DEFAULT_CONFIG = {
       SHEET_URL: '',
       CREDITO: 86000,
       PRESUPUESTO: 25000,
@@ -27,12 +28,38 @@
       CERTIFICADOS: 300,
     };
 
-    const REF_M2 = {
+    const DEFAULT_REF_M2 = {
       "Flores": 1953, "Parque Chacabuco": 1951, "Liniers": 1857, "Monte Castro": 1854,
       "Floresta": 1683, "Parque Avellaneda": 1750, "Villa Luro": 1785, "Vélez Sarsfield": 1663,
       "Mataderos": 1629, "Paternal": 1897, "Caballito": 2357, "Villa Crespo": 2150,
       "Villa del Parque": 2063, "Villa Devoto": 2348, "Boedo": 1876
     };
+
+    // Load from localStorage or use defaults
+    function loadConfig() {
+      try {
+        const saved = localStorage.getItem('casita_config');
+        return saved ? { ...DEFAULT_CONFIG, ...JSON.parse(saved) } : { ...DEFAULT_CONFIG };
+      } catch { return { ...DEFAULT_CONFIG }; }
+    }
+
+    function loadRefM2() {
+      try {
+        const saved = localStorage.getItem('casita_ref_m2');
+        return saved ? JSON.parse(saved) : { ...DEFAULT_REF_M2 };
+      } catch { return { ...DEFAULT_REF_M2 }; }
+    }
+
+    function saveConfig(config) {
+      localStorage.setItem('casita_config', JSON.stringify(config));
+    }
+
+    function saveRefM2(refM2) {
+      localStorage.setItem('casita_ref_m2', JSON.stringify(refM2));
+    }
+
+    let CONFIG = loadConfig();
+    let REF_M2 = loadRefM2();
 
     const SAMPLE_CSV = `id,direccion,barrio,precio,m2_cub,m2_tot,m2_terr,amb,apto_credito,terraza,expensas,inmobiliaria,status,notas,link,online
 1,Av Juan B Alberdi 4600,Parque Avellaneda,105000,70,140,70,3,si,si,,GOLDEN HAUS,Por ver,40 años sin expensas,https://www.argenprop.com/ficha--17094976,online
@@ -54,7 +81,8 @@
       filterOnline: 'todos',
       sortBy: 'precio',
       sortDir: 'asc',
-      showConfig: false
+      showConfig: false,
+      configTab: 'general'
     };
 
     function parseCSV(text) {
@@ -181,6 +209,151 @@
       return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
     }
 
+    function updateConfig(key, value) {
+      CONFIG[key] = value;
+      saveConfig(CONFIG);
+      render();
+    }
+
+    function updateRefM2(barrio, value) {
+      if (value === '' || value === null) {
+        delete REF_M2[barrio];
+      } else {
+        REF_M2[barrio] = parseInt(value) || 0;
+      }
+      saveRefM2(REF_M2);
+      render();
+    }
+
+    function addBarrio() {
+      const nombre = prompt('Nombre del barrio:');
+      if (nombre && nombre.trim()) {
+        const valor = prompt('$/m² de referencia:');
+        if (valor) {
+          REF_M2[nombre.trim()] = parseInt(valor) || 0;
+          saveRefM2(REF_M2);
+          render();
+        }
+      }
+    }
+
+    function deleteBarrio(barrio) {
+      if (confirm(`¿Eliminar ${barrio}?`)) {
+        delete REF_M2[barrio];
+        saveRefM2(REF_M2);
+        render();
+      }
+    }
+
+    function resetConfig() {
+      if (confirm('¿Resetear toda la configuración a los valores por defecto?')) {
+        CONFIG = { ...DEFAULT_CONFIG };
+        REF_M2 = { ...DEFAULT_REF_M2 };
+        saveConfig(CONFIG);
+        saveRefM2(REF_M2);
+        state.manualUrl = CONFIG.SHEET_URL;
+        render();
+      }
+    }
+
+    function renderConfigPanel() {
+      const tabClass = (tab) => state.configTab === tab
+        ? 'px-3 py-1.5 text-sm font-medium text-blue-600 border-b-2 border-blue-600'
+        : 'px-3 py-1.5 text-sm text-slate-500 hover:text-slate-700 cursor-pointer';
+
+      return `
+        <div class="bg-white rounded-xl p-4 shadow-sm mb-4 border border-slate-200">
+          <div class="flex items-center justify-between mb-3">
+            <h3 class="font-medium text-slate-700">Configuración</h3>
+            <button onclick="resetConfig()" class="text-xs text-red-500 hover:text-red-700">Resetear todo</button>
+          </div>
+
+          <!-- Tabs -->
+          <div class="flex border-b border-slate-200 mb-4">
+            <button onclick="state.configTab='general';render()" class="${tabClass('general')}">General</button>
+            <button onclick="state.configTab='gastos';render()" class="${tabClass('gastos')}">Gastos</button>
+            <button onclick="state.configTab='barrios';render()" class="${tabClass('barrios')}">Barrios $/m²</button>
+          </div>
+
+          ${state.configTab === 'general' ? `
+            <!-- Google Sheet URL -->
+            <div class="mb-4">
+              <label class="block text-xs text-slate-500 mb-1">URL Google Sheet (CSV)</label>
+              <div class="flex gap-2">
+                <input type="text" id="urlInput" value="${escapeHtml(state.manualUrl)}" placeholder="https://docs.google.com/spreadsheets/d/e/.../pub?output=csv" class="flex-1 px-3 py-2 border rounded-lg text-sm" />
+                <button onclick="state.manualUrl=document.getElementById('urlInput').value;CONFIG.SHEET_URL=state.manualUrl;saveConfig(CONFIG);fetchData(state.manualUrl)" class="px-4 py-2 bg-green-500 text-white rounded-lg text-sm hover:bg-green-600">Conectar</button>
+              </div>
+              ${!state.manualUrl ? '<p class="text-xs text-amber-600 mt-1">Usando datos de ejemplo</p>' : ''}
+            </div>
+
+            <!-- Crédito y Presupuesto -->
+            <div class="grid grid-cols-2 gap-4">
+              <div>
+                <label class="block text-xs text-slate-500 mb-1">Monto crédito hipotecario (USD)</label>
+                <input type="number" value="${CONFIG.CREDITO}" onchange="updateConfig('CREDITO', parseInt(this.value))" class="w-full px-3 py-2 border rounded-lg text-sm" />
+              </div>
+              <div>
+                <label class="block text-xs text-slate-500 mb-1">Presupuesto gastos (USD)</label>
+                <input type="number" value="${CONFIG.PRESUPUESTO}" onchange="updateConfig('PRESUPUESTO', parseInt(this.value))" class="w-full px-3 py-2 border rounded-lg text-sm" />
+              </div>
+            </div>
+          ` : ''}
+
+          ${state.configTab === 'gastos' ? `
+            <div class="grid grid-cols-2 md:grid-cols-3 gap-4">
+              <div>
+                <label class="block text-xs text-slate-500 mb-1">Escribano (%)</label>
+                <input type="number" step="0.01" value="${(CONFIG.ESCRIBANO * 100).toFixed(2)}" onchange="updateConfig('ESCRIBANO', parseFloat(this.value)/100)" class="w-full px-3 py-2 border rounded-lg text-sm" />
+              </div>
+              <div>
+                <label class="block text-xs text-slate-500 mb-1">Sellos (%)</label>
+                <input type="number" step="0.01" value="${(CONFIG.SELLOS * 100).toFixed(2)}" onchange="updateConfig('SELLOS', parseFloat(this.value)/100)" class="w-full px-3 py-2 border rounded-lg text-sm" />
+              </div>
+              <div>
+                <label class="block text-xs text-slate-500 mb-1">Exento sellos hasta (USD)</label>
+                <input type="number" value="${CONFIG.SELLOS_EXENTO}" onchange="updateConfig('SELLOS_EXENTO', parseInt(this.value))" class="w-full px-3 py-2 border rounded-lg text-sm" />
+              </div>
+              <div>
+                <label class="block text-xs text-slate-500 mb-1">Registrales (%)</label>
+                <input type="number" step="0.01" value="${(CONFIG.REGISTRALES * 100).toFixed(2)}" onchange="updateConfig('REGISTRALES', parseFloat(this.value)/100)" class="w-full px-3 py-2 border rounded-lg text-sm" />
+              </div>
+              <div>
+                <label class="block text-xs text-slate-500 mb-1">Inmobiliaria (%)</label>
+                <input type="number" step="0.01" value="${(CONFIG.INMOB * 100).toFixed(2)}" onchange="updateConfig('INMOB', parseFloat(this.value)/100)" class="w-full px-3 py-2 border rounded-lg text-sm" />
+              </div>
+              <div>
+                <label class="block text-xs text-slate-500 mb-1">Hipoteca (%)</label>
+                <input type="number" step="0.01" value="${(CONFIG.HIPOTECA * 100).toFixed(2)}" onchange="updateConfig('HIPOTECA', parseFloat(this.value)/100)" class="w-full px-3 py-2 border rounded-lg text-sm" />
+              </div>
+              <div>
+                <label class="block text-xs text-slate-500 mb-1">Certificados (USD fijo)</label>
+                <input type="number" value="${CONFIG.CERTIFICADOS}" onchange="updateConfig('CERTIFICADOS', parseInt(this.value))" class="w-full px-3 py-2 border rounded-lg text-sm" />
+              </div>
+              <div>
+                <label class="block text-xs text-slate-500 mb-1">Margen referencia (%)</label>
+                <input type="number" step="1" value="${(CONFIG.MARGEN_REF * 100).toFixed(0)}" onchange="updateConfig('MARGEN_REF', parseFloat(this.value)/100)" class="w-full px-3 py-2 border rounded-lg text-sm" />
+              </div>
+            </div>
+          ` : ''}
+
+          ${state.configTab === 'barrios' ? `
+            <div class="mb-3">
+              <button onclick="addBarrio()" class="px-3 py-1.5 bg-blue-500 text-white text-sm rounded-lg hover:bg-blue-600">+ Agregar barrio</button>
+            </div>
+            <div class="grid grid-cols-2 md:grid-cols-3 gap-2 max-h-64 overflow-y-auto">
+              ${Object.entries(REF_M2).sort((a,b) => a[0].localeCompare(b[0])).map(([barrio, valor]) => `
+                <div class="flex items-center gap-2 bg-slate-50 rounded-lg p-2">
+                  <input type="number" value="${valor}" onchange="updateRefM2('${escapeHtml(barrio)}', this.value)" class="w-20 px-2 py-1 border rounded text-sm" />
+                  <span class="text-sm text-slate-600 flex-1 truncate" title="${escapeHtml(barrio)}">${escapeHtml(barrio)}</span>
+                  <button onclick="deleteBarrio('${escapeHtml(barrio)}')" class="text-red-400 hover:text-red-600 text-sm">✕</button>
+                </div>
+              `).join('')}
+            </div>
+          ` : ''}
+        </div>
+      `;
+    }
+
     function render() {
       const properties = getProperties();
       const filtered = getFiltered(properties);
@@ -200,22 +373,12 @@
               <div class="flex items-center gap-2">
                 ${state.lastUpdate ? `<span class="text-xs text-slate-400">${state.lastUpdate.toLocaleTimeString()}</span>` : ''}
                 <button onclick="fetchData(state.manualUrl)" class="px-3 py-1.5 bg-blue-500 text-white text-sm rounded-lg hover:bg-blue-600 disabled:opacity-50" ${state.loading ? 'disabled' : ''}>${state.loading ? '...' : '↻'}</button>
-                <button onclick="state.showConfig=!state.showConfig;render()" class="px-3 py-1.5 bg-slate-200 text-slate-700 text-sm rounded-lg hover:bg-slate-300">⚙️</button>
+                <button onclick="state.showConfig=!state.showConfig;render()" class="px-3 py-1.5 ${state.showConfig ? 'bg-blue-500 text-white' : 'bg-slate-200 text-slate-700'} text-sm rounded-lg hover:opacity-80">⚙️</button>
               </div>
             </div>
 
             <!-- Config Panel -->
-            ${state.showConfig ? `
-              <div class="bg-white rounded-xl p-4 shadow-sm mb-4 border border-slate-200">
-                <h3 class="font-medium text-slate-700 mb-2">Configuración</h3>
-                <div class="flex flex-col md:flex-row gap-2">
-                  <input type="text" id="urlInput" value="${escapeHtml(state.manualUrl)}" placeholder="URL de Google Sheet (CSV público)" class="flex-1 px-3 py-2 border rounded-lg text-sm" />
-                  <button onclick="state.manualUrl=document.getElementById('urlInput').value;fetchData(state.manualUrl)" class="px-4 py-2 bg-green-500 text-white rounded-lg text-sm hover:bg-green-600">Conectar</button>
-                </div>
-                <p class="text-xs text-slate-400 mt-2">Google Sheet → Archivo → Compartir → Publicar en la web → CSV</p>
-                ${!state.manualUrl ? '<p class="text-xs text-amber-600 mt-1">⚠️ Usando datos de ejemplo</p>' : ''}
-              </div>
-            ` : ''}
+            ${state.showConfig ? renderConfigPanel() : ''}
 
             <!-- Error -->
             ${state.error ? `<div class="bg-red-50 border border-red-200 text-red-700 px-4 py-2 rounded-lg mb-4 text-sm">${escapeHtml(state.error)}</div>` : ''}
