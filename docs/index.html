@@ -68,6 +68,7 @@ Av Juan B Alberdi 4600,Parque Avellaneda,105000,70,140,70,3,si,si,0,GOLDEN HAUS,
       loading: false,
       error: null,
       lastUpdate: null,
+      dataSource: null, // 'sheet' or 'cache'
       filterStatus: 'todos',
       filterOk: 'todos',
       filterBarrio: 'todos',
@@ -183,6 +184,7 @@ Av Juan B Alberdi 4600,Parque Avellaneda,105000,70,140,70,3,si,si,0,GOLDEN HAUS,
 
         state.rawData = text;
         state.lastUpdate = new Date();
+        state.dataSource = 'sheet';
         state.error = null;
 
       } catch (err) {
@@ -609,6 +611,7 @@ Av Juan B Alberdi 4600,Parque Avellaneda,105000,70,140,70,3,si,si,0,GOLDEN HAUS,
                   }
                 </div>
                 ${state.lastUpdate ? `<span class="text-slate-400">· ${state.lastUpdate.toLocaleTimeString()}</span>` : ''}
+                ${state.dataSource ? `<span class="text-slate-500">· ${state.dataSource === 'sheet' ? '📊 Sheet' : '💾 Cache'}</span>` : ''}
                 <span class="text-slate-500">${state.autoRefreshEnabled ? '· Auto ●' : ''}</span>
               </div>
               <div class="text-slate-400">
