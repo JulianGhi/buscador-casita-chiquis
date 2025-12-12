@@ -4,6 +4,97 @@ Documentación de problemas encontrados y soluciones para futura referencia.
 
 ---
 
+## PROCEDIMIENTOS PRINCIPALES
+
+### Agregar nuevos links
+```bash
+cd /home/julian/Documents/repos/argentina-real-estate-scraper
+source .venv/bin/activate
+
+# Un link
+python sheets/add_links.py "https://mercadolibre.com.ar/MLA-123456"
+
+# Con nota
+python sheets/add_links.py "https://mercadolibre.com.ar/MLA-123456 - tiene patio"
+
+# Múltiples links
+python sheets/add_links.py URL1 URL2 URL3
+
+# Desde archivo (uno por línea)
+python sheets/add_links.py --file links.txt
+```
+
+### Actualizar datos (re-scrapear)
+```bash
+# Ver qué hay en la planilla vs local
+python sheets/sync_sheet.py diff
+
+# Descargar datos de la planilla
+python sheets/sync_sheet.py pull
+
+# Re-scrapear links existentes
+python sheets/sync_sheet.py scrape
+
+# Subir cambios a la planilla
+python sheets/sync_sheet.py push
+```
+
+### Verificar links activos
+```bash
+# Verifica cuáles dan 404 y los marca como activo='no'
+python sheets/sync_sheet.py scrape --check-links
+```
+
+---
+
+## CAMPOS Y SUS FUENTES
+
+### 📝 Campos MANUALES (el usuario los llena en la planilla)
+| Campo | Descripción |
+|-------|-------------|
+| rating | Puntuación 1-5 |
+| contacto | Teléfono/email del vendedor |
+| fecha_visita | Cuándo se visitó |
+| fecha_contacto | Cuándo se contactó |
+| status | Visitado/Por ver/Descartado/etc |
+| notas | Observaciones |
+| inmobiliaria | Nombre de la inmobiliaria |
+| estado | Estado del inmueble (Bueno/A refaccionar) |
+
+### 🤖 Campos SCRAPEADOS (dependen del anuncio)
+| Campo | % vacíos (ML) | Nota |
+|-------|--------------|------|
+| direccion | 0% | Siempre disponible |
+| barrio | 0% | A veces incorrecto |
+| precio | 0% | Siempre disponible |
+| m2_cub, m2_tot | 0% | Casi siempre |
+| amb | 0% | Casi siempre |
+| expensas | 6% | A veces no dice |
+| tipo | 47% | depto/ph/casa |
+| apto_credito | 53% | Solo si lo dice |
+| terraza | 47% | Solo si lo tiene |
+| balcon | 65% | Solo si lo tiene |
+| cocheras | 65% | Solo si lo tiene |
+| ascensor | 71% | Solo si lo tiene |
+| piso | 76% | A veces no dice |
+| disposicion | 53% | frente/contrafrente |
+| luminosidad | 47% | A veces no dice |
+| fecha_publicado | 88% | Falla el scraper |
+
+### ⚙️ Campos AUTOMÁTICOS
+| Campo | Descripción |
+|-------|-------------|
+| activo | si/no - basado en si el link funciona |
+| fecha_agregado | Fecha cuando se agregó a la planilla |
+| link | La URL del anuncio |
+
+### ⚠️ Problemas conocidos
+1. **fecha_publicado** falla 88% - MercadoLibre cambió el formato
+2. **barrio** puede ser incorrecto - no validamos vs altura de calle
+3. **Argenprop** scraper anda mal - casi todo vacío
+
+---
+
 ## 1. Google Sheets - `append_row` puede corromper datos
 
 ### Problema
