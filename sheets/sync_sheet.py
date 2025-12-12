@@ -36,7 +36,8 @@ CACHE_FILE = Path('data/scrape_cache.json')
 # Columnas que el scraper puede llenar
 SCRAPEABLE_COLS = ['precio', 'm2_cub', 'm2_tot', 'amb', 'barrio', 'direccion',
                    'expensas', 'terraza', 'antiguedad', 'apto_credito', 'tipo', 'activo',
-                   'cocheras', 'disposicion', 'piso', 'ascensor', 'balcon', 'luminosidad']
+                   'cocheras', 'disposicion', 'piso', 'ascensor', 'balcon', 'luminosidad',
+                   'fecha_publicado']
 
 
 def get_client():
@@ -375,6 +376,21 @@ def scrape_mercadolibre(url):
             data['tipo'] = 'piso'
         elif '/departamento.' in url_lower or 'depto' in title_lower:
             data['tipo'] = 'depto'
+
+        # Fecha de publicación ("Publicado hace X días")
+        from datetime import datetime, timedelta
+        pub_match = re.search(r'Publicado hace (\d+) día', resp.text)
+        if pub_match:
+            dias = int(pub_match.group(1))
+            fecha_pub = datetime.now() - timedelta(days=dias)
+            data['fecha_publicado'] = fecha_pub.strftime('%Y-%m-%d')
+        else:
+            # Buscar "Publicado ayer" o "Publicado hoy"
+            if 'Publicado ayer' in resp.text:
+                fecha_pub = datetime.now() - timedelta(days=1)
+                data['fecha_publicado'] = fecha_pub.strftime('%Y-%m-%d')
+            elif 'Publicado hoy' in resp.text:
+                data['fecha_publicado'] = datetime.now().strftime('%Y-%m-%d')
 
         return data
     except Exception as e:
