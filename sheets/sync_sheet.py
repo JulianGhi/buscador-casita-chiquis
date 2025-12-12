@@ -343,10 +343,55 @@ def scrape_mercadolibre(url):
 
         # Info del título y URL
         title = soup.select_one('h1.ui-pdp-title')
-        title_lower = title.text.lower() if title else ''
+        title_text = title.text if title else ''
+        title_lower = title_text.lower()
         url_lower = url.lower()
         # Combinar título y URL para buscar tipo
         search_text = title_lower + ' ' + url_lower
+
+        # Barrios conocidos de CABA
+        barrios_conocidos = [
+            'Floresta', 'Flores', 'Caballito', 'Almagro', 'Villa Crespo',
+            'Paternal', 'Monte Castro', 'Parque Chacabuco', 'Parque Avellaneda',
+            'Villa del Parque', 'Villa Devoto', 'Villa Santa Rita', 'Vélez Sársfield',
+            'Villa Luro', 'Liniers', 'Mataderos', 'Villa Real', 'Versalles',
+            'Villa Pueyrredón', 'Agronomía', 'Villa Ortúzar', 'Chacarita',
+            'Colegiales', 'Belgrano', 'Núñez', 'Saavedra', 'Villa Urquiza',
+            'Coghlan', 'Palermo', 'Recoleta', 'Retiro', 'San Nicolás',
+            'Monserrat', 'San Telmo', 'Constitución', 'Barracas', 'La Boca',
+            'Boedo', 'San Cristóbal', 'Balvanera', 'Once', 'Abasto'
+        ]
+
+        # Extraer barrio de múltiples fuentes
+        barrio_fuentes = {}
+
+        # 1. Del título (alta prioridad - el vendedor lo puso explícitamente)
+        for barrio in barrios_conocidos:
+            if barrio.lower() in title_lower:
+                barrio_fuentes['titulo'] = barrio
+                break
+
+        # 2. De la ubicación (ya extraído antes, si existe)
+        if 'barrio' in data:
+            barrio_fuentes['ubicacion'] = data['barrio']
+
+        # 3. De la URL (algunos tienen el barrio)
+        for barrio in barrios_conocidos:
+            if barrio.lower().replace(' ', '-') in url_lower:
+                barrio_fuentes['url'] = barrio
+                break
+
+        # Decidir el barrio final (prioridad: titulo > ubicacion > url)
+        if 'titulo' in barrio_fuentes:
+            data['barrio'] = barrio_fuentes['titulo']
+        elif 'ubicacion' in barrio_fuentes:
+            data['barrio'] = barrio_fuentes['ubicacion']
+        elif 'url' in barrio_fuentes:
+            data['barrio'] = barrio_fuentes['url']
+
+        # Marcar si hay conflicto (para debug)
+        if len(set(barrio_fuentes.values())) > 1:
+            data['_barrio_conflicto'] = str(barrio_fuentes)
 
         # Descripción completa
         desc_elem = soup.select_one('.ui-pdp-description__content')
