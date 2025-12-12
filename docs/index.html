@@ -9,6 +9,21 @@
   <style>
     body { font-family: system-ui, -apple-system, sans-serif; }
     .modal-backdrop { background: rgba(0,0,0,0.5); }
+
+    @keyframes float {
+      0%, 100% { transform: translateY(0); }
+      50% { transform: translateY(-4px); }
+    }
+    @keyframes pulse-heart {
+      0%, 100% { transform: scale(1); }
+      50% { transform: scale(1.2); }
+    }
+    .emoji-float { display: inline-block; animation: float 2s ease-in-out infinite; }
+    .emoji-float:nth-child(2) { animation-delay: 0.2s; }
+    .emoji-float:nth-child(3) { animation-delay: 0.4s; }
+    .emoji-float:nth-child(4) { animation-delay: 0.6s; }
+    .emoji-float:nth-child(5) { animation-delay: 0.8s; }
+    .emoji-heart { display: inline-block; animation: pulse-heart 1s ease-in-out infinite; }
   </style>
 </head>
 <body class="bg-slate-50">
@@ -659,7 +674,7 @@ Av Juan B Alberdi 4600,Parque Avellaneda,105000,70,140,70,3,si,si,0,GOLDEN HAUS,
           <div class="max-w-7xl mx-auto px-4 py-3">
             <div class="flex flex-wrap items-center justify-between gap-3">
               <div>
-                <h1 class="text-xl md:text-2xl font-bold text-slate-800">🏠 Buscador Casita Chiquis 👩❤️🧔‍♂️🐱🐈</h1>
+                <h1 class="text-xl md:text-2xl font-bold text-slate-800">🏠 Buscador Casita Chiquis <span class="emoji-float">👩</span><span class="emoji-heart">❤️</span><span class="emoji-float">🧔‍♂️</span><span class="emoji-float">🐱</span><span class="emoji-float">🐈</span></h1>
                 <p class="text-xs text-slate-500">Crédito $${CONFIG.CREDITO.toLocaleString()} · Presupuesto $${CONFIG.PRESUPUESTO.toLocaleString()}</p>
               </div>
               <div class="flex items-center gap-2">
