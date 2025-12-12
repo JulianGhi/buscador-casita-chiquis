@@ -630,62 +630,51 @@ Av Juan B Alberdi 4600,Parque Avellaneda,105000,70,140,70,3,si,si,0,GOLDEN HAUS,
 
       const root = document.getElementById('root');
       root.innerHTML = `
-        <!-- Status Bar -->
-        <div class="fixed top-0 left-0 right-0 bg-slate-800 text-white shadow-lg z-40">
-          <div class="max-w-7xl mx-auto px-4 py-1.5 flex items-center justify-between text-xs">
-            <div class="flex items-center gap-4">
-              <!-- Status indicator -->
-              <div class="flex items-center gap-2">
-                ${state.loading
-                  ? '<span class="w-2 h-2 bg-yellow-400 rounded-full animate-pulse"></span><span class="text-yellow-300">Cargando...</span>'
-                  : state.error
-                    ? '<span class="w-2 h-2 bg-red-400 rounded-full"></span><span class="text-red-300">Error</span>'
-                    : '<span class="w-2 h-2 bg-green-400 rounded-full"></span><span class="text-green-300">Conectado</span>'
-                }
-              </div>
-
-              <!-- Last update -->
-              ${state.lastUpdate ? `
-                <div class="text-slate-300">
-                  Actualizado: ${state.lastUpdate.toLocaleTimeString()}
+        <!-- Fixed Header -->
+        <header class="fixed top-0 left-0 right-0 bg-white shadow-md z-40">
+          <!-- Status Bar -->
+          <div class="bg-slate-800 text-white">
+            <div class="max-w-7xl mx-auto px-4 py-1 flex items-center justify-between text-xs">
+              <div class="flex items-center gap-3">
+                <div class="flex items-center gap-1.5">
+                  ${state.loading
+                    ? '<span class="w-2 h-2 bg-yellow-400 rounded-full animate-pulse"></span><span class="text-yellow-300">Cargando...</span>'
+                    : state.error
+                      ? '<span class="w-2 h-2 bg-red-400 rounded-full"></span><span class="text-red-300">Error</span>'
+                      : '<span class="w-2 h-2 bg-green-400 rounded-full"></span><span class="text-green-300">OK</span>'
+                  }
                 </div>
-              ` : ''}
-
-              <!-- Auto-refresh status -->
-              <div class="text-slate-400">
-                ${state.autoRefreshEnabled
-                  ? '<span class="text-green-300">Auto ●</span>'
-                  : '<span class="text-slate-500">Auto ○</span>'
-                }
+                ${state.lastUpdate ? `<span class="text-slate-400">· ${state.lastUpdate.toLocaleTimeString()}</span>` : ''}
+                <span class="text-slate-500">${state.autoRefreshEnabled ? '· Auto ●' : ''}</span>
               </div>
-            </div>
-
-            <div class="flex items-center gap-4">
-              <!-- Data info -->
-              <div class="text-slate-300">
-                ${stats.total} propiedades · ${stats.activos} activas
+              <div class="text-slate-400">
+                ${stats.total} props · ${stats.activos} activas · ${stats.entran} entran
               </div>
             </div>
           </div>
-        </div>
 
-        <div class="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 p-3 md:p-6 pt-12">
-          <div class="max-w-7xl mx-auto">
-            <!-- Header -->
-            <div class="flex flex-wrap items-center justify-between gap-3 mb-4">
+          <!-- Main Header -->
+          <div class="max-w-7xl mx-auto px-4 py-3">
+            <div class="flex flex-wrap items-center justify-between gap-3">
               <div>
                 <h1 class="text-xl md:text-2xl font-bold text-slate-800">🏠 Buscador Casita Chiquis</h1>
-                <p class="text-xs md:text-sm text-slate-500">Crédito $${CONFIG.CREDITO.toLocaleString()} · Presupuesto $${CONFIG.PRESUPUESTO.toLocaleString()}</p>
+                <p class="text-xs text-slate-500">Crédito $${CONFIG.CREDITO.toLocaleString()} · Presupuesto $${CONFIG.PRESUPUESTO.toLocaleString()}</p>
               </div>
               <div class="flex items-center gap-2">
-                <button onclick="fetchData()" class="px-3 py-1.5 bg-blue-500 text-white text-sm rounded-lg hover:bg-blue-600 disabled:opacity-50" ${state.loading ? 'disabled' : ''} title="Recargar datos locales">${state.loading ? '...' : '↻'}</button>
+                <button onclick="fetchData()" class="px-3 py-1.5 bg-blue-500 text-white text-sm rounded-lg hover:bg-blue-600 disabled:opacity-50" ${state.loading ? 'disabled' : ''} title="Recargar datos">${state.loading ? '...' : '↻'}</button>
                 <button onclick="forceUpdate()" class="px-3 py-1.5 bg-orange-500 text-white text-sm rounded-lg hover:bg-orange-600 disabled:opacity-50" ${state.loading ? 'disabled' : ''} title="Forzar update desde Sheet">⚡</button>
                 <button onclick="toggleAutoRefresh()" class="px-3 py-1.5 ${state.autoRefreshEnabled ? 'bg-green-500 text-white' : 'bg-slate-200 text-slate-700'} text-sm rounded-lg hover:opacity-80" title="Auto-refresh cada ${CONFIG.AUTO_REFRESH}s">${state.autoRefreshEnabled ? '⏸' : '▶'}</button>
-                <button onclick="state.showHelp=!state.showHelp;render()" class="px-3 py-1.5 ${state.showHelp ? 'bg-purple-500 text-white' : 'bg-slate-200 text-slate-700'} text-sm rounded-lg hover:opacity-80">?</button>
-                <button onclick="state.showConfig=!state.showConfig;render()" class="px-3 py-1.5 ${state.showConfig ? 'bg-blue-500 text-white' : 'bg-slate-200 text-slate-700'} text-sm rounded-lg hover:opacity-80">⚙️</button>
+                <span class="w-px h-6 bg-slate-200"></span>
+                <button onclick="state.showHelp=!state.showHelp;render()" class="px-3 py-1.5 ${state.showHelp ? 'bg-purple-500 text-white' : 'bg-slate-200 text-slate-700'} text-sm rounded-lg hover:opacity-80" title="Ayuda">?</button>
+                <button onclick="state.showConfig=!state.showConfig;render()" class="px-3 py-1.5 ${state.showConfig ? 'bg-blue-500 text-white' : 'bg-slate-200 text-slate-700'} text-sm rounded-lg hover:opacity-80" title="Configuración">⚙️</button>
               </div>
             </div>
+          </div>
+        </header>
 
+        <!-- Main Content -->
+        <div class="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 p-3 md:p-6 pt-28 md:pt-24">
+          <div class="max-w-7xl mx-auto">
             ${state.showConfig ? renderConfigPanel() : ''}
 
             ${state.showHelp ? renderHelpPanel() : ''}
