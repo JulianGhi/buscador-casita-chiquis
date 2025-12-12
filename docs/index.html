@@ -278,7 +278,7 @@ Av Juan B Alberdi 4600,Parque Avellaneda,105000,70,140,70,3,si,si,0,GOLDEN HAUS,
     }
 
     function activoBadge(activo) {
-      if (!activo) return '<span class="text-gray-300">-</span>';
+      if (!activo) return '<span class="text-slate-300 text-xs italic">activo?</span>';
       const s = activo.toLowerCase();
       if (s === 'si') return '<span class="text-xs bg-green-100 text-green-700 px-1.5 py-0.5 rounded">Activo</span>';
       if (s === 'no') return '<span class="text-xs bg-red-100 text-red-700 px-1.5 py-0.5 rounded">Baja</span>';
@@ -286,7 +286,7 @@ Av Juan B Alberdi 4600,Parque Avellaneda,105000,70,140,70,3,si,si,0,GOLDEN HAUS,
     }
 
     function statusBadge(status) {
-      if (!status) return '<span class="text-gray-300">-</span>';
+      if (!status) return '<span class="text-slate-300 text-xs italic">status?</span>';
       const s = status.toLowerCase();
       if (s.includes('visitado')) return `<span class="text-xs bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded">${status}</span>`;
       if (s.includes('interesado')) return `<span class="text-xs bg-green-100 text-green-700 px-1.5 py-0.5 rounded">${status}</span>`;
@@ -749,14 +749,14 @@ Av Juan B Alberdi 4600,Parque Avellaneda,105000,70,140,70,3,si,si,0,GOLDEN HAUS,
                   <tbody class="divide-y divide-slate-100">
                     ${filtered.map((p, i) => `
                       <tr class="hover:bg-slate-50 transition-colors cursor-pointer ${p._ok ? 'bg-green-50/30' : ''}" onclick="showDetail(${p._idx})">
-                        <td class="px-3 py-2.5"><span class="font-medium text-slate-800">${escapeHtml(p.direccion)}</span></td>
-                        <td class="px-3 py-2.5 text-slate-600">${escapeHtml(p.barrio)}</td>
-                        <td class="px-3 py-2.5 text-right font-mono text-slate-800">${p._precio > 0 ? '$' + p._precio.toLocaleString() : '-'}</td>
-                        <td class="px-3 py-2.5 text-right text-slate-600">${p._m2 || '-'}</td>
-                        <td class="px-3 py-2.5 text-right font-mono text-slate-600">${p._preciom2 > 0 ? '$' + p._preciom2.toLocaleString() : '-'}</td>
+                        <td class="px-3 py-2.5"><span class="font-medium text-slate-800">${p.direccion ? escapeHtml(p.direccion) : '<span class="text-slate-300 text-xs italic">sin dir</span>'}</span></td>
+                        <td class="px-3 py-2.5 text-slate-600">${p.barrio ? escapeHtml(p.barrio) : '<span class="text-slate-300 text-xs italic">sin barrio</span>'}</td>
+                        <td class="px-3 py-2.5 text-right font-mono text-slate-800">${p._precio > 0 ? '$' + p._precio.toLocaleString() : '<span class="text-slate-300 text-xs italic">$?</span>'}</td>
+                        <td class="px-3 py-2.5 text-right text-slate-600">${p._m2 ? p._m2 : '<span class="text-slate-300 text-xs italic">m²?</span>'}</td>
+                        <td class="px-3 py-2.5 text-right font-mono text-slate-600">${p._preciom2 > 0 ? '$' + p._preciom2.toLocaleString() : '<span class="text-slate-300">-</span>'}</td>
                         <td class="px-3 py-2.5 text-center">${evalIcon(p._vsRef)}</td>
-                        <td class="px-3 py-2.5 text-right"><div class="font-mono text-slate-800">${p._precio > 0 ? '$' + p._total.toLocaleString() : '-'}</div></td>
-                        <td class="px-3 py-2.5 text-center">${p._precio > 0 ? okPill(p._ok) : '-'}</td>
+                        <td class="px-3 py-2.5 text-right"><div class="font-mono text-slate-800">${p._precio > 0 ? '$' + p._total.toLocaleString() : '<span class="text-slate-300">-</span>'}</div></td>
+                        <td class="px-3 py-2.5 text-center">${p._precio > 0 ? okPill(p._ok) : '<span class="text-slate-300">-</span>'}</td>
                         <td class="px-3 py-2.5 text-center">${statusBadge(p.status)}</td>
                         <td class="px-3 py-2.5 text-center">${activoBadge(p.activo)}</td>
                       </tr>
