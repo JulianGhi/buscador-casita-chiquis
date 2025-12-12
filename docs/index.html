@@ -8,12 +8,12 @@
   <script src="https://cdn.tailwindcss.com"></script>
   <style>
     body { font-family: system-ui, -apple-system, sans-serif; }
+    .modal-backdrop { background: rgba(0,0,0,0.5); }
   </style>
 </head>
 <body class="bg-slate-50">
   <div id="root"></div>
   <script>
-    // Defaults
     const DEFAULT_CONFIG = {
       SHEET_URL: 'https://docs.google.com/spreadsheets/d/e/2PACX-1vT-bXC7r4bVh2Hc6Wovv-EFfb30nUMB5X3HA4NQoSTAZ-r6di3dhUEsdUNSHhebr8ezg0dIbw8nAA8S/pub?output=csv',
       CREDITO: 86000,
@@ -26,7 +26,7 @@
       INMOB: 0.0484,
       HIPOTECA: 0.01,
       CERTIFICADOS: 300,
-      AUTO_REFRESH: 60,  // segundos, 0 = desactivado
+      AUTO_REFRESH: 60,
     };
 
     const DEFAULT_REF_M2 = {
@@ -36,7 +36,6 @@
       "Villa del Parque": 2063, "Villa Devoto": 2348, "Boedo": 1876
     };
 
-    // Load from localStorage or use defaults
     function loadConfig() {
       try {
         const saved = localStorage.getItem('casita_config');
@@ -62,13 +61,8 @@
     let CONFIG = loadConfig();
     let REF_M2 = loadRefM2();
 
-    const SAMPLE_CSV = `id,direccion,barrio,precio,m2_cub,m2_tot,m2_terr,amb,apto_credito,terraza,expensas,inmobiliaria,status,notas,link,online
-1,Av Juan B Alberdi 4600,Parque Avellaneda,105000,70,140,70,3,si,si,,GOLDEN HAUS,Por ver,40 años sin expensas,https://www.argenprop.com/ficha--17094976,online
-2,Segurola 1700,Monte Castro,89000,70,,,3,si,si,,,Por ver,95 años apto crédito,,?meli
-3,Gualeguaychú 985,Floresta,95000,79,,,4,si,si,15000,,Por ver,Terraza con parrilla,,?meli
-4,Chivilcoy (Plaza Vélez),Floresta,98000,71,,,3,si,si,,,Por ver,Terraza + balcón,,?meli
-5,Mercedes 1432,Floresta,110000,83,,,3,si,si,,Inmobiliaria,Por ver,Reciclado terraza oficina,,online
-6,Túpac Amaru 1100,Floresta,95000,64,138,,3,si,,,Argenprop,Por ver,64m² cub 138m² tot,,online`;
+    const SAMPLE_CSV = `direccion,barrio,precio,m2_cub,m2_tot,m2_terr,amb,apto_credito,terraza,expensas,inmobiliaria,status,notas,link,activo,contacto,fecha_contacto,fecha_visita,antiguedad,estado,luminosidad,rating
+Av Juan B Alberdi 4600,Parque Avellaneda,105000,70,140,70,3,si,si,0,GOLDEN HAUS,Visitado,Visita 30/8. Norte/Frente. 40 años.,https://www.argenprop.com/ficha--17094976,si,,,,,Bueno,Buena,`;
 
     let state = {
       rawData: '',
@@ -79,13 +73,13 @@
       filterStatus: 'todos',
       filterOk: 'todos',
       filterBarrio: 'todos',
-      filterOnline: 'todos',
+      filterActivo: 'todos',
       sortBy: 'precio',
       sortDir: 'asc',
       showConfig: false,
       configTab: 'general',
       autoRefreshEnabled: CONFIG.AUTO_REFRESH > 0,
-      nextRefresh: null
+      selectedProperty: null
     };
 
     let autoRefreshInterval = null;
@@ -184,7 +178,7 @@
     }
 
     function getProperties() {
-      return parseCSV(state.rawData).map(calculateProperty).filter(p => p._precio > 0);
+      return parseCSV(state.rawData).map(calculateProperty);
     }
 
     function getFiltered(properties) {
@@ -193,7 +187,8 @@
       if (state.filterOk === 'ok') result = result.filter(p => p._ok);
       else if (state.filterOk === 'no') result = result.filter(p => !p._ok);
       if (state.filterBarrio !== 'todos') result = result.filter(p => p.barrio === state.filterBarrio);
-      if (state.filterOnline !== 'todos') result = result.filter(p => p.online?.toLowerCase().includes(state.filterOnline.toLowerCase()));
+      if (state.filterActivo === 'si') result = result.filter(p => p.activo?.toLowerCase() === 'si');
+      else if (state.filterActivo === 'no') result = result.filter(p => p.activo?.toLowerCase() === 'no');
       result.sort((a, b) => {
         let va = a['_' + state.sortBy] ?? a[state.sortBy] ?? 0;
         let vb = b['_' + state.sortBy] ?? b[state.sortBy] ?? 0;
@@ -208,10 +203,10 @@
       return {
         total: properties.length,
         entran: properties.filter(p => p._ok).length,
-        online: properties.filter(p => p.online?.toLowerCase() === 'online').length,
+        activos: properties.filter(p => p.activo?.toLowerCase() === 'si').length,
         porVer: properties.filter(p => p.status?.toLowerCase().includes('por ver')).length,
-        minPrecio: properties.length > 0 ? Math.min(...properties.map(p => p._precio)) : 0,
-        maxPrecio: properties.length > 0 ? Math.max(...properties.map(p => p._precio)) : 0,
+        minPrecio: properties.filter(p => p._precio > 0).length > 0 ? Math.min(...properties.filter(p => p._precio > 0).map(p => p._precio)) : 0,
+        maxPrecio: properties.filter(p => p._precio > 0).length > 0 ? Math.max(...properties.filter(p => p._precio > 0).map(p => p._precio)) : 0,
       };
     }
 
@@ -228,17 +223,42 @@
         : '<span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-red-100 text-red-800">✗</span>';
     }
 
-    function onlineBadge(status) {
+    function activoBadge(activo) {
+      if (!activo) return '<span class="text-gray-300">-</span>';
+      const s = activo.toLowerCase();
+      if (s === 'si') return '<span class="text-xs bg-green-100 text-green-700 px-1.5 py-0.5 rounded">Activo</span>';
+      if (s === 'no') return '<span class="text-xs bg-red-100 text-red-700 px-1.5 py-0.5 rounded">Baja</span>';
+      return `<span class="text-xs bg-yellow-100 text-yellow-700 px-1.5 py-0.5 rounded">${activo}</span>`;
+    }
+
+    function statusBadge(status) {
       if (!status) return '<span class="text-gray-300">-</span>';
       const s = status.toLowerCase();
-      if (s === 'online') return '<span class="text-xs bg-green-100 text-green-700 px-1.5 py-0.5 rounded">Online</span>';
-      if (s === 'baja') return '<span class="text-xs bg-red-100 text-red-700 px-1.5 py-0.5 rounded">Baja</span>';
+      if (s.includes('visitado')) return `<span class="text-xs bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded">${status}</span>`;
+      if (s.includes('interesado')) return `<span class="text-xs bg-green-100 text-green-700 px-1.5 py-0.5 rounded">${status}</span>`;
+      if (s.includes('descartado')) return `<span class="text-xs bg-red-100 text-red-700 px-1.5 py-0.5 rounded">${status}</span>`;
       return `<span class="text-xs bg-yellow-100 text-yellow-700 px-1.5 py-0.5 rounded">${status}</span>`;
+    }
+
+    function ratingStars(rating) {
+      if (!rating) return '-';
+      const n = parseInt(rating) || 0;
+      return '★'.repeat(n) + '☆'.repeat(5 - n);
     }
 
     function escapeHtml(text) {
       if (!text) return '';
       return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    }
+
+    function showDetail(idx) {
+      state.selectedProperty = idx;
+      render();
+    }
+
+    function closeDetail() {
+      state.selectedProperty = null;
+      render();
     }
 
     function updateConfig(key, value) {
@@ -288,6 +308,116 @@
       }
     }
 
+    function renderDetailModal(p) {
+      if (!p) return '';
+      return `
+        <div class="fixed inset-0 modal-backdrop z-50 flex items-center justify-center p-4" onclick="if(event.target===this)closeDetail()">
+          <div class="bg-white rounded-2xl shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+            <!-- Header -->
+            <div class="sticky top-0 bg-white border-b px-6 py-4 flex justify-between items-start">
+              <div>
+                <h2 class="text-xl font-bold text-slate-800">${escapeHtml(p.direccion)}</h2>
+                <p class="text-slate-500">${escapeHtml(p.barrio)}</p>
+              </div>
+              <button onclick="closeDetail()" class="text-slate-400 hover:text-slate-600 text-2xl">&times;</button>
+            </div>
+
+            <div class="p-6 space-y-6">
+              <!-- Status y Link -->
+              <div class="flex flex-wrap gap-2 items-center">
+                ${statusBadge(p.status)}
+                ${activoBadge(p.activo)}
+                ${p.apto_credito?.toLowerCase() === 'si' ? '<span class="text-xs bg-purple-100 text-purple-700 px-1.5 py-0.5 rounded">Apto crédito</span>' : ''}
+                ${p.link ? `<a href="${escapeHtml(p.link)}" target="_blank" class="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded hover:bg-blue-200">Ver aviso ↗</a>` : ''}
+              </div>
+
+              <!-- Números principales -->
+              <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <div class="bg-slate-50 rounded-xl p-3 text-center">
+                  <div class="text-2xl font-bold text-slate-800">$${p._precio > 0 ? p._precio.toLocaleString() : '-'}</div>
+                  <div class="text-xs text-slate-500">Precio</div>
+                </div>
+                <div class="bg-slate-50 rounded-xl p-3 text-center">
+                  <div class="text-2xl font-bold text-slate-800">${p._m2 || '-'}</div>
+                  <div class="text-xs text-slate-500">m² cub</div>
+                </div>
+                <div class="bg-slate-50 rounded-xl p-3 text-center">
+                  <div class="text-2xl font-bold text-slate-800">${p._preciom2 > 0 ? '$' + p._preciom2.toLocaleString() : '-'}</div>
+                  <div class="text-xs text-slate-500">$/m² ${p._ref ? `(ref: ${p._ref})` : ''}</div>
+                </div>
+                <div class="bg-slate-50 rounded-xl p-3 text-center">
+                  <div class="text-2xl font-bold ${p._ok ? 'text-green-600' : 'text-red-600'}">$${p._total.toLocaleString()}</div>
+                  <div class="text-xs text-slate-500">Gastos ${p._ok ? '✓' : '✗'}</div>
+                </div>
+              </div>
+
+              <!-- Características -->
+              <div>
+                <h3 class="text-sm font-medium text-slate-700 mb-2">Características</h3>
+                <div class="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
+                  <div><span class="text-slate-400">Ambientes:</span> ${p.amb || '-'}</div>
+                  <div><span class="text-slate-400">m² total:</span> ${p.m2_tot || '-'}</div>
+                  <div><span class="text-slate-400">m² terraza:</span> ${p.m2_terr || '-'}</div>
+                  <div><span class="text-slate-400">Terraza:</span> ${p.terraza || '-'}</div>
+                  <div><span class="text-slate-400">Expensas:</span> ${p.expensas ? '$' + p.expensas : '-'}</div>
+                  <div><span class="text-slate-400">Antigüedad:</span> ${p.antiguedad || '-'}</div>
+                  <div><span class="text-slate-400">Estado:</span> ${p.estado || '-'}</div>
+                  <div><span class="text-slate-400">Luminosidad:</span> ${p.luminosidad || '-'}</div>
+                </div>
+              </div>
+
+              <!-- Desglose gastos -->
+              <div>
+                <h3 class="text-sm font-medium text-slate-700 mb-2">Desglose de gastos</h3>
+                <div class="bg-slate-50 rounded-xl p-4 text-sm">
+                  <div class="grid grid-cols-2 gap-2">
+                    <div class="flex justify-between"><span class="text-slate-500">Tu 10%:</span><span class="font-mono">$${p._tu10.toLocaleString()}</span></div>
+                    <div class="flex justify-between"><span class="text-slate-500">Escribano:</span><span class="font-mono">$${p._escr.toLocaleString()}</span></div>
+                    <div class="flex justify-between"><span class="text-slate-500">Sellos:</span><span class="font-mono">$${p._sell.toLocaleString()}</span></div>
+                    <div class="flex justify-between"><span class="text-slate-500">Registrales:</span><span class="font-mono">$${p._reg.toLocaleString()}</span></div>
+                    <div class="flex justify-between"><span class="text-slate-500">Inmobiliaria:</span><span class="font-mono">$${p._inmob.toLocaleString()}</span></div>
+                    <div class="flex justify-between"><span class="text-slate-500">Hipoteca:</span><span class="font-mono">$${p._hip.toLocaleString()}</span></div>
+                    <div class="flex justify-between"><span class="text-slate-500">Certificados:</span><span class="font-mono">$${p._cert.toLocaleString()}</span></div>
+                    <div class="flex justify-between border-t pt-2 font-bold ${p._ok ? 'text-green-600' : 'text-red-600'}"><span>TOTAL:</span><span class="font-mono">$${p._total.toLocaleString()}</span></div>
+                  </div>
+                  <div class="mt-2 text-center text-sm ${p._dif >= 0 ? 'text-green-600' : 'text-red-500'}">
+                    ${p._dif >= 0 ? `Te sobran $${p._dif.toLocaleString()}` : `Te faltan $${Math.abs(p._dif).toLocaleString()}`}
+                  </div>
+                </div>
+              </div>
+
+              <!-- Gestión -->
+              <div>
+                <h3 class="text-sm font-medium text-slate-700 mb-2">Gestión</h3>
+                <div class="grid grid-cols-2 gap-3 text-sm">
+                  <div><span class="text-slate-400">Inmobiliaria:</span> ${p.inmobiliaria || '-'}</div>
+                  <div><span class="text-slate-400">Contacto:</span> ${p.contacto || '-'}</div>
+                  <div><span class="text-slate-400">Fecha contacto:</span> ${p.fecha_contacto || '-'}</div>
+                  <div><span class="text-slate-400">Fecha visita:</span> ${p.fecha_visita || '-'}</div>
+                </div>
+              </div>
+
+              <!-- Rating -->
+              ${p.rating ? `
+              <div>
+                <h3 class="text-sm font-medium text-slate-700 mb-2">Rating</h3>
+                <div class="text-2xl text-yellow-500">${ratingStars(p.rating)}</div>
+              </div>
+              ` : ''}
+
+              <!-- Notas -->
+              ${p.notas ? `
+              <div>
+                <h3 class="text-sm font-medium text-slate-700 mb-2">Notas</h3>
+                <p class="text-sm text-slate-600 bg-slate-50 rounded-xl p-4">${escapeHtml(p.notas)}</p>
+              </div>
+              ` : ''}
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
     function renderConfigPanel() {
       const tabClass = (tab) => state.configTab === tab
         ? 'px-3 py-1.5 text-sm font-medium text-blue-600 border-b-2 border-blue-600'
@@ -300,7 +430,6 @@
             <button onclick="resetConfig()" class="text-xs text-red-500 hover:text-red-700">Resetear todo</button>
           </div>
 
-          <!-- Tabs -->
           <div class="flex border-b border-slate-200 mb-4">
             <button onclick="state.configTab='general';render()" class="${tabClass('general')}">General</button>
             <button onclick="state.configTab='gastos';render()" class="${tabClass('gastos')}">Gastos</button>
@@ -310,7 +439,7 @@
           ${state.configTab === 'general' ? `
             <div class="grid grid-cols-2 md:grid-cols-3 gap-4">
               <div>
-                <label class="block text-xs text-slate-500 mb-1">Monto crédito hipotecario (USD)</label>
+                <label class="block text-xs text-slate-500 mb-1">Crédito hipotecario (USD)</label>
                 <input type="number" value="${CONFIG.CREDITO}" onchange="updateConfig('CREDITO', parseInt(this.value))" class="w-full px-3 py-2 border rounded-lg text-sm" />
               </div>
               <div>
@@ -384,6 +513,7 @@
       const filtered = getFiltered(properties);
       const stats = getStats(properties);
       const barrios = [...new Set(properties.map(p => p.barrio).filter(Boolean))].sort();
+      const selectedProp = state.selectedProperty !== null ? properties[state.selectedProperty] : null;
 
       const root = document.getElementById('root');
       root.innerHTML = `
@@ -403,10 +533,8 @@
               </div>
             </div>
 
-            <!-- Config Panel -->
             ${state.showConfig ? renderConfigPanel() : ''}
 
-            <!-- Error -->
             ${state.error ? `<div class="bg-red-50 border border-red-200 text-red-700 px-4 py-2 rounded-lg mb-4 text-sm">${escapeHtml(state.error)}</div>` : ''}
 
             <!-- Stats -->
@@ -414,9 +542,9 @@
               <div class="bg-white rounded-xl p-3 shadow-sm"><div class="text-xl md:text-2xl font-bold text-blue-600">${stats.total}</div><div class="text-xs text-slate-500">Total</div></div>
               <div class="bg-white rounded-xl p-3 shadow-sm"><div class="text-xl md:text-2xl font-bold text-green-600">${stats.entran}</div><div class="text-xs text-slate-500">Entran</div></div>
               <div class="bg-white rounded-xl p-3 shadow-sm"><div class="text-xl md:text-2xl font-bold text-red-600">${stats.total - stats.entran}</div><div class="text-xs text-slate-500">No entran</div></div>
-              <div class="bg-white rounded-xl p-3 shadow-sm"><div class="text-xl md:text-2xl font-bold text-teal-600">${stats.online}</div><div class="text-xs text-slate-500">Online</div></div>
-              <div class="bg-white rounded-xl p-3 shadow-sm"><div class="text-xl md:text-2xl font-bold text-purple-600">$${(stats.minPrecio/1000).toFixed(0)}k</div><div class="text-xs text-slate-500">Min</div></div>
-              <div class="bg-white rounded-xl p-3 shadow-sm"><div class="text-xl md:text-2xl font-bold text-purple-600">$${(stats.maxPrecio/1000).toFixed(0)}k</div><div class="text-xs text-slate-500">Max</div></div>
+              <div class="bg-white rounded-xl p-3 shadow-sm"><div class="text-xl md:text-2xl font-bold text-teal-600">${stats.activos}</div><div class="text-xs text-slate-500">Activos</div></div>
+              <div class="bg-white rounded-xl p-3 shadow-sm"><div class="text-xl md:text-2xl font-bold text-purple-600">$${stats.minPrecio > 0 ? (stats.minPrecio/1000).toFixed(0) + 'k' : '-'}</div><div class="text-xs text-slate-500">Min</div></div>
+              <div class="bg-white rounded-xl p-3 shadow-sm"><div class="text-xl md:text-2xl font-bold text-purple-600">$${stats.maxPrecio > 0 ? (stats.maxPrecio/1000).toFixed(0) + 'k' : '-'}</div><div class="text-xs text-slate-500">Max</div></div>
             </div>
 
             <!-- Filters -->
@@ -438,11 +566,10 @@
                   <option value="todos" ${state.filterBarrio === 'todos' ? 'selected' : ''}>Barrio: Todos</option>
                   ${barrios.map(b => `<option value="${escapeHtml(b)}" ${state.filterBarrio === b ? 'selected' : ''}>${escapeHtml(b)}</option>`).join('')}
                 </select>
-                <select onchange="state.filterOnline=this.value;render()" class="border border-slate-200 rounded-lg px-2 py-1.5 text-sm bg-white">
-                  <option value="todos" ${state.filterOnline === 'todos' ? 'selected' : ''}>Online: Todos</option>
-                  <option value="online" ${state.filterOnline === 'online' ? 'selected' : ''}>✓ Online</option>
-                  <option value="baja" ${state.filterOnline === 'baja' ? 'selected' : ''}>✗ Baja</option>
-                  <option value="?" ${state.filterOnline === '?' ? 'selected' : ''}>? Sin verificar</option>
+                <select onchange="state.filterActivo=this.value;render()" class="border border-slate-200 rounded-lg px-2 py-1.5 text-sm bg-white">
+                  <option value="todos" ${state.filterActivo === 'todos' ? 'selected' : ''}>Aviso: Todos</option>
+                  <option value="si" ${state.filterActivo === 'si' ? 'selected' : ''}>✓ Activo</option>
+                  <option value="no" ${state.filterActivo === 'no' ? 'selected' : ''}>✗ Baja</option>
                 </select>
                 <div class="flex items-center gap-1 ml-auto">
                   <select onchange="state.sortBy=this.value;render()" class="border border-slate-200 rounded-lg px-2 py-1.5 text-sm bg-white">
@@ -471,23 +598,23 @@
                       <th class="px-3 py-2.5 text-center font-medium text-slate-600">Eval</th>
                       <th class="px-3 py-2.5 text-right font-medium text-slate-600">Gastos</th>
                       <th class="px-3 py-2.5 text-center font-medium text-slate-600">OK</th>
-                      <th class="px-3 py-2.5 text-center font-medium text-slate-600">Online</th>
-                      <th class="px-3 py-2.5 text-left font-medium text-slate-600">Notas</th>
+                      <th class="px-3 py-2.5 text-center font-medium text-slate-600">Status</th>
+                      <th class="px-3 py-2.5 text-center font-medium text-slate-600">Activo</th>
                     </tr>
                   </thead>
                   <tbody class="divide-y divide-slate-100">
                     ${filtered.map((p, i) => `
-                      <tr class="hover:bg-slate-50 transition-colors ${p._ok ? 'bg-green-50/30' : ''}">
-                        <td class="px-3 py-2.5">${p.link ? `<a href="${escapeHtml(p.link)}" target="_blank" rel="noopener noreferrer" class="text-blue-600 hover:underline font-medium">${escapeHtml(p.direccion)}</a>` : `<span class="font-medium text-slate-800">${escapeHtml(p.direccion)}</span>`}</td>
+                      <tr class="hover:bg-slate-50 transition-colors cursor-pointer ${p._ok ? 'bg-green-50/30' : ''}" onclick="showDetail(${p._idx})">
+                        <td class="px-3 py-2.5"><span class="font-medium text-slate-800">${escapeHtml(p.direccion)}</span></td>
                         <td class="px-3 py-2.5 text-slate-600">${escapeHtml(p.barrio)}</td>
-                        <td class="px-3 py-2.5 text-right font-mono text-slate-800">$${p._precio.toLocaleString()}</td>
+                        <td class="px-3 py-2.5 text-right font-mono text-slate-800">${p._precio > 0 ? '$' + p._precio.toLocaleString() : '-'}</td>
                         <td class="px-3 py-2.5 text-right text-slate-600">${p._m2 || '-'}</td>
-                        <td class="px-3 py-2.5 text-right font-mono text-slate-600">${p._preciom2 > 0 ? `$${p._preciom2.toLocaleString()}${p._ref > 0 ? `<span class="text-slate-400 text-xs ml-1">(${p._ref})</span>` : ''}` : '-'}</td>
+                        <td class="px-3 py-2.5 text-right font-mono text-slate-600">${p._preciom2 > 0 ? '$' + p._preciom2.toLocaleString() : '-'}</td>
                         <td class="px-3 py-2.5 text-center">${evalIcon(p._vsRef)}</td>
-                        <td class="px-3 py-2.5 text-right"><div class="font-mono text-slate-800">$${p._total.toLocaleString()}</div><div class="text-xs font-medium ${p._dif >= 0 ? 'text-green-600' : 'text-red-500'}">${p._dif >= 0 ? '+' : ''}${p._dif.toLocaleString()}</div></td>
-                        <td class="px-3 py-2.5 text-center">${okPill(p._ok)}</td>
-                        <td class="px-3 py-2.5 text-center">${onlineBadge(p.online)}</td>
-                        <td class="px-3 py-2.5 text-slate-500 text-xs max-w-[200px] truncate" title="${escapeHtml(p.notas)}">${escapeHtml(p.notas)}</td>
+                        <td class="px-3 py-2.5 text-right"><div class="font-mono text-slate-800">${p._precio > 0 ? '$' + p._total.toLocaleString() : '-'}</div></td>
+                        <td class="px-3 py-2.5 text-center">${p._precio > 0 ? okPill(p._ok) : '-'}</td>
+                        <td class="px-3 py-2.5 text-center">${statusBadge(p.status)}</td>
+                        <td class="px-3 py-2.5 text-center">${activoBadge(p.activo)}</td>
                       </tr>
                     `).join('')}
                   </tbody>
@@ -499,6 +626,8 @@
             <div class="text-center text-xs text-slate-400 mt-6">Buscador Casita Chiquis 🏠</div>
           </div>
         </div>
+
+        ${selectedProp ? renderDetailModal(selectedProp) : ''}
       `;
     }
 
