@@ -902,7 +902,7 @@ Av Juan B Alberdi 4600,Parque Avellaneda,105000,70,140,70,3,si,si,0,GOLDEN HAUS,
             const cardStyle = isInactivo
               ? 'bg-red-50 border-2 border-red-200 opacity-70'
               : noAptoCredito
-                ? 'bg-amber-50 border-2 border-amber-200 opacity-80'
+                ? 'bg-yellow-100 border-2 border-yellow-300'
                 : 'bg-white';
             const warnings = [];
             if (isInactivo) warnings.push('<span class="text-red-600">INACTIVO</span>');
@@ -1331,7 +1331,7 @@ Av Juan B Alberdi 4600,Parque Avellaneda,105000,70,140,70,3,si,si,0,GOLDEN HAUS,
                         const noApto = apto === 'no';
                         const rowBg = isInactivo ? 'bg-red-100/70 opacity-60'
                           : needsCheck ? 'bg-yellow-200/70 border-l-4 border-yellow-500'
-                          : noApto ? 'bg-amber-50/70'
+                          : noApto ? 'bg-yellow-100'
                           : (p._ok ? 'bg-green-50/30' : '');
                         return `
                         <tr class="hover:bg-slate-100 transition-colors cursor-pointer ${rowBg}" onclick="showDetail(${p._idx})">
