@@ -974,6 +974,7 @@ Av Juan B Alberdi 4600,Parque Avellaneda,105000,70,140,70,3,si,si,0,GOLDEN HAUS,
               </div>
               <div class="flex items-center gap-2">
                 <a href="https://docs.google.com/spreadsheets/d/${SHEET_ID}" target="_blank" class="px-3 py-1.5 bg-green-600 text-white text-sm rounded-lg hover:bg-green-700 font-medium" title="Abrir Google Sheet para cargar datos">📝 Cargar datos</a>
+                <a href="stats.html" class="px-3 py-1.5 bg-purple-600 text-white text-sm rounded-lg hover:bg-purple-700 font-medium" title="Ver estadísticas y análisis">📊 Stats</a>
                 <span class="w-px h-6 bg-slate-200"></span>
                 <button onclick="fetchData()" class="px-3 py-1.5 bg-blue-500 text-white text-sm rounded-lg hover:bg-blue-600 disabled:opacity-50" ${state.loading ? 'disabled' : ''} title="Actualizar datos desde Sheet">${state.loading ? '...' : '↻'}</button>
                 <button onclick="toggleAutoRefresh()" class="px-3 py-1.5 ${state.autoRefreshEnabled ? 'bg-green-500 text-white' : 'bg-slate-200 text-slate-700'} text-sm rounded-lg hover:opacity-80" title="Auto-refresh cada ${CONFIG.AUTO_REFRESH}s">${state.autoRefreshEnabled ? '⏸' : '▶'}</button>
