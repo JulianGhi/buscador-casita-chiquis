@@ -1,0 +1,9 @@
+id,direccion,barrio,precio,m2_cub,m2_tot,m2_terr,amb,apto_credito,terraza,expensas,inmobiliaria,status,notas,link,online
+1,Av Juan B Alberdi 4600,Parque Avellaneda,105000,70,140,70,3,si,si,,GOLDEN HAUS,Por ver,40 años sin expensas,https://www.argenprop.com/ficha--17094976,online
+2,Segurola 1700,Monte Castro,89000,70,,,3,si,si,,,Por ver,95 años apto crédito,,?meli
+3,Gualeguaychú 985,Floresta,95000,79,,,4,si,si,15000,,Por ver,Terraza con parrilla,,?meli
+4,Chivilcoy (Plaza Vélez),Floresta,98000,71,,,3,si,si,,,Por ver,Terraza + balcón apto crédito,,?meli
+5,Mercedes 1432,Floresta,110000,83,,,3,si,si,,Inmobiliaria,Por ver,Reciclado terraza oficina,,online
+6,Túpac Amaru 1100,Floresta,95000,64,138,,3,si,si,,Argenprop,Por ver,64m² cub 138m² tot impecable,,online
+7,Juan A García,Monte Castro,90000,,,,,si,si,,,Por ver,Patio + parrilla apto crédito,,?meli
+8,Cervantes 1700,Monte Castro,115000,106,181,,4,si,si,,Inmobiliaria,Por ver,Cochera quincho,,?meli

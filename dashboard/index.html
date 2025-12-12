@@ -1,0 +1,320 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Buscador Casita Chiquis</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🏠</text></svg>">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body { font-family: system-ui, -apple-system, sans-serif; }
+  </style>
+</head>
+<body class="bg-slate-50">
+  <div id="root"></div>
+  <script>
+    const CONFIG = {
+      SHEET_URL: '',
+      CREDITO: 86000,
+      PRESUPUESTO: 25000,
+      MARGEN_REF: 0.12,
+      ESCRIBANO: 0.0242,
+      SELLOS_EXENTO: 140000,
+      SELLOS: 0.0175,
+      REGISTRALES: 0.004,
+      INMOB: 0.0484,
+      HIPOTECA: 0.01,
+      CERTIFICADOS: 300,
+    };
+
+    const REF_M2 = {
+      "Flores": 1953, "Parque Chacabuco": 1951, "Liniers": 1857, "Monte Castro": 1854,
+      "Floresta": 1683, "Parque Avellaneda": 1750, "Villa Luro": 1785, "Vélez Sarsfield": 1663,
+      "Mataderos": 1629, "Paternal": 1897, "Caballito": 2357, "Villa Crespo": 2150,
+      "Villa del Parque": 2063, "Villa Devoto": 2348, "Boedo": 1876
+    };
+
+    const SAMPLE_CSV = `id,direccion,barrio,precio,m2_cub,m2_tot,m2_terr,amb,apto_credito,terraza,expensas,inmobiliaria,status,notas,link,online
+1,Av Juan B Alberdi 4600,Parque Avellaneda,105000,70,140,70,3,si,si,,GOLDEN HAUS,Por ver,40 años sin expensas,https://www.argenprop.com/ficha--17094976,online
+2,Segurola 1700,Monte Castro,89000,70,,,3,si,si,,,Por ver,95 años apto crédito,,?meli
+3,Gualeguaychú 985,Floresta,95000,79,,,4,si,si,15000,,Por ver,Terraza con parrilla,,?meli
+4,Chivilcoy (Plaza Vélez),Floresta,98000,71,,,3,si,si,,,Por ver,Terraza + balcón,,?meli
+5,Mercedes 1432,Floresta,110000,83,,,3,si,si,,Inmobiliaria,Por ver,Reciclado terraza oficina,,online
+6,Túpac Amaru 1100,Floresta,95000,64,138,,3,si,,,Argenprop,Por ver,64m² cub 138m² tot,,online`;
+
+    let state = {
+      rawData: '',
+      loading: false,
+      error: null,
+      lastUpdate: null,
+      manualUrl: CONFIG.SHEET_URL,
+      filterStatus: 'todos',
+      filterOk: 'todos',
+      filterBarrio: 'todos',
+      filterOnline: 'todos',
+      sortBy: 'precio',
+      sortDir: 'asc',
+      showConfig: false
+    };
+
+    function parseCSV(text) {
+      const lines = text.trim().split('\n');
+      if (lines.length < 2) return [];
+      const headers = lines[0].split(',').map(h => h.trim().toLowerCase().replace(/\s+/g, '_'));
+      return lines.slice(1).map((line, idx) => {
+        const values = [];
+        let current = '';
+        let inQuotes = false;
+        for (const char of line) {
+          if (char === '"') inQuotes = !inQuotes;
+          else if (char === ',' && !inQuotes) { values.push(current.trim()); current = ''; }
+          else current += char;
+        }
+        values.push(current.trim());
+        const obj = { _idx: idx };
+        headers.forEach((h, i) => { obj[h] = values[i] || ''; });
+        return obj;
+      });
+    }
+
+    function calculateProperty(p) {
+      const precio = parseFloat(p.precio) || 0;
+      const m2 = parseFloat(p.m2_cub) || 0;
+      const barrio = p.barrio;
+      const tieneInmob = p.inmobiliaria && p.inmobiliaria.trim() !== '';
+      const calc = { ...p, _precio: precio, _m2: m2, _preciom2: m2 > 0 ? Math.round(precio / m2) : 0, _ref: REF_M2[barrio] || 0 };
+      calc._vsRef = calc._ref > 0 ? (calc._preciom2 - calc._ref) / calc._ref : 0;
+      calc._tu10 = Math.max(precio - CONFIG.CREDITO, precio * 0.1);
+      calc._escr = Math.round(precio * CONFIG.ESCRIBANO);
+      calc._sell = precio <= CONFIG.SELLOS_EXENTO ? 0 : Math.round(precio * CONFIG.SELLOS);
+      calc._reg = Math.round(precio * CONFIG.REGISTRALES);
+      calc._inmob = tieneInmob ? Math.round(precio * CONFIG.INMOB) : 0;
+      calc._hip = Math.round(precio * CONFIG.HIPOTECA);
+      calc._cert = CONFIG.CERTIFICADOS;
+      calc._total = calc._tu10 + calc._escr + calc._sell + calc._reg + calc._inmob + calc._hip + calc._cert;
+      calc._ok = calc._total <= CONFIG.PRESUPUESTO;
+      calc._dif = CONFIG.PRESUPUESTO - calc._total;
+      return calc;
+    }
+
+    async function fetchData(url) {
+      if (!url) {
+        state.rawData = SAMPLE_CSV;
+        state.lastUpdate = new Date();
+        state.error = null;
+        render();
+        return;
+      }
+      state.loading = true;
+      state.error = null;
+      render();
+      try {
+        const corsProxy = 'https://corsproxy.io/?';
+        const response = await fetch(corsProxy + encodeURIComponent(url));
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        const text = await response.text();
+        state.rawData = text;
+        state.lastUpdate = new Date();
+      } catch (err) {
+        state.error = `Error cargando datos: ${err.message}`;
+        state.rawData = SAMPLE_CSV;
+      }
+      state.loading = false;
+      render();
+    }
+
+    function getProperties() {
+      return parseCSV(state.rawData).map(calculateProperty).filter(p => p._precio > 0);
+    }
+
+    function getFiltered(properties) {
+      let result = [...properties];
+      if (state.filterStatus !== 'todos') result = result.filter(p => p.status?.toLowerCase().includes(state.filterStatus.toLowerCase()));
+      if (state.filterOk === 'ok') result = result.filter(p => p._ok);
+      else if (state.filterOk === 'no') result = result.filter(p => !p._ok);
+      if (state.filterBarrio !== 'todos') result = result.filter(p => p.barrio === state.filterBarrio);
+      if (state.filterOnline !== 'todos') result = result.filter(p => p.online?.toLowerCase().includes(state.filterOnline.toLowerCase()));
+      result.sort((a, b) => {
+        let va = a['_' + state.sortBy] ?? a[state.sortBy] ?? 0;
+        let vb = b['_' + state.sortBy] ?? b[state.sortBy] ?? 0;
+        if (typeof va === 'string') va = va.toLowerCase();
+        if (typeof vb === 'string') vb = vb.toLowerCase();
+        return state.sortDir === 'asc' ? (va > vb ? 1 : -1) : (va < vb ? 1 : -1);
+      });
+      return result;
+    }
+
+    function getStats(properties) {
+      return {
+        total: properties.length,
+        entran: properties.filter(p => p._ok).length,
+        online: properties.filter(p => p.online?.toLowerCase() === 'online').length,
+        porVer: properties.filter(p => p.status?.toLowerCase().includes('por ver')).length,
+        minPrecio: properties.length > 0 ? Math.min(...properties.map(p => p._precio)) : 0,
+        maxPrecio: properties.length > 0 ? Math.max(...properties.map(p => p._precio)) : 0,
+      };
+    }
+
+    function evalIcon(vsRef) {
+      if (!vsRef && vsRef !== 0) return '<span class="text-gray-300">-</span>';
+      if (vsRef < -CONFIG.MARGEN_REF) return '<span title="Bajo mercado">🟢</span>';
+      if (vsRef > CONFIG.MARGEN_REF) return '<span title="Sobre mercado">🔴</span>';
+      return '<span title="En mercado">🟡</span>';
+    }
+
+    function okPill(ok) {
+      return ok
+        ? '<span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800">✓</span>'
+        : '<span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-red-100 text-red-800">✗</span>';
+    }
+
+    function onlineBadge(status) {
+      if (!status) return '<span class="text-gray-300">-</span>';
+      const s = status.toLowerCase();
+      if (s === 'online') return '<span class="text-xs bg-green-100 text-green-700 px-1.5 py-0.5 rounded">Online</span>';
+      if (s === 'baja') return '<span class="text-xs bg-red-100 text-red-700 px-1.5 py-0.5 rounded">Baja</span>';
+      return `<span class="text-xs bg-yellow-100 text-yellow-700 px-1.5 py-0.5 rounded">${status}</span>`;
+    }
+
+    function escapeHtml(text) {
+      if (!text) return '';
+      return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    }
+
+    function render() {
+      const properties = getProperties();
+      const filtered = getFiltered(properties);
+      const stats = getStats(properties);
+      const barrios = [...new Set(properties.map(p => p.barrio).filter(Boolean))].sort();
+
+      const root = document.getElementById('root');
+      root.innerHTML = `
+        <div class="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 p-3 md:p-6">
+          <div class="max-w-7xl mx-auto">
+            <!-- Header -->
+            <div class="flex flex-wrap items-center justify-between gap-3 mb-4">
+              <div>
+                <h1 class="text-xl md:text-2xl font-bold text-slate-800">🏠 Buscador Casita Chiquis</h1>
+                <p class="text-xs md:text-sm text-slate-500">Crédito $${CONFIG.CREDITO.toLocaleString()} · Presupuesto $${CONFIG.PRESUPUESTO.toLocaleString()}</p>
+              </div>
+              <div class="flex items-center gap-2">
+                ${state.lastUpdate ? `<span class="text-xs text-slate-400">${state.lastUpdate.toLocaleTimeString()}</span>` : ''}
+                <button onclick="fetchData(state.manualUrl)" class="px-3 py-1.5 bg-blue-500 text-white text-sm rounded-lg hover:bg-blue-600 disabled:opacity-50" ${state.loading ? 'disabled' : ''}>${state.loading ? '...' : '↻'}</button>
+                <button onclick="state.showConfig=!state.showConfig;render()" class="px-3 py-1.5 bg-slate-200 text-slate-700 text-sm rounded-lg hover:bg-slate-300">⚙️</button>
+              </div>
+            </div>
+
+            <!-- Config Panel -->
+            ${state.showConfig ? `
+              <div class="bg-white rounded-xl p-4 shadow-sm mb-4 border border-slate-200">
+                <h3 class="font-medium text-slate-700 mb-2">Configuración</h3>
+                <div class="flex flex-col md:flex-row gap-2">
+                  <input type="text" id="urlInput" value="${escapeHtml(state.manualUrl)}" placeholder="URL de Google Sheet (CSV público)" class="flex-1 px-3 py-2 border rounded-lg text-sm" />
+                  <button onclick="state.manualUrl=document.getElementById('urlInput').value;fetchData(state.manualUrl)" class="px-4 py-2 bg-green-500 text-white rounded-lg text-sm hover:bg-green-600">Conectar</button>
+                </div>
+                <p class="text-xs text-slate-400 mt-2">Google Sheet → Archivo → Compartir → Publicar en la web → CSV</p>
+                ${!state.manualUrl ? '<p class="text-xs text-amber-600 mt-1">⚠️ Usando datos de ejemplo</p>' : ''}
+              </div>
+            ` : ''}
+
+            <!-- Error -->
+            ${state.error ? `<div class="bg-red-50 border border-red-200 text-red-700 px-4 py-2 rounded-lg mb-4 text-sm">${escapeHtml(state.error)}</div>` : ''}
+
+            <!-- Stats -->
+            <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-2 md:gap-3 mb-4">
+              <div class="bg-white rounded-xl p-3 shadow-sm"><div class="text-xl md:text-2xl font-bold text-blue-600">${stats.total}</div><div class="text-xs text-slate-500">Total</div></div>
+              <div class="bg-white rounded-xl p-3 shadow-sm"><div class="text-xl md:text-2xl font-bold text-green-600">${stats.entran}</div><div class="text-xs text-slate-500">Entran</div></div>
+              <div class="bg-white rounded-xl p-3 shadow-sm"><div class="text-xl md:text-2xl font-bold text-red-600">${stats.total - stats.entran}</div><div class="text-xs text-slate-500">No entran</div></div>
+              <div class="bg-white rounded-xl p-3 shadow-sm"><div class="text-xl md:text-2xl font-bold text-teal-600">${stats.online}</div><div class="text-xs text-slate-500">Online</div></div>
+              <div class="bg-white rounded-xl p-3 shadow-sm"><div class="text-xl md:text-2xl font-bold text-purple-600">$${(stats.minPrecio/1000).toFixed(0)}k</div><div class="text-xs text-slate-500">Min</div></div>
+              <div class="bg-white rounded-xl p-3 shadow-sm"><div class="text-xl md:text-2xl font-bold text-purple-600">$${(stats.maxPrecio/1000).toFixed(0)}k</div><div class="text-xs text-slate-500">Max</div></div>
+            </div>
+
+            <!-- Filters -->
+            <div class="bg-white rounded-xl p-3 shadow-sm mb-4">
+              <div class="flex flex-wrap gap-2 md:gap-3 items-center text-sm">
+                <select onchange="state.filterStatus=this.value;render()" class="border border-slate-200 rounded-lg px-2 py-1.5 text-sm bg-white">
+                  <option value="todos" ${state.filterStatus === 'todos' ? 'selected' : ''}>Status: Todos</option>
+                  <option value="por ver" ${state.filterStatus === 'por ver' ? 'selected' : ''}>Por ver</option>
+                  <option value="visitado" ${state.filterStatus === 'visitado' ? 'selected' : ''}>Visitado</option>
+                  <option value="interesado" ${state.filterStatus === 'interesado' ? 'selected' : ''}>Interesado</option>
+                  <option value="descartado" ${state.filterStatus === 'descartado' ? 'selected' : ''}>Descartado</option>
+                </select>
+                <select onchange="state.filterOk=this.value;render()" class="border border-slate-200 rounded-lg px-2 py-1.5 text-sm bg-white">
+                  <option value="todos" ${state.filterOk === 'todos' ? 'selected' : ''}>Presupuesto: Todos</option>
+                  <option value="ok" ${state.filterOk === 'ok' ? 'selected' : ''}>✓ Entra</option>
+                  <option value="no" ${state.filterOk === 'no' ? 'selected' : ''}>✗ No entra</option>
+                </select>
+                <select onchange="state.filterBarrio=this.value;render()" class="border border-slate-200 rounded-lg px-2 py-1.5 text-sm bg-white">
+                  <option value="todos" ${state.filterBarrio === 'todos' ? 'selected' : ''}>Barrio: Todos</option>
+                  ${barrios.map(b => `<option value="${escapeHtml(b)}" ${state.filterBarrio === b ? 'selected' : ''}>${escapeHtml(b)}</option>`).join('')}
+                </select>
+                <select onchange="state.filterOnline=this.value;render()" class="border border-slate-200 rounded-lg px-2 py-1.5 text-sm bg-white">
+                  <option value="todos" ${state.filterOnline === 'todos' ? 'selected' : ''}>Online: Todos</option>
+                  <option value="online" ${state.filterOnline === 'online' ? 'selected' : ''}>✓ Online</option>
+                  <option value="baja" ${state.filterOnline === 'baja' ? 'selected' : ''}>✗ Baja</option>
+                  <option value="?" ${state.filterOnline === '?' ? 'selected' : ''}>? Sin verificar</option>
+                </select>
+                <div class="flex items-center gap-1 ml-auto">
+                  <select onchange="state.sortBy=this.value;render()" class="border border-slate-200 rounded-lg px-2 py-1.5 text-sm bg-white">
+                    <option value="precio" ${state.sortBy === 'precio' ? 'selected' : ''}>Precio</option>
+                    <option value="total" ${state.sortBy === 'total' ? 'selected' : ''}>Gastos</option>
+                    <option value="dif" ${state.sortBy === 'dif' ? 'selected' : ''}>Diferencia</option>
+                    <option value="preciom2" ${state.sortBy === 'preciom2' ? 'selected' : ''}>$/m²</option>
+                  </select>
+                  <button onclick="state.sortDir=state.sortDir==='asc'?'desc':'asc';render()" class="px-2 py-1.5 border border-slate-200 rounded-lg bg-white hover:bg-slate-50">${state.sortDir === 'asc' ? '↑' : '↓'}</button>
+                </div>
+                <span class="text-slate-400 text-xs">${filtered.length}/${properties.length}</span>
+              </div>
+            </div>
+
+            <!-- Table -->
+            <div class="bg-white rounded-xl shadow-sm overflow-hidden">
+              <div class="overflow-x-auto">
+                <table class="w-full text-sm">
+                  <thead class="bg-slate-50 border-b border-slate-200">
+                    <tr>
+                      <th class="px-3 py-2.5 text-left font-medium text-slate-600">Dirección</th>
+                      <th class="px-3 py-2.5 text-left font-medium text-slate-600">Barrio</th>
+                      <th class="px-3 py-2.5 text-right font-medium text-slate-600">Precio</th>
+                      <th class="px-3 py-2.5 text-right font-medium text-slate-600">m²</th>
+                      <th class="px-3 py-2.5 text-right font-medium text-slate-600">$/m²</th>
+                      <th class="px-3 py-2.5 text-center font-medium text-slate-600">Eval</th>
+                      <th class="px-3 py-2.5 text-right font-medium text-slate-600">Gastos</th>
+                      <th class="px-3 py-2.5 text-center font-medium text-slate-600">OK</th>
+                      <th class="px-3 py-2.5 text-center font-medium text-slate-600">Online</th>
+                      <th class="px-3 py-2.5 text-left font-medium text-slate-600">Notas</th>
+                    </tr>
+                  </thead>
+                  <tbody class="divide-y divide-slate-100">
+                    ${filtered.map((p, i) => `
+                      <tr class="hover:bg-slate-50 transition-colors ${p._ok ? 'bg-green-50/30' : ''}">
+                        <td class="px-3 py-2.5">${p.link ? `<a href="${escapeHtml(p.link)}" target="_blank" rel="noopener noreferrer" class="text-blue-600 hover:underline font-medium">${escapeHtml(p.direccion)}</a>` : `<span class="font-medium text-slate-800">${escapeHtml(p.direccion)}</span>`}</td>
+                        <td class="px-3 py-2.5 text-slate-600">${escapeHtml(p.barrio)}</td>
+                        <td class="px-3 py-2.5 text-right font-mono text-slate-800">$${p._precio.toLocaleString()}</td>
+                        <td class="px-3 py-2.5 text-right text-slate-600">${p._m2 || '-'}</td>
+                        <td class="px-3 py-2.5 text-right font-mono text-slate-600">${p._preciom2 > 0 ? `$${p._preciom2.toLocaleString()}${p._ref > 0 ? `<span class="text-slate-400 text-xs ml-1">(${p._ref})</span>` : ''}` : '-'}</td>
+                        <td class="px-3 py-2.5 text-center">${evalIcon(p._vsRef)}</td>
+                        <td class="px-3 py-2.5 text-right"><div class="font-mono text-slate-800">$${p._total.toLocaleString()}</div><div class="text-xs font-medium ${p._dif >= 0 ? 'text-green-600' : 'text-red-500'}">${p._dif >= 0 ? '+' : ''}${p._dif.toLocaleString()}</div></td>
+                        <td class="px-3 py-2.5 text-center">${okPill(p._ok)}</td>
+                        <td class="px-3 py-2.5 text-center">${onlineBadge(p.online)}</td>
+                        <td class="px-3 py-2.5 text-slate-500 text-xs max-w-[200px] truncate" title="${escapeHtml(p.notas)}">${escapeHtml(p.notas)}</td>
+                      </tr>
+                    `).join('')}
+                  </tbody>
+                </table>
+              </div>
+              ${filtered.length === 0 ? '<div class="text-center py-8 text-slate-400">No hay propiedades que coincidan</div>' : ''}
+            </div>
+
+            <div class="text-center text-xs text-slate-400 mt-6">Buscador Casita Chiquis 🏠</div>
+          </div>
+        </div>
+      `;
+    }
+
+    // Initial load
+    fetchData(state.manualUrl);
+  </script>
+</body>
+</html>
