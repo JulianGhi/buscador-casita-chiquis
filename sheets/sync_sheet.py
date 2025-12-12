@@ -269,7 +269,29 @@ def scrape_mercadolibre(url):
             parts = [p.strip() for p in loc_text.split(',') if p.strip()]
             if len(parts) >= 1 and any(c.isdigit() for c in parts[0]):
                 # Si el primer elemento tiene números, es una dirección
-                data['direccion'] = parts[0]
+                direccion_raw = parts[0]
+
+                # Limpiar direcciones mal formadas (ej: "4 Amb Almagro - Mario Bravo 200")
+                # Si tiene " - ", probablemente la dirección real está después
+                if ' - ' in direccion_raw:
+                    partes = direccion_raw.split(' - ')
+                    # Buscar la parte que parece dirección (tiene número de calle)
+                    for p in partes:
+                        # Patrón: palabra(s) + número (ej: "Mario Bravo 200", "Av. Rivadavia 6100")
+                        if re.search(r'[A-Za-záéíóúÁÉÍÓÚñÑ\.\s]+\d+', p.strip()):
+                            direccion_raw = p.strip()
+                            break
+
+                # Remover prefijos como "4 Amb", "3 Ambientes", etc.
+                direccion_raw = re.sub(r'^\d+\s*(Amb|Ambientes?)\s*', '', direccion_raw, flags=re.IGNORECASE).strip()
+
+                # Remover barrios que quedaron pegados al inicio
+                barrios_limpiar = ['Floresta', 'Flores', 'Caballito', 'Almagro', 'Villa Crespo', 'Paternal']
+                for b in barrios_limpiar:
+                    if direccion_raw.lower().startswith(b.lower()):
+                        direccion_raw = direccion_raw[len(b):].strip(' -')
+
+                data['direccion'] = direccion_raw
             if len(parts) >= 2:
                 # Buscar barrio (no Capital Federal/Buenos Aires)
                 for part in parts[1:]:
