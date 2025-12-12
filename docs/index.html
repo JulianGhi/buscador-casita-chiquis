@@ -158,39 +158,11 @@ Av Juan B Alberdi 4600,Parque Avellaneda,105000,70,140,70,3,si,si,0,GOLDEN HAUS,
       state.error = null;
       render();
 
-      try {
-        // Load from local CSV file (updated by GitHub Actions every 15 min)
-        const response = await fetch('data.csv?' + Date.now());
-        if (!response.ok) throw new Error(`HTTP ${response.status}`);
-        const text = await response.text();
-        if (text && text.includes('direccion')) {
-          state.rawData = text;
-          state.lastUpdate = new Date();
-          state.error = null;
-          console.log('Loaded', text.split('\n').length, 'lines');
-        } else {
-          throw new Error('Invalid data format');
-        }
-      } catch (err) {
-        console.error('Fetch failed:', err.message);
-        state.error = 'Error cargando datos: ' + err.message;
-        if (!state.rawData) state.rawData = SAMPLE_CSV;
-      }
-
-      state.loading = false;
-      render();
-    }
-
-    async function forceUpdate() {
-      state.loading = true;
-      state.error = null;
-      render();
-
       const SHEET_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vT-bXC7r4bVh2Hc6Wovv-EFfb30nUMB5X3HA4NQoSTAZ-r6di3dhUEsdUNSHhebr8ezg0dIbw8nAA8S/pub?output=csv';
 
-      // Try multiple methods
+      // Try multiple methods to fetch from Sheet
       const methods = [
-        // Direct fetch (might work depending on browser/CORS)
+        // Direct fetch (works in most browsers)
         async () => {
           const r = await fetch(SHEET_URL);
           if (!r.ok) throw new Error('Direct failed');
@@ -218,7 +190,7 @@ Av Juan B Alberdi 4600,Parque Avellaneda,105000,70,140,70,3,si,si,0,GOLDEN HAUS,
             state.lastUpdate = new Date();
             state.error = null;
             success = true;
-            console.log('Force update success!', text.split('\n').length, 'lines');
+            console.log('Loaded', text.split('\n').length, 'lines from Sheet');
             break;
           }
         } catch (err) {
@@ -227,7 +199,8 @@ Av Juan B Alberdi 4600,Parque Avellaneda,105000,70,140,70,3,si,si,0,GOLDEN HAUS,
       }
 
       if (!success) {
-        state.error = 'No se pudo actualizar. Los datos se actualizan cada 15 min automáticamente.';
+        state.error = 'Error cargando datos. Intentá de nuevo.';
+        if (!state.rawData) state.rawData = SAMPLE_CSV;
       }
 
       state.loading = false;
@@ -664,8 +637,7 @@ Av Juan B Alberdi 4600,Parque Avellaneda,105000,70,140,70,3,si,si,0,GOLDEN HAUS,
                 <p class="text-xs text-slate-500">Crédito $${CONFIG.CREDITO.toLocaleString()} · Presupuesto $${CONFIG.PRESUPUESTO.toLocaleString()}</p>
               </div>
               <div class="flex items-center gap-2">
-                <button onclick="fetchData()" class="px-3 py-1.5 bg-blue-500 text-white text-sm rounded-lg hover:bg-blue-600 disabled:opacity-50" ${state.loading ? 'disabled' : ''} title="Recargar datos">${state.loading ? '...' : '↻'}</button>
-                <button onclick="forceUpdate()" class="px-3 py-1.5 bg-orange-500 text-white text-sm rounded-lg hover:bg-orange-600 disabled:opacity-50" ${state.loading ? 'disabled' : ''} title="Forzar update desde Sheet">⚡</button>
+                <button onclick="fetchData()" class="px-3 py-1.5 bg-blue-500 text-white text-sm rounded-lg hover:bg-blue-600 disabled:opacity-50" ${state.loading ? 'disabled' : ''} title="Actualizar datos desde Sheet">${state.loading ? '...' : '↻'}</button>
                 <button onclick="toggleAutoRefresh()" class="px-3 py-1.5 ${state.autoRefreshEnabled ? 'bg-green-500 text-white' : 'bg-slate-200 text-slate-700'} text-sm rounded-lg hover:opacity-80" title="Auto-refresh cada ${CONFIG.AUTO_REFRESH}s">${state.autoRefreshEnabled ? '⏸' : '▶'}</button>
                 <span class="w-px h-6 bg-slate-200"></span>
                 <button onclick="state.showHelp=!state.showHelp;render()" class="px-3 py-1.5 ${state.showHelp ? 'bg-purple-500 text-white' : 'bg-slate-200 text-slate-700'} text-sm rounded-lg hover:opacity-80" title="Ayuda">?</button>
