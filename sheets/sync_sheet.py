@@ -15,9 +15,15 @@ Opciones de push:
 
 import argparse
 import json
+import os
 import re
 import time
 from pathlib import Path
+
+# Cargar variables de entorno desde .env
+from dotenv import load_dotenv
+load_dotenv()
+
 import httpx
 from bs4 import BeautifulSoup
 import gspread
@@ -28,7 +34,10 @@ SCOPES = [
     'https://www.googleapis.com/auth/drive'
 ]
 
-SHEET_ID = '16n92ghEe8Vr1tiLdqbccF3i97kiwhHin9OPWY-O50L4'
+# Leer de variable de entorno (más seguro que hardcodear)
+SHEET_ID = os.environ.get('GOOGLE_SHEET_ID')
+if not SHEET_ID:
+    raise ValueError("GOOGLE_SHEET_ID environment variable is required. Set it in .env or export it.")
 WORKSHEET_NAME = 'Propiedades'
 LOCAL_FILE = Path('data/sheet_data.json')
 CACHE_FILE = Path('data/scrape_cache.json')
