@@ -15,7 +15,6 @@
   <div id="root"></div>
   <script>
     const DEFAULT_CONFIG = {
-      SHEET_URL: 'https://docs.google.com/spreadsheets/d/e/2PACX-1vT-bXC7r4bVh2Hc6Wovv-EFfb30nUMB5X3HA4NQoSTAZ-r6di3dhUEsdUNSHhebr8ezg0dIbw8nAA8S/pub?output=csv',
       CREDITO: 86000,
       PRESUPUESTO: 25000,
       MARGEN_REF: 0.12,
@@ -69,7 +68,6 @@ Av Juan B Alberdi 4600,Parque Avellaneda,105000,70,140,70,3,si,si,0,GOLDEN HAUS,
       loading: false,
       error: null,
       lastUpdate: null,
-      manualUrl: CONFIG.SHEET_URL,
       filterStatus: 'todos',
       filterOk: 'todos',
       filterBarrio: 'todos',
@@ -87,10 +85,10 @@ Av Juan B Alberdi 4600,Parque Avellaneda,105000,70,140,70,3,si,si,0,GOLDEN HAUS,
 
     function startAutoRefresh() {
       stopAutoRefresh();
-      if (CONFIG.AUTO_REFRESH > 0 && state.manualUrl) {
+      if (CONFIG.AUTO_REFRESH > 0) {
         state.autoRefreshEnabled = true;
         autoRefreshInterval = setInterval(() => {
-          fetchData(state.manualUrl);
+          fetchData();
         }, CONFIG.AUTO_REFRESH * 1000);
       }
     }
@@ -152,47 +150,27 @@ Av Juan B Alberdi 4600,Parque Avellaneda,105000,70,140,70,3,si,si,0,GOLDEN HAUS,
       return calc;
     }
 
-    async function fetchData(url) {
-      if (!url) {
-        state.rawData = SAMPLE_CSV;
-        state.lastUpdate = new Date();
-        state.error = null;
-        render();
-        return;
-      }
+    async function fetchData() {
       state.loading = true;
       state.error = null;
       render();
 
-      // Try multiple CORS proxies
-      const proxies = [
-        (u) => 'https://corsproxy.io/?' + encodeURIComponent(u),
-        (u) => 'https://api.allorigins.win/raw?url=' + encodeURIComponent(u),
-      ];
-
-      let success = false;
-      for (const makeUrl of proxies) {
-        try {
-          const proxyUrl = makeUrl(url);
-          console.log('Trying:', proxyUrl);
-          const response = await fetch(proxyUrl);
-          if (!response.ok) throw new Error(`HTTP ${response.status}`);
-          const text = await response.text();
-          if (text && text.includes('direccion')) {
-            state.rawData = text;
-            state.lastUpdate = new Date();
-            state.error = null;
-            success = true;
-            console.log('Success! Loaded', text.split('\n').length, 'lines');
-            break;
-          }
-        } catch (err) {
-          console.warn('Proxy failed:', err.message);
+      try {
+        // Load from local CSV file (updated by GitHub Actions every 15 min)
+        const response = await fetch('data.csv?' + Date.now());
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        const text = await response.text();
+        if (text && text.includes('direccion')) {
+          state.rawData = text;
+          state.lastUpdate = new Date();
+          state.error = null;
+          console.log('Loaded', text.split('\n').length, 'lines');
+        } else {
+          throw new Error('Invalid data format');
         }
-      }
-
-      if (!success) {
-        state.error = 'Error cargando datos. Probá recargar en unos segundos.';
+      } catch (err) {
+        console.error('Fetch failed:', err.message);
+        state.error = 'Error cargando datos: ' + err.message;
         if (!state.rawData) state.rawData = SAMPLE_CSV;
       }
 
@@ -609,7 +587,7 @@ Av Juan B Alberdi 4600,Parque Avellaneda,105000,70,140,70,3,si,si,0,GOLDEN HAUS,
               </div>
               <div class="flex items-center gap-2">
                 ${state.lastUpdate ? `<span class="text-xs text-slate-400">${state.lastUpdate.toLocaleTimeString()}</span>` : ''}
-                <button onclick="fetchData(state.manualUrl)" class="px-3 py-1.5 bg-blue-500 text-white text-sm rounded-lg hover:bg-blue-600 disabled:opacity-50" ${state.loading ? 'disabled' : ''}>${state.loading ? '...' : '↻'}</button>
+                <button onclick="fetchData()" class="px-3 py-1.5 bg-blue-500 text-white text-sm rounded-lg hover:bg-blue-600 disabled:opacity-50" ${state.loading ? 'disabled' : ''}>${state.loading ? '...' : '↻'}</button>
                 <button onclick="toggleAutoRefresh()" class="px-3 py-1.5 ${state.autoRefreshEnabled ? 'bg-green-500 text-white' : 'bg-slate-200 text-slate-700'} text-sm rounded-lg hover:opacity-80" title="Auto-refresh cada ${CONFIG.AUTO_REFRESH}s">${state.autoRefreshEnabled ? '⏸' : '▶'}</button>
                 <button onclick="state.showHelp=!state.showHelp;render()" class="px-3 py-1.5 ${state.showHelp ? 'bg-purple-500 text-white' : 'bg-slate-200 text-slate-700'} text-sm rounded-lg hover:opacity-80">?</button>
                 <button onclick="state.showConfig=!state.showConfig;render()" class="px-3 py-1.5 ${state.showConfig ? 'bg-blue-500 text-white' : 'bg-slate-200 text-slate-700'} text-sm rounded-lg hover:opacity-80">⚙️</button>
@@ -717,7 +695,7 @@ Av Juan B Alberdi 4600,Parque Avellaneda,105000,70,140,70,3,si,si,0,GOLDEN HAUS,
     }
 
     // Initial load
-    fetchData(state.manualUrl);
+    fetchData();
   </script>
 </body>
 </html>

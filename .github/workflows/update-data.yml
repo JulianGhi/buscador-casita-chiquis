@@ -1,0 +1,36 @@
+name: Update property data
+
+on:
+  schedule:
+    # Run every 15 minutes
+    - cron: '*/15 * * * *'
+  workflow_dispatch: # Allow manual trigger
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Fetch CSV from Google Sheets
+        run: |
+          curl -L "https://docs.google.com/spreadsheets/d/e/2PACX-1vT-bXC7r4bVh2Hc6Wovv-EFfb30nUMB5X3HA4NQoSTAZ-r6di3dhUEsdUNSHhebr8ezg0dIbw8nAA8S/pub?output=csv" -o docs/data.csv
+
+      - name: Check if data changed
+        id: check
+        run: |
+          if git diff --quiet docs/data.csv; then
+            echo "changed=false" >> $GITHUB_OUTPUT
+          else
+            echo "changed=true" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Commit and push if changed
+        if: steps.check.outputs.changed == 'true'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add docs/data.csv
+          git commit -m "Update property data [skip ci]"
+          git push
