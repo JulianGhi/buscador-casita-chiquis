@@ -517,6 +517,25 @@ Av Juan B Alberdi 4600,Parque Avellaneda,105000,70,140,70,3,si,si,0,GOLDEN HAUS,
       return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
     }
 
+    function diasHace(fecha) {
+      if (!fecha) return null;
+      const hoy = new Date();
+      const f = new Date(fecha);
+      if (isNaN(f.getTime())) return null;
+      const diff = Math.floor((hoy - f) / (1000 * 60 * 60 * 24));
+      return diff;
+    }
+
+    function fechaIndicators(p) {
+      const pubDias = diasHace(p.fecha_publicado);
+      const trackDias = diasHace(p.fecha_agregado);
+      let parts = [];
+      if (pubDias !== null) parts.push(`📅${pubDias}d`);
+      if (trackDias !== null) parts.push(`👁${trackDias}d`);
+      if (parts.length === 0) return '';
+      return `<div class="text-[10px] text-slate-400 mt-0.5">${parts.join(' · ')}</div>`;
+    }
+
     function showDetail(idx) {
       state.selectedProperty = idx;
       state.negotiationPct = 0;
@@ -1319,7 +1338,7 @@ Av Juan B Alberdi 4600,Parque Avellaneda,105000,70,140,70,3,si,si,0,GOLDEN HAUS,
                           <td class="px-2 py-2.5 text-center">${activoBadge(p.activo)}</td>
                           <td class="px-2 py-2.5 text-center">${aptoCreditoBadge(p.apto_credito)}</td>
                           <td class="px-2 py-2.5 text-center">${statusBadge(p.status)}</td>
-                          <td class="px-3 py-2.5"><span class="font-medium text-slate-800">${p.direccion ? escapeHtml(p.direccion) : '<span class="text-slate-300 text-xs italic">sin dir</span>'}</span></td>
+                          <td class="px-3 py-2.5"><span class="font-medium text-slate-800">${p.direccion ? escapeHtml(p.direccion) : '<span class="text-slate-300 text-xs italic">sin dir</span>'}</span>${fechaIndicators(p)}</td>
                           <td class="px-3 py-2.5 text-slate-600">${p.barrio ? escapeHtml(p.barrio) : '<span class="text-slate-300 text-xs italic">-</span>'}</td>
                           <td class="px-2 py-2.5 text-center text-xs text-slate-600">${p.tipo ? escapeHtml(p.tipo.toUpperCase()) : '<span class="text-slate-300">-</span>'}</td>
                           <td class="px-3 py-2.5 text-right font-mono text-slate-800">${p._precio > 0 ? '$' + p._precio.toLocaleString() : '<span class="text-slate-300">-</span>'}</td>
