@@ -265,10 +265,12 @@ Av Juan B Alberdi 4600,Parque Avellaneda,105000,70,140,70,3,si,si,0,GOLDEN HAUS,
     }
 
     function evalIcon(vsRef) {
-      if (!vsRef && vsRef !== 0) return '<span class="text-gray-300">-</span>';
-      if (vsRef < -CONFIG.MARGEN_REF) return '<span title="Bajo mercado">🟢</span>';
-      if (vsRef > CONFIG.MARGEN_REF) return '<span title="Sobre mercado">🔴</span>';
-      return '<span title="En mercado">🟡</span>';
+      if (!vsRef && vsRef !== 0) return '<span class="text-slate-300 text-xs">-</span>';
+      const pct = Math.round(vsRef * 100);
+      const sign = pct > 0 ? '+' : '';
+      if (vsRef < -CONFIG.MARGEN_REF) return `<span class="text-green-600 text-xs font-medium" title="Bajo mercado">${sign}${pct}%</span>`;
+      if (vsRef > CONFIG.MARGEN_REF) return `<span class="text-red-500 text-xs font-medium" title="Sobre mercado">${sign}${pct}%</span>`;
+      return `<span class="text-yellow-600 text-xs" title="En mercado">${sign}${pct}%</span>`;
     }
 
     function okPill(ok) {
@@ -739,7 +741,7 @@ Av Juan B Alberdi 4600,Parque Avellaneda,105000,70,140,70,3,si,si,0,GOLDEN HAUS,
                       <th class="px-3 py-2.5 text-right font-medium text-slate-600">Precio</th>
                       <th class="px-3 py-2.5 text-right font-medium text-slate-600">m²</th>
                       <th class="px-3 py-2.5 text-right font-medium text-slate-600">$/m²</th>
-                      <th class="px-3 py-2.5 text-center font-medium text-slate-600">Eval</th>
+                      <th class="px-3 py-2.5 text-center font-medium text-slate-600" title="Diferencia vs precio promedio del barrio">vs Barrio</th>
                       <th class="px-3 py-2.5 text-right font-medium text-slate-600">Gastos</th>
                       <th class="px-3 py-2.5 text-center font-medium text-slate-600">OK</th>
                       <th class="px-3 py-2.5 text-center font-medium text-slate-600">Status</th>
