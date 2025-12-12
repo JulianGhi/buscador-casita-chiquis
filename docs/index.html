@@ -153,6 +153,9 @@ Av Juan B Alberdi 4600,Parque Avellaneda,105000,70,140,70,3,si,si,0,GOLDEN HAUS,
       return calc;
     }
 
+    const API_KEY = 'AIzaSyClZvK5NbmLEtxi9tqf1fcKxRIKEUqYnu0';
+    const SHEET_ID = '16n92ghEe8Vr1tiLdqbccF3i97kiwhHin9OPWY-O50L4';
+
     async function fetchData() {
       console.group('🔄 fetchData()');
       console.log('Timestamp:', new Date().toISOString());
@@ -161,52 +164,52 @@ Av Juan B Alberdi 4600,Parque Avellaneda,105000,70,140,70,3,si,si,0,GOLDEN HAUS,
       state.error = null;
       render();
 
-      // Add timestamp to bust cache
-      const timestamp = Date.now();
-      const SHEET_URL = `https://docs.google.com/spreadsheets/d/e/2PACX-1vT-bXC7r4bVh2Hc6Wovv-EFfb30nUMB5X3HA4NQoSTAZ-r6di3dhUEsdUNSHhebr8ezg0dIbw8nAA8S/pub?output=csv&_t=${timestamp}`;
-
-      console.log('URL:', SHEET_URL);
+      const API_URL = `https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}/values/A:V?key=${API_KEY}`;
+      console.log('Using Sheets API');
 
       try {
         console.log('Fetching...');
-        const response = await fetch(SHEET_URL, {
-          cache: 'no-store',
-          headers: { 'Cache-Control': 'no-cache' }
-        });
+        const response = await fetch(API_URL);
 
         console.log('Response status:', response.status);
-        console.log('Response headers:', Object.fromEntries(response.headers.entries()));
 
-        if (!response.ok) throw new Error(`HTTP ${response.status}`);
-
-        const text = await response.text();
-
-        console.log('Raw text length:', text.length);
-        console.log('First 200 chars:', text.substring(0, 200));
-
-        if (!text || !text.startsWith('direccion,barrio,')) {
-          throw new Error('Datos inválidos');
+        if (!response.ok) {
+          const errorData = await response.json();
+          throw new Error(errorData.error?.message || `HTTP ${response.status}`);
         }
 
-        const lines = text.trim().split('\n');
-        console.log('Total lines:', lines.length);
+        const data = await response.json();
+        console.log('Rows received:', data.values?.length || 0);
 
-        const validRows = lines.slice(1).filter(line => {
-          const cols = line.split(',');
-          return cols[0] || cols[1] || cols[2];
-        });
+        if (!data.values || data.values.length < 2) {
+          throw new Error('No hay datos');
+        }
+
+        // Convert API response to CSV format for compatibility
+        const csvLines = data.values.map(row =>
+          row.map(cell => {
+            const val = (cell || '').toString();
+            // Escape quotes and wrap in quotes if contains comma
+            if (val.includes(',') || val.includes('"')) {
+              return '"' + val.replace(/"/g, '""') + '"';
+            }
+            return val;
+          }).join(',')
+        );
+        const csvText = csvLines.join('\n');
+
+        const headers = data.values[0];
+        const validRows = data.values.slice(1).filter(row => row[0] || row[1] || row[2]);
 
         console.log('Valid rows:', validRows.length);
-
-        // Log first column of each row to see what addresses we got
-        const direcciones = validRows.map(line => line.split(',')[0] || '(vacío)');
+        const direcciones = validRows.map(row => row[0] || '(vacío)');
         console.log('Direcciones:', direcciones.join(' | '));
 
-        state.rawData = text;
+        state.rawData = csvText;
         state.lastUpdate = new Date();
         state.error = null;
 
-        console.log('✅ Data loaded successfully');
+        console.log('✅ Data loaded successfully via API');
 
       } catch (err) {
         console.error('❌ Error:', err.message);
@@ -636,7 +639,7 @@ Av Juan B Alberdi 4600,Parque Avellaneda,105000,70,140,70,3,si,si,0,GOLDEN HAUS,
                 <span class="text-slate-500">${state.autoRefreshEnabled ? '· Auto ●' : ''}</span>
               </div>
               <div class="text-slate-400">
-                ${stats.total} props · ${stats.activos} activas · ${stats.entran} entran · <span class="text-slate-600">v4</span>
+                ${stats.total} props · ${stats.activos} activas · ${stats.entran} entran · <span class="text-slate-600">v5-API</span>
               </div>
             </div>
           </div>
