@@ -154,6 +154,9 @@ Av Juan B Alberdi 4600,Parque Avellaneda,105000,70,140,70,3,si,si,0,GOLDEN HAUS,
     }
 
     async function fetchData() {
+      console.group('🔄 fetchData()');
+      console.log('Timestamp:', new Date().toISOString());
+
       state.loading = true;
       state.error = null;
       render();
@@ -162,38 +165,57 @@ Av Juan B Alberdi 4600,Parque Avellaneda,105000,70,140,70,3,si,si,0,GOLDEN HAUS,
       const timestamp = Date.now();
       const SHEET_URL = `https://docs.google.com/spreadsheets/d/e/2PACX-1vT-bXC7r4bVh2Hc6Wovv-EFfb30nUMB5X3HA4NQoSTAZ-r6di3dhUEsdUNSHhebr8ezg0dIbw8nAA8S/pub?output=csv&_t=${timestamp}`;
 
+      console.log('URL:', SHEET_URL);
+
       try {
+        console.log('Fetching...');
         const response = await fetch(SHEET_URL, {
           cache: 'no-store',
           headers: { 'Cache-Control': 'no-cache' }
         });
+
+        console.log('Response status:', response.status);
+        console.log('Response headers:', Object.fromEntries(response.headers.entries()));
+
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
 
         const text = await response.text();
+
+        console.log('Raw text length:', text.length);
+        console.log('First 200 chars:', text.substring(0, 200));
 
         if (!text || !text.startsWith('direccion,barrio,')) {
           throw new Error('Datos inválidos');
         }
 
         const lines = text.trim().split('\n');
+        console.log('Total lines:', lines.length);
+
         const validRows = lines.slice(1).filter(line => {
           const cols = line.split(',');
           return cols[0] || cols[1] || cols[2];
         });
 
-        console.log(`✓ ${validRows.length} propiedades cargadas`);
+        console.log('Valid rows:', validRows.length);
+
+        // Log first column of each row to see what addresses we got
+        const direcciones = validRows.map(line => line.split(',')[0] || '(vacío)');
+        console.log('Direcciones:', direcciones);
 
         state.rawData = text;
         state.lastUpdate = new Date();
         state.error = null;
 
+        console.log('✅ Data loaded successfully');
+
       } catch (err) {
-        console.error('✗ Error:', err.message);
+        console.error('❌ Error:', err.message);
         state.error = 'Error: ' + err.message;
         if (!state.rawData) state.rawData = SAMPLE_CSV;
       }
 
       state.loading = false;
+      console.groupEnd();
       render();
     }
 
@@ -614,7 +636,7 @@ Av Juan B Alberdi 4600,Parque Avellaneda,105000,70,140,70,3,si,si,0,GOLDEN HAUS,
                 <span class="text-slate-500">${state.autoRefreshEnabled ? '· Auto ●' : ''}</span>
               </div>
               <div class="text-slate-400">
-                ${stats.total} props · ${stats.activos} activas · ${stats.entran} entran · <span class="text-slate-600">v2</span>
+                ${stats.total} props · ${stats.activos} activas · ${stats.entran} entran · <span class="text-slate-600">v3</span>
               </div>
             </div>
           </div>
