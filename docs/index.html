@@ -1305,9 +1305,15 @@ Av Juan B Alberdi 4600,Parque Avellaneda,105000,70,140,70,3,si,si,0,GOLDEN HAUS,
                     <tbody class="divide-y divide-slate-100">
                       ${filtered.map((p, i) => {
                         const barColor = p._completeness >= 3 ? 'bg-green-500' : p._completeness >= 2 ? 'bg-yellow-500' : 'bg-red-400';
-                        const isInactivo = (p.activo || '').toLowerCase() === 'no';
-                        const noApto = (p.apto_credito || '').toLowerCase() !== 'si';
-                        const rowBg = isInactivo ? 'bg-red-100/70 opacity-60' : noApto ? 'bg-amber-50/70' : (p._ok ? 'bg-green-50/30' : '');
+                        const activo = (p.activo || '').toLowerCase();
+                        const apto = (p.apto_credito || '').toLowerCase();
+                        const isInactivo = activo === 'no';
+                        const needsCheck = (activo === '?' || apto === '?' || !apto) && p._ok;
+                        const noApto = apto === 'no';
+                        const rowBg = isInactivo ? 'bg-red-100/70 opacity-60'
+                          : needsCheck ? 'bg-yellow-200/70 border-l-4 border-yellow-500'
+                          : noApto ? 'bg-amber-50/70'
+                          : (p._ok ? 'bg-green-50/30' : '');
                         return `
                         <tr class="hover:bg-slate-100 transition-colors cursor-pointer ${rowBg}" onclick="showDetail(${p._idx})">
                           <td class="px-2 py-2.5 text-center">${activoBadge(p.activo)}</td>
