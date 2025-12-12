@@ -68,7 +68,6 @@ Av Juan B Alberdi 4600,Parque Avellaneda,105000,70,140,70,3,si,si,0,GOLDEN HAUS,
       loading: false,
       error: null,
       lastUpdate: null,
-      dataSource: null, // 'sheet' or 'cache'
       filterStatus: 'todos',
       filterOk: 'todos',
       filterBarrio: 'todos',
@@ -159,10 +158,11 @@ Av Juan B Alberdi 4600,Parque Avellaneda,105000,70,140,70,3,si,si,0,GOLDEN HAUS,
       state.error = null;
       render();
 
-      const SHEET_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vT-bXC7r4bVh2Hc6Wovv-EFfb30nUMB5X3HA4NQoSTAZ-r6di3dhUEsdUNSHhebr8ezg0dIbw8nAA8S/pub?output=csv';
+      // Add timestamp to bust cache
+      const timestamp = Date.now();
+      const SHEET_URL = `https://docs.google.com/spreadsheets/d/e/2PACX-1vT-bXC7r4bVh2Hc6Wovv-EFfb30nUMB5X3HA4NQoSTAZ-r6di3dhUEsdUNSHhebr8ezg0dIbw8nAA8S/pub?output=csv&_t=${timestamp}`;
 
       try {
-        // Fetch with no-cache headers
         const response = await fetch(SHEET_URL, {
           cache: 'no-store',
           headers: { 'Cache-Control': 'no-cache' }
@@ -171,61 +171,30 @@ Av Juan B Alberdi 4600,Parque Avellaneda,105000,70,140,70,3,si,si,0,GOLDEN HAUS,
 
         const text = await response.text();
 
-        // Validate it's real CSV data with expected headers
         if (!text || !text.startsWith('direccion,barrio,')) {
-          throw new Error('Datos inválidos recibidos');
+          throw new Error('Datos inválidos');
         }
 
-        // Count valid rows (non-empty)
         const lines = text.trim().split('\n');
         const validRows = lines.slice(1).filter(line => {
           const cols = line.split(',');
           return cols[0] || cols[1] || cols[2];
         });
 
-        console.log(`✓ Cargadas ${validRows.length} propiedades desde Sheet`);
-
-        // Save to localStorage as backup
-        localStorage.setItem('casita_data', text);
-        localStorage.setItem('casita_data_time', Date.now().toString());
+        console.log(`✓ ${validRows.length} propiedades cargadas`);
 
         state.rawData = text;
         state.lastUpdate = new Date();
-        state.dataSource = 'sheet';
         state.error = null;
 
       } catch (err) {
-        console.error('✗ Fetch falló:', err.message);
-
-        // Try to load from localStorage backup
-        const cached = localStorage.getItem('casita_data');
-        if (cached && cached.startsWith('direccion,barrio,')) {
-          console.log('→ Usando datos guardados en cache');
-          state.rawData = cached;
-          state.dataSource = 'cache';
-          state.error = null;
-        } else {
-          state.error = 'Error cargando datos: ' + err.message;
-          if (!state.rawData) state.rawData = SAMPLE_CSV;
-        }
+        console.error('✗ Error:', err.message);
+        state.error = 'Error: ' + err.message;
+        if (!state.rawData) state.rawData = SAMPLE_CSV;
       }
 
       state.loading = false;
       render();
-    }
-
-    // Load cached data on startup
-    function loadCachedData() {
-      const cached = localStorage.getItem('casita_data');
-      if (cached && cached.startsWith('direccion,barrio,')) {
-        state.rawData = cached;
-        state.dataSource = 'cache';
-        const cacheTime = localStorage.getItem('casita_data_time');
-        if (cacheTime) {
-          state.lastUpdate = new Date(parseInt(cacheTime));
-        }
-        render();
-      }
     }
 
     function getProperties() {
@@ -642,7 +611,6 @@ Av Juan B Alberdi 4600,Parque Avellaneda,105000,70,140,70,3,si,si,0,GOLDEN HAUS,
                   }
                 </div>
                 ${state.lastUpdate ? `<span class="text-slate-400">· ${state.lastUpdate.toLocaleTimeString()}</span>` : ''}
-                ${state.dataSource ? `<span class="text-slate-500">· ${state.dataSource === 'sheet' ? '📊 Sheet' : '💾 Cache'}</span>` : ''}
                 <span class="text-slate-500">${state.autoRefreshEnabled ? '· Auto ●' : ''}</span>
               </div>
               <div class="text-slate-400">
@@ -769,8 +737,7 @@ Av Juan B Alberdi 4600,Parque Avellaneda,105000,70,140,70,3,si,si,0,GOLDEN HAUS,
       `;
     }
 
-    // Initial load - show cached data first, then fetch fresh
-    loadCachedData();
+    // Initial load
     fetchData();
   </script>
 </body>
