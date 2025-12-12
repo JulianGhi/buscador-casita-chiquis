@@ -38,7 +38,15 @@
     function loadConfig() {
       try {
         const saved = localStorage.getItem('casita_config');
-        return saved ? { ...DEFAULT_CONFIG, ...JSON.parse(saved) } : { ...DEFAULT_CONFIG };
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          // Force new auto-refresh default if user had old value
+          if (parsed.AUTO_REFRESH === 60) {
+            parsed.AUTO_REFRESH = DEFAULT_CONFIG.AUTO_REFRESH;
+          }
+          return { ...DEFAULT_CONFIG, ...parsed };
+        }
+        return { ...DEFAULT_CONFIG };
       } catch { return { ...DEFAULT_CONFIG }; }
     }
 
@@ -87,6 +95,7 @@ Av Juan B Alberdi 4600,Parque Avellaneda,105000,70,140,70,3,si,si,0,GOLDEN HAUS,
       stopAutoRefresh();
       if (CONFIG.AUTO_REFRESH > 0) {
         state.autoRefreshEnabled = true;
+        console.log(`⏱️ Auto-refresh cada ${CONFIG.AUTO_REFRESH}s`);
         autoRefreshInterval = setInterval(() => {
           fetchData();
         }, CONFIG.AUTO_REFRESH * 1000);
