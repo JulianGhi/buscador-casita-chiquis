@@ -686,8 +686,8 @@ function renderDetailModal(p) {
             </div>
             <div class="text-sm ${entraConQuita ? 'text-purple-700' : 'text-red-700'}">
               ${entraConQuita
-                ? `Necesitás negociar <span class="font-bold">-${quitaNecesaria.toFixed(1)}%</span> (precio objetivo: <span class="font-mono font-bold">$${Math.round(precioTarget).toLocaleString()}</span>)`
-                : `Necesitarías <span class="font-bold">-${quitaNecesaria.toFixed(1)}%</span> de quita, poco realista`
+                ? `Necesitás negociar <span class="font-bold">-${quitaNecesaria.toFixed(1)}%</span> (<span class="font-mono">-$${Math.round(p._precio - precioTarget).toLocaleString()}</span>) → precio objetivo: <span class="font-mono font-bold">$${Math.round(precioTarget).toLocaleString()}</span>`
+                : `Necesitarías <span class="font-bold">-${quitaNecesaria.toFixed(1)}%</span> (<span class="font-mono">-$${Math.round(p._precio - precioTarget).toLocaleString()}</span>), poco realista`
               }
             </div>
             ${entraConQuita ? `<div class="text-xs text-purple-500 mt-1">Con dólar a $${dolarActual} y crédito de $${creditoEstimado.toLocaleString()}</div>` : ''}
