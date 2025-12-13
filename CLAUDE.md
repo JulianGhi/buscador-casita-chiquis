@@ -196,13 +196,34 @@ El ordenamiento "Mejor candidato" usa un sistema de **tiers** (niveles de priori
 | T4 | activo + apto_credito=no | Naranja | No aceptan crédito (difícil) |
 | T5 | inactivo o sin link | Rojo | Descartadas |
 
-#### Score (bonus dentro de cada tier)
+#### Score (bonus/penalidad dentro de cada tier)
 
-Dentro de cada tier, las propiedades se ordenan por score. El score base depende del tier, y se suman bonus por:
-- **Bajo precio de mercado**: +15 a +105 puntos según qué tan bajo (configurado por peso `bajo_mercado`)
-- **Metros cuadrados**: +10 a +40 puntos según m² (configurado por peso `m2`)
-- **Amenities**: terraza, balcón, cochera, luminosidad, disposición frente (+10 c/u × peso)
-- **Completitud de datos**: +3 puntos por cada campo completo
+Dentro de cada tier, las propiedades se ordenan por score. **Datos faltantes penalizan** (asumimos lo peor si no está verificado).
+
+**Sistema de 3 estados:**
+| Estado | Score | Significado |
+|--------|-------|-------------|
+| `"si"` | +bonus × peso | Verificado que tiene el atributo |
+| `"no"` | 0 | Verificado que NO tiene (neutro) |
+| `""` / `"?"` / missing | -penalidad × peso | No sabemos, asumimos lo peor |
+
+**Pesos configurables (11 atributos):**
+
+| Peso | Qué prioriza | Bonus si cumple |
+|------|--------------|-----------------|
+| 💰 Bajo mercado | Precio bajo vs barrio | +15 a +105 pts si <15% bajo ref |
+| 📐 M² grandes | Más m² cubiertos | +40 pts si ≥70m², +20 si ≥50m² |
+| 🚪 Ambientes | 3+ ambientes | +24 pts si 4+, +12 si 3 |
+| 🚿 Baños | 2+ baños | +12 pts si 2+ |
+| ✨ Nuevo | Menos antigüedad | +30 pts si a estrenar, +18 si <15 años |
+| 💵 Exp. bajas | Expensas bajas | +16 pts si $0, +10 si <$80k |
+| 🌿 Terraza | Tiene terraza | +10 × peso |
+| 🏠 Balcón | Tiene balcón | +10 × peso |
+| 🚗 Cochera | Tiene cochera | +10 × peso |
+| ☀️ Luminoso | Es luminoso | +10 × peso |
+| 🪟 Al frente | Disposición frente | +10 × peso |
+
+**Penalidad por dato faltante:** -3 a -5 × peso (incentiva completar datos)
 
 #### Condiciones toggleables
 
@@ -215,9 +236,13 @@ Al deshabilitar condiciones, los tiers se recalculan automáticamente (ej: sin a
 
 #### Archivos relacionados
 
-- `docs/js/config.js`: Define `DEFAULT_CONDITIONS` y `DEFAULT_WEIGHTS`
-- `docs/js/utils.js`: Función `calculateProperty()` implementa tiers y score
-- `docs/js/components.js`: Función `renderConfigPanel()` muestra UI de configuración
+- `docs/js/config.js`: Define `DEFAULT_CONDITIONS` y `DEFAULT_WEIGHTS` (11 pesos con enabled/weight)
+- `docs/js/utils.js`:
+  - `scoreAtributo()`, `scoreNumerico()`, `scoreDisposicion()` - scoring de atributos booleanos
+  - `scoreAmbientes()`, `scoreBanos()`, `scoreAntiguedad()`, `scoreExpensas()` - scoring de atributos numéricos
+  - `calculateProperty()` - implementa tiers y score, guarda `_attrScores` y `_missingCount`
+- `docs/js/components.js`: `renderConfigPanel()` muestra checkboxes + sliders para cada peso
+- `docs/js/app.js`: `toggleWeightEnabled()` para habilitar/deshabilitar cada peso
 
 ## Para Continuar Desarrollo
 

@@ -470,22 +470,22 @@ function renderConfigPanel() {
             </div>
           </div>
         </div>
-        <div class="text-xs text-slate-500 mb-2">Ponderación (bonus/penalidad dentro de cada tier):</div>
-        <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-7 gap-2">
+        <div class="text-xs text-slate-500 mb-2">Ponderación (↑ peso = más importante, hover para ver qué prioriza):</div>
+        <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
           ${Object.entries(WEIGHTS).map(([key, config]) => `
-            <div class="flex flex-col ${config.enabled ? '' : 'opacity-40'}">
-              <div class="flex items-center gap-1 text-xs mb-0.5">
+            <div class="flex flex-col p-2 rounded-lg ${config.enabled ? 'bg-blue-50/50' : 'bg-slate-50 opacity-50'}" title="${config.desc}">
+              <div class="flex items-center gap-1.5 text-xs mb-1">
                 <input type="checkbox" ${config.enabled ? 'checked' : ''}
                   onchange="toggleWeightEnabled('${key}', this.checked)"
-                  class="w-3 h-3 accent-blue-500 rounded" />
-                <span class="${config.enabled ? 'text-slate-600' : 'text-slate-400'} truncate" title="${config.desc}">${config.label}</span>
-                <span class="font-bold ${config.enabled ? 'text-blue-600' : 'text-slate-400'} ml-auto">${config.weight}</span>
+                  class="w-3.5 h-3.5 accent-blue-500 rounded" />
+                <span class="${config.enabled ? 'text-slate-700 font-medium' : 'text-slate-400'}">${config.label}</span>
+                <span class="font-bold ${config.enabled ? 'text-blue-600' : 'text-slate-400'} ml-auto text-sm">${config.weight}</span>
               </div>
               <input type="range" min="0" max="10" value="${config.weight}"
                 onchange="updateWeight('${key}', this.value)"
                 oninput="updateWeight('${key}', this.value)"
                 ${config.enabled ? '' : 'disabled'}
-                class="w-full h-1.5 bg-slate-200 rounded-lg appearance-none cursor-pointer ${config.enabled ? 'accent-blue-500' : 'accent-slate-300'}" />
+                class="w-full h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer ${config.enabled ? 'accent-blue-500' : 'accent-slate-300'}" />
             </div>
           `).join('')}
         </div>
@@ -575,6 +575,10 @@ function renderDetailModal(p) {
             <div class="text-xs font-medium text-orange-700 mb-2">⚠️ Datos faltantes (penalizan score):</div>
             <div class="flex flex-wrap gap-2">
               ${p._attrScores?.m2 === 'missing' ? '<span class="text-xs bg-orange-100 text-orange-700 px-2 py-0.5 rounded">m²</span>' : ''}
+              ${p._attrScores?.ambientes === 'missing' ? '<span class="text-xs bg-orange-100 text-orange-700 px-2 py-0.5 rounded">Ambientes</span>' : ''}
+              ${p._attrScores?.banos === 'missing' ? '<span class="text-xs bg-orange-100 text-orange-700 px-2 py-0.5 rounded">Baños</span>' : ''}
+              ${p._attrScores?.antiguedad === 'missing' ? '<span class="text-xs bg-orange-100 text-orange-700 px-2 py-0.5 rounded">Antigüedad</span>' : ''}
+              ${p._attrScores?.expensas === 'missing' ? '<span class="text-xs bg-orange-100 text-orange-700 px-2 py-0.5 rounded">Expensas</span>' : ''}
               ${p._attrScores?.terraza === 'missing' ? '<span class="text-xs bg-orange-100 text-orange-700 px-2 py-0.5 rounded">Terraza</span>' : ''}
               ${p._attrScores?.balcon === 'missing' ? '<span class="text-xs bg-orange-100 text-orange-700 px-2 py-0.5 rounded">Balcón</span>' : ''}
               ${p._attrScores?.cochera === 'missing' ? '<span class="text-xs bg-orange-100 text-orange-700 px-2 py-0.5 rounded">Cochera</span>' : ''}

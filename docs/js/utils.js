@@ -32,6 +32,57 @@ function scoreDisposicion(valor, peso, bonusFront = 10, penaltyMissing = 5) {
   return { score: -penaltyMissing * peso, status: 'missing' };
 }
 
+// Score de ambientes: 4+ = muy bien, 3 = bien, <3 = neutro
+function scoreAmbientes(valor, peso, penaltyMissing = 3) {
+  if (peso <= 0) return { score: 0, status: 'disabled' };
+  const num = parseInt(valor);
+  if (!isNaN(num) && num > 0) {
+    if (num >= 4) return { score: 8 * peso, status: 'si' };
+    if (num >= 3) return { score: 4 * peso, status: 'ok' };
+    return { score: 0, status: 'no' }; // 2 o menos
+  }
+  return { score: -penaltyMissing * peso, status: 'missing' };
+}
+
+// Score de baños: 2+ = bonus, 1 = neutro
+function scoreBanos(valor, peso, penaltyMissing = 3) {
+  if (peso <= 0) return { score: 0, status: 'disabled' };
+  const num = parseInt(valor);
+  if (!isNaN(num) && num > 0) {
+    if (num >= 2) return { score: 6 * peso, status: 'si' };
+    return { score: 0, status: 'no' }; // 1 baño
+  }
+  return { score: -penaltyMissing * peso, status: 'missing' };
+}
+
+// Score de antigüedad: nuevo = mejor, viejo = peor
+function scoreAntiguedad(valor, peso, penaltyMissing = 3) {
+  if (peso <= 0) return { score: 0, status: 'disabled' };
+  const num = parseInt(valor);
+  if (!isNaN(num)) {
+    if (num === 0) return { score: 10 * peso, status: 'si' }; // A estrenar
+    if (num <= 15) return { score: 6 * peso, status: 'si' };
+    if (num <= 30) return { score: 3 * peso, status: 'ok' };
+    if (num <= 50) return { score: 0, status: 'no' };
+    return { score: -3 * peso, status: 'no' }; // >50 años
+  }
+  return { score: -penaltyMissing * peso, status: 'missing' };
+}
+
+// Score de expensas: bajas = bonus, altas = penalty
+function scoreExpensas(valor, peso, penaltyMissing = 2) {
+  if (peso <= 0) return { score: 0, status: 'disabled' };
+  const num = parseInt(valor);
+  if (!isNaN(num)) {
+    if (num === 0) return { score: 8 * peso, status: 'si' }; // Sin expensas
+    if (num <= 80) return { score: 5 * peso, status: 'si' };
+    if (num <= 150) return { score: 2 * peso, status: 'ok' };
+    if (num <= 250) return { score: 0, status: 'no' };
+    return { score: -4 * peso, status: 'no' }; // >250 (muy altas)
+  }
+  return { score: -penaltyMissing * peso, status: 'missing' };
+}
+
 function getCreditoUSD(dolar = null) {
   const tc = dolar || CONFIG.DOLAR_BASE;
   return Math.round(CONFIG.CREDITO_ARS / tc);
@@ -180,6 +231,19 @@ function calculateProperty(p) {
     else if (m2 > 0) { attrScores.m2 = 'no'; } // Verificado pero chico
     else { score -= 3 * wM2; attrScores.m2 = 'missing'; } // Sin datos
   }
+
+  // Atributos numéricos con escalas específicas
+  const ambientes = scoreAmbientes(p.amb, getWeight('ambientes'));
+  score += ambientes.score; attrScores.ambientes = ambientes.status;
+
+  const banos = scoreBanos(p.banos, getWeight('banos'));
+  score += banos.score; attrScores.banos = banos.status;
+
+  const antiguedad = scoreAntiguedad(p.antiguedad, getWeight('antiguedad'));
+  score += antiguedad.score; attrScores.antiguedad = antiguedad.status;
+
+  const expensas = scoreExpensas(p.expensas, getWeight('expensas'));
+  score += expensas.score; attrScores.expensas = expensas.status;
 
   // Atributos booleanos: si/no/missing
   const terraza = scoreAtributo(p.terraza, getWeight('terraza'));

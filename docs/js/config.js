@@ -31,13 +31,17 @@ const DEFAULT_CONDITIONS = {
 };
 
 const DEFAULT_WEIGHTS = {
-  bajo_mercado:  { label: 'Bajo mercado',   weight: 7,  enabled: true, desc: 'Precio bajo vs promedio barrio' },
-  m2:            { label: 'M² cubiertos',   weight: 5,  enabled: true, desc: 'Más m² = mejor' },
-  terraza:       { label: 'Terraza',        weight: 5,  enabled: true, desc: 'Tiene terraza' },
-  balcon:        { label: 'Balcón',         weight: 3,  enabled: true, desc: 'Tiene balcón' },
-  cochera:       { label: 'Cochera',        weight: 4,  enabled: true, desc: 'Tiene cochera' },
-  luminosidad:   { label: 'Luminoso',       weight: 4,  enabled: true, desc: 'Es luminoso' },
-  frente:        { label: 'Al frente',      weight: 3,  enabled: true, desc: 'Disposición frente' },
+  bajo_mercado:  { label: '💰 Bajo mercado', weight: 7,  enabled: true, desc: '↑ peso = prioriza precio bajo vs barrio' },
+  m2:            { label: '📐 M² grandes',   weight: 5,  enabled: true, desc: '↑ peso = prioriza más m² (70m²+ ideal)' },
+  ambientes:     { label: '🚪 Ambientes',    weight: 3,  enabled: true, desc: '↑ peso = prioriza 3+ ambientes' },
+  banos:         { label: '🚿 Baños',        weight: 2,  enabled: true, desc: '↑ peso = prioriza 2+ baños' },
+  antiguedad:    { label: '✨ Nuevo',        weight: 3,  enabled: true, desc: '↑ peso = prioriza propiedades nuevas (<15 años)' },
+  expensas:      { label: '💵 Exp. bajas',   weight: 2,  enabled: true, desc: '↑ peso = prioriza expensas bajas (<$80k)' },
+  terraza:       { label: '🌿 Terraza',      weight: 5,  enabled: true, desc: '↑ peso = prioriza con terraza' },
+  balcon:        { label: '🏠 Balcón',       weight: 3,  enabled: true, desc: '↑ peso = prioriza con balcón' },
+  cochera:       { label: '🚗 Cochera',      weight: 4,  enabled: true, desc: '↑ peso = prioriza con cochera' },
+  luminosidad:   { label: '☀️ Luminoso',     weight: 4,  enabled: true, desc: '↑ peso = prioriza luminosidad' },
+  frente:        { label: '🪟 Al frente',    weight: 3,  enabled: true, desc: '↑ peso = prioriza disposición frente' },
 };
 
 const API_KEY = 'AIzaSyClZvK5NbmLEtxi9tqf1fcKxRIKEUqYnu0';
