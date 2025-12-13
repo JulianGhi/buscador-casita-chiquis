@@ -232,7 +232,9 @@ def detectar_atributo(texto, atributo, contexto=None):
     for variante in variantes:
         if variante in texto_lower:
             # Encontró mención pero no pudo clasificar
-            print(f"      ⚠️  {atributo.upper()} incierto: '{texto[:80]}...' {f'({contexto})' if contexto else ''}")
+            msg = f"'{texto[:60]}...'"
+            print(f"      ⚠️  {atributo.upper()} incierto: {msg}")
+            add_warning('atributo_incierto', f"{atributo}=? en: {msg}", contexto)
             return '?'
 
     return None
@@ -749,8 +751,14 @@ def scrape_link(url, use_cache=True, cache=None):
     return data, False
 
 
-def cmd_scrape(check_all=False, no_cache=False):
-    """Scrapea links del archivo local y actualiza los datos"""
+def cmd_scrape(check_all=False, no_cache=False, force_update=False):
+    """Scrapea links del archivo local y actualiza los datos
+
+    Args:
+        check_all: Scrapear todos los links (no solo los que faltan datos)
+        no_cache: Ignorar cache y re-scrapear
+        force_update: Sobrescribir valores existentes (no solo llenar vacíos)
+    """
     if not LOCAL_FILE.exists():
         print(f"❌ No existe {LOCAL_FILE}")
         print("   Ejecutá primero: python sync_sheet.py pull")
@@ -787,6 +795,8 @@ def cmd_scrape(check_all=False, no_cache=False):
     print(f"🔍 Scrapeando {len(to_scrape)} links...")
     if not no_cache:
         print(f"   (usando cache de {len(cache)} links)")
+    if force_update:
+        print(f"   ⚠️  Modo --update: sobrescribiendo valores existentes")
     updated = 0
     offline = 0
 
@@ -824,21 +834,31 @@ def cmd_scrape(check_all=False, no_cache=False):
         if 'activo' in headers:
             rows[idx]['activo'] = 'si'
 
-        # Actualizar campos vacíos
+        # Actualizar campos
         changes = []
+        updates = []
         for col in SCRAPEABLE_COLS:
             if col in scraped and col in headers:
                 current = row.get(col, '').strip()
                 new_val = str(scraped[col]).strip()
+
+                # Llenar vacíos siempre
                 if not current and new_val:
                     rows[idx][col] = new_val
                     changes.append(f'{col}={new_val}')
+                # Sobrescribir existentes solo si --update y valor diferente
+                elif force_update and current and new_val and current != new_val:
+                    rows[idx][col] = new_val
+                    updates.append(f'{col}: {current}→{new_val}')
 
         if changes:
-            print(f"      ✅ {', '.join(changes)}")
+            print(f"      ✅ Nuevo: {', '.join(changes)}")
             updated += 1
-        else:
-            print(f"      ⚪ Sin datos nuevos")
+        if updates:
+            print(f"      🔄 Actualizado: {', '.join(updates)}")
+            updated += 1
+        if not changes and not updates:
+            print(f"      ⚪ Sin cambios")
 
         # Validar datos de la propiedad
         validar_propiedad(rows[idx], contexto=direccion)
@@ -1311,13 +1331,15 @@ Flujo de trabajo:
                        help='[scrape] Scrapea todos los links (no solo los que faltan datos)')
     parser.add_argument('--no-cache', action='store_true',
                        help='[scrape] Ignora el cache y re-scrapea todo')
+    parser.add_argument('--update', action='store_true',
+                       help='[scrape] Sobrescribe valores existentes (no solo llena vacíos)')
 
     args = parser.parse_args()
 
     if args.command == 'pull':
         cmd_pull()
     elif args.command == 'scrape':
-        cmd_scrape(check_all=args.all, no_cache=args.no_cache)
+        cmd_scrape(check_all=args.all, no_cache=args.no_cache, force_update=args.update)
     elif args.command == 'view':
         cmd_view(check_links=args.check_links)
     elif args.command == 'diff':
