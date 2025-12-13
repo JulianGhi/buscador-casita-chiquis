@@ -145,8 +145,10 @@ docs/
 - **Sistema de tiers + score** para ordenar candidatos (ver abajo)
 - **Vista detallada** con:
   - Slider de negociación de precio (0-15%)
-  - Slider de dólar estimado ($900-$1500)
+  - Slider de dólar estimado ($900-$2000)
+  - **Calculadora de quita necesaria**: Si no alcanza el presupuesto, muestra cuánto % y USD hay que negociar para que entre
   - Desglose completo de costos (escribano, sellos, etc.)
+  - Indicador de datos faltantes (qué atributos faltan y penalizan el score)
   - Características: tipo, ambientes, m² totales/desc, baños, antigüedad, estado, expensas, disposición, piso, etc.
   - Rating personal y fechas (publicado, contacto, visita)
 - **Página de stats** con gráfico precio vs m²
@@ -251,3 +253,65 @@ Al deshabilitar condiciones, los tiers se recalculan automáticamente (ej: sin a
 3. **Agregar más portales**: Properati, inmobiliarias individuales
 4. **Scheduler**: Agregar opción de scraping periódico (cron/GitHub Actions)
 5. **Notificaciones**: Telegram/email cuando aparecen nuevas propiedades
+
+## Notas de Sesión (2025-12-13)
+
+### Cambios realizados
+
+1. **Sistema de penalización por datos faltantes**
+   - Antes: dato faltante = 0 puntos (igual que "no")
+   - Ahora: dato faltante = -penalidad (asumimos lo peor)
+   - Funciones: `scoreAtributo()`, `scoreNumerico()`, `scoreDisposicion()`
+   - Campos nuevos: `_attrScores` (status de cada atributo), `_missingCount`
+
+2. **Nuevos pesos agregados (4 nuevos, total 11)**
+   - `ambientes`: 4+ = muy bien, 3 = bien
+   - `banos`: 2+ = bonus
+   - `antiguedad`: <15 años = bonus, >50 = penalidad
+   - `expensas`: $0 = bonus, >$250k = penalidad
+   - Funciones: `scoreAmbientes()`, `scoreBanos()`, `scoreAntiguedad()`, `scoreExpensas()`
+
+3. **Panel de configuración mejorado**
+   - Checkbox para habilitar/deshabilitar cada peso
+   - Emojis y descripciones claras ("↑ peso = prioriza X")
+   - Grid de 4 columnas con cards
+   - `toggleWeightEnabled()` en app.js
+
+4. **Calculadora de quita necesaria**
+   - Cuando no alcanza el presupuesto, muestra:
+     - % de quita necesaria
+     - Monto en USD de la quita
+     - Precio objetivo
+   - Se actualiza con el slider de dólar
+   - Distingue quitas realistas (≤20%) de poco realistas
+
+5. **Slider de dólar ampliado**
+   - Antes: $900-$1500
+   - Ahora: $900-$2000
+
+### Issues conocidos / Pendientes
+
+1. **MercadoLibre rate limiting**
+   - La IP está bloqueada temporalmente
+   - Headers mejorados (Sec-Ch-Ua, Sec-Fetch-*) no fueron suficientes
+   - Playwright instalado pero no integrado (sigue bloqueado)
+   - **Workaround**: usar cache, esperar unas horas, o usar proxy
+
+2. **Propiedad Alvarez Jonte 4314**
+   - Tenía terraza="si" cuando el aviso decía "terraza: no"
+   - **Arreglado**: se creó sistema ATTR_PATTERNS para detectar "no" antes que "si"
+   - Se corrigió manualmente en el JSON
+
+3. **Bug de ordenamiento por tier**
+   - El sort por tier asc/desc tenía la misma fórmula
+   - **Arreglado** en utils.js línea 169
+
+### Commits de la sesión
+
+```
+e71d804 Agregar monto en USD de la quita necesaria
+a0ebcdc Mostrar quita necesaria cuando no alcanza el presupuesto
+d6099a7 Aumentar límite del slider de dólar a $2000
+f1458eb Agregar más pesos y mejorar sistema de scoring
+ce20b67 Penalizar datos faltantes en score y permitir toggle de pesos
+```
