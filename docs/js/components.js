@@ -645,13 +645,13 @@ function renderDetailModal(p) {
                 <span class="text-sm font-medium text-green-800">💵 Dólar estimado</span>
                 <span class="text-lg font-bold ${hayAjusteDolar ? 'text-green-600' : 'text-slate-400'}">$${dolarActual}</span>
               </div>
-              <input type="range" min="900" max="1500" step="10" value="${dolarActual}"
+              <input type="range" min="900" max="2000" step="10" value="${dolarActual}"
                 onchange="updateDolarEstimado(this.value)" oninput="updateDolarEstimado(this.value)"
                 class="w-full h-2 bg-green-200 rounded-lg appearance-none cursor-pointer accent-green-500" />
               <div class="flex justify-between text-xs text-green-600 mt-1">
                 <span>$900</span>
                 <span>Base: $${CONFIG.DOLAR_BASE}</span>
-                <span>$1500</span>
+                <span>$2000</span>
               </div>
               ${hayAjusteDolar ? `<div class="text-xs text-center mt-2 ${diferenciaCredito > 0 ? 'text-red-600' : 'text-green-600'}">Crédito: $${creditoEstimado.toLocaleString()} (${diferenciaCredito > 0 ? '-' : '+'}$${Math.abs(diferenciaCredito).toLocaleString()})</div>` : ''}
             </div>
