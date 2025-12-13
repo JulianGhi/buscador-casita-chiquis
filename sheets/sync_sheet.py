@@ -200,8 +200,12 @@ def scrape_argenprop(url):
                 elif 'si' in txt or 'sí' in txt or txt == 'balcón' or txt == 'balcon':
                     data['balcon'] = 'si'
             elif 'cochera' in txt:
-                match = re.search(r'(\d+)', txt)
-                data['cocheras'] = match.group(1) if match else '1'
+                # Verificar que no diga "sin cochera"
+                if 'sin' in txt or 'no' == txt.split()[0]:
+                    data['cocheras'] = '0'
+                else:
+                    match = re.search(r'(\d+)', txt)
+                    data['cocheras'] = match.group(1) if match else '1'
             elif 'baño' in txt:
                 match = re.search(r'(\d+)', txt)
                 if match:
@@ -460,7 +464,10 @@ def scrape_mercadolibre(url):
                 data['expensas'] = '0'
 
         # Luminosidad (de título o descripción)
-        if 'luminoso' in full_text or 'muy luminoso' in full_text or 'luz natural' in full_text:
+        # Verificar que no diga "poco luminoso", "no luminoso", etc.
+        has_luminoso = 'luminoso' in full_text or 'luz natural' in full_text
+        negado = 'poco luminoso' in full_text or 'no luminoso' in full_text or 'no es luminoso' in full_text or 'sin luz' in full_text
+        if has_luminoso and not negado:
             data['luminosidad'] = 'si'
 
         # Tipo de propiedad (del título o URL) - orden de prioridad
