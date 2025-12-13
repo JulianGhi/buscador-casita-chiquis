@@ -49,6 +49,97 @@ SCRAPEABLE_COLS = ['precio', 'm2_cub', 'm2_tot', 'm2_terr', 'amb', 'barrio', 'di
                    'fecha_publicado', 'banos', 'inmobiliaria', 'dormitorios']
 
 # =============================================================================
+# SISTEMA DE VALIDACIONES Y WARNINGS
+# =============================================================================
+# Acumula warnings durante el scrape para mostrar resumen al final
+
+scrape_warnings = []  # Lista global de warnings
+
+def add_warning(tipo, mensaje, propiedad=None):
+    """Agrega un warning a la lista para revisión."""
+    scrape_warnings.append({
+        'tipo': tipo,
+        'mensaje': mensaje,
+        'propiedad': propiedad,
+    })
+
+def clear_warnings():
+    """Limpia la lista de warnings."""
+    global scrape_warnings
+    scrape_warnings = []
+
+def print_warnings_summary():
+    """Imprime resumen de warnings al final del scrape."""
+    if not scrape_warnings:
+        print("\n✅ Sin warnings - todos los datos pasaron validación")
+        return
+
+    print(f"\n{'='*60}")
+    print(f"⚠️  RESUMEN DE WARNINGS ({len(scrape_warnings)} items)")
+    print(f"{'='*60}")
+
+    # Agrupar por tipo
+    by_type = {}
+    for w in scrape_warnings:
+        tipo = w['tipo']
+        if tipo not in by_type:
+            by_type[tipo] = []
+        by_type[tipo].append(w)
+
+    for tipo, warnings in by_type.items():
+        print(f"\n📋 {tipo.upper()} ({len(warnings)}):")
+        for w in warnings[:10]:  # Mostrar max 10 por tipo
+            prop = w['propiedad'] or ''
+            print(f"   • {w['mensaje']} {prop}")
+        if len(warnings) > 10:
+            print(f"   ... y {len(warnings) - 10} más")
+
+    print(f"\n{'='*60}")
+
+
+def validar_propiedad(data, contexto=None):
+    """
+    Valida los datos de una propiedad y agrega warnings si hay problemas.
+
+    Args:
+        data: dict con los datos scrapeados
+        contexto: string para identificar la propiedad (dirección o link)
+    """
+    ctx = contexto or data.get('direccion', data.get('link', '?'))[:50]
+
+    # Validar m² (cub + desc = tot)
+    m2_cub = int(data.get('m2_cub') or 0)
+    m2_tot = int(data.get('m2_tot') or 0)
+    m2_terr = int(data.get('m2_terr') or 0)
+
+    if m2_cub > 0 and m2_tot > 0:
+        if m2_cub > m2_tot:
+            add_warning('m2_inconsistente', f"m² cub ({m2_cub}) > m² tot ({m2_tot})", ctx)
+        elif m2_terr > 0:
+            esperado = m2_cub + m2_terr
+            if esperado != m2_tot and abs(esperado - m2_tot) > 2:  # tolerancia de 2m²
+                add_warning('m2_no_cierra', f"cub({m2_cub}) + desc({m2_terr}) = {esperado} ≠ tot({m2_tot})", ctx)
+
+    # Validar precio sospechoso
+    precio = int(data.get('precio') or 0)
+    if precio > 0:
+        if precio < 30000:
+            add_warning('precio_bajo', f"Precio muy bajo: ${precio:,}", ctx)
+        elif precio > 500000:
+            add_warning('precio_alto', f"Precio muy alto: ${precio:,}", ctx)
+
+    # Validar atributos inciertos
+    for attr in ['terraza', 'balcon', 'apto_credito', 'ascensor']:
+        if data.get(attr) == '?':
+            add_warning('atributo_incierto', f"{attr}=? (revisar manualmente)", ctx)
+
+    # Validar campos importantes faltantes
+    if not data.get('barrio'):
+        add_warning('dato_faltante', "Sin barrio", ctx)
+    if not data.get('m2_cub') and not data.get('m2_tot'):
+        add_warning('dato_faltante', "Sin m²", ctx)
+
+# =============================================================================
 # PATRONES DE DETECCIÓN PARA ATRIBUTOS BOOLEANOS
 # =============================================================================
 # Cada atributo tiene:
@@ -94,37 +185,55 @@ ATTR_PATTERNS = {
 }
 
 
-def detectar_atributo(texto, atributo):
+def detectar_atributo(texto, atributo, contexto=None):
     """
     Detecta si un atributo está presente o ausente basado en patrones.
 
     Args:
         texto: string a analizar (ya en lowercase)
         atributo: nombre del atributo ('terraza', 'balcon', etc.)
+        contexto: string opcional para identificar la propiedad en logs
 
     Returns:
-        'si', 'no', o None si no se puede determinar
+        'si': atributo presente
+        'no': atributo ausente
+        '?': atributo mencionado pero valor incierto (requiere revisión manual)
+        None: atributo no mencionado
     """
     if atributo not in ATTR_PATTERNS:
         return None
 
     patterns = ATTR_PATTERNS[atributo]
-    texto = texto.lower()
+    texto_lower = texto.lower()
 
     # Primero verificar patrones de negación
     for patron in patterns['no']:
-        if patron in texto:
+        if patron in texto_lower:
             return 'no'
 
     # Luego verificar patrones positivos
     for patron in patterns['si']:
-        if patron in texto:
+        if patron in texto_lower:
             return 'si'
 
     # Si solo_label está activo, verificar si el label aparece solo
-    if patterns.get('solo_label') and atributo in texto:
+    if patterns.get('solo_label') and atributo in texto_lower:
         # Ya verificamos que no hay negación, así que es positivo
         return 'si'
+
+    # Si el atributo está mencionado pero no matcheó ningún patrón → incierto
+    # Normalizar variantes (balcón/balcon, etc.)
+    variantes = [atributo]
+    if atributo == 'balcon':
+        variantes.append('balcón')
+    elif atributo == 'terraza':
+        variantes.append('terraz')  # terraza, terrazas
+
+    for variante in variantes:
+        if variante in texto_lower:
+            # Encontró mención pero no pudo clasificar
+            print(f"      ⚠️  {atributo.upper()} incierto: '{texto[:80]}...' {f'({contexto})' if contexto else ''}")
+            return '?'
 
     return None
 
@@ -681,6 +790,9 @@ def cmd_scrape(check_all=False, no_cache=False):
     updated = 0
     offline = 0
 
+    # Limpiar warnings de corridas anteriores
+    clear_warnings()
+
     for idx, row in to_scrape:
         link = row.get('link', '')
         direccion = row.get('direccion', '(sin dirección)')[:35]
@@ -728,16 +840,8 @@ def cmd_scrape(check_all=False, no_cache=False):
         else:
             print(f"      ⚪ Sin datos nuevos")
 
-        # Validación: m2_tot debería ser >= m2_cub
-        m2_cub = int(rows[idx].get('m2_cub') or 0)
-        m2_tot = int(rows[idx].get('m2_tot') or 0)
-        m2_terr = int(rows[idx].get('m2_terr') or 0)
-        if m2_cub > 0 and m2_tot > 0:
-            if m2_cub > m2_tot:
-                print(f"      ⚠️  m² cub ({m2_cub}) > m² tot ({m2_tot}) - posible error")
-            elif m2_terr > 0 and m2_cub + m2_terr != m2_tot:
-                expected = m2_cub + m2_terr
-                print(f"      ℹ️  m² cub({m2_cub}) + desc({m2_terr}) = {expected} ≠ tot({m2_tot})")
+        # Validar datos de la propiedad
+        validar_propiedad(rows[idx], contexto=direccion)
 
         time.sleep(0.5)
 
@@ -757,7 +861,11 @@ def cmd_scrape(check_all=False, no_cache=False):
         print(f"📦 {cache_hits} desde cache, {len(to_scrape) - cache_hits} scrapeados")
     if offline:
         print(f"📴 {offline} links marcados como NO activos")
-    print(f"   Revisá con: python sync_sheet.py view")
+
+    # Mostrar resumen de warnings
+    print_warnings_summary()
+
+    print(f"\n   Revisá con: python sync_sheet.py view")
     print(f"   Subí con: python sync_sheet.py push")
 
 
