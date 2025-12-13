@@ -2,6 +2,36 @@
 // UTILIDADES
 // ============================================
 
+// Score de atributos: penaliza datos faltantes, premia datos verificados
+// "si" → +bonus, "no" → 0 (neutro, verificado), missing/"?"/"" → -penalidad
+function scoreAtributo(valor, peso, bonusSi = 10, penaltyMissing = 5) {
+  if (peso <= 0) return { score: 0, status: 'disabled' };
+  const v = (valor || '').toLowerCase().trim();
+  if (v === 'si' || v === 'sí') return { score: bonusSi * peso, status: 'si' };
+  if (v === 'no') return { score: 0, status: 'no' }; // Verificado que no tiene
+  return { score: -penaltyMissing * peso, status: 'missing' }; // Desconocido
+}
+
+// Score de atributo numérico (cocheras)
+function scoreNumerico(valor, peso, bonusPositivo = 10, penaltyMissing = 5) {
+  if (peso <= 0) return { score: 0, status: 'disabled' };
+  const num = parseInt(valor);
+  if (!isNaN(num)) {
+    if (num > 0) return { score: bonusPositivo * peso, status: 'si' };
+    return { score: 0, status: 'no' }; // cocheras=0 es verificado
+  }
+  return { score: -penaltyMissing * peso, status: 'missing' };
+}
+
+// Score de disposición (frente/contrafrente/interno)
+function scoreDisposicion(valor, peso, bonusFront = 10, penaltyMissing = 5) {
+  if (peso <= 0) return { score: 0, status: 'disabled' };
+  const v = (valor || '').toLowerCase().trim();
+  if (v === 'frente') return { score: bonusFront * peso, status: 'si' };
+  if (v === 'contrafrente' || v === 'interno' || v === 'lateral') return { score: 0, status: 'no' };
+  return { score: -penaltyMissing * peso, status: 'missing' };
+}
+
 function getCreditoUSD(dolar = null) {
   const tc = dolar || CONFIG.DOLAR_BASE;
   return Math.round(CONFIG.CREDITO_ARS / tc);
@@ -125,26 +155,53 @@ function calculateProperty(p) {
     }
   }
 
-  if (calc._vsRef !== null && W.bajo_mercado.weight > 0) {
-    if (calc._vsRef < -0.15) score += 15 * W.bajo_mercado.weight;
-    else if (calc._vsRef < -0.05) score += 8 * W.bajo_mercado.weight;
-    else if (calc._vsRef < 0) score += 3 * W.bajo_mercado.weight;
-    else if (calc._vsRef > 0.15) score -= 5 * W.bajo_mercado.weight;
+  // Scoring de atributos con penalización por datos faltantes
+  // Guardamos detalles para debugging/transparencia
+  const attrScores = {};
+
+  // Helper: peso efectivo (0 si deshabilitado)
+  const getWeight = (key) => W[key].enabled ? W[key].weight : 0;
+
+  // Bajo mercado: solo si tenemos datos para calcular
+  const wBajo = getWeight('bajo_mercado');
+  if (calc._vsRef !== null && wBajo > 0) {
+    if (calc._vsRef < -0.15) score += 15 * wBajo;
+    else if (calc._vsRef < -0.05) score += 8 * wBajo;
+    else if (calc._vsRef < 0) score += 3 * wBajo;
+    else if (calc._vsRef > 0.15) score -= 5 * wBajo;
   }
 
-  if (W.m2.weight > 0) {
-    if (m2 >= 70) score += 4 * W.m2.weight;
-    else if (m2 >= 50) score += 2 * W.m2.weight;
-    else if (m2 >= 40) score += 1 * W.m2.weight;
+  // M2: bonus por tamaño, penalidad si no sabemos
+  const wM2 = getWeight('m2');
+  if (wM2 > 0) {
+    if (m2 >= 70) { score += 4 * wM2; attrScores.m2 = 'si'; }
+    else if (m2 >= 50) { score += 2 * wM2; attrScores.m2 = 'si'; }
+    else if (m2 >= 40) { score += 1 * wM2; attrScores.m2 = 'ok'; }
+    else if (m2 > 0) { attrScores.m2 = 'no'; } // Verificado pero chico
+    else { score -= 3 * wM2; attrScores.m2 = 'missing'; } // Sin datos
   }
 
-  if (p.terraza?.toLowerCase() === 'si') score += 10 * W.terraza.weight;
-  if (p.balcon?.toLowerCase() === 'si') score += 10 * W.balcon.weight;
-  if (parseInt(p.cocheras) > 0) score += 10 * W.cochera.weight;
-  if (p.luminosidad?.toLowerCase() === 'si') score += 10 * W.luminosidad.weight;
-  if (p.disposicion?.toLowerCase() === 'frente') score += 10 * W.frente.weight;
+  // Atributos booleanos: si/no/missing
+  const terraza = scoreAtributo(p.terraza, getWeight('terraza'));
+  score += terraza.score; attrScores.terraza = terraza.status;
 
-  score += calc._completeness * 3;
+  const balcon = scoreAtributo(p.balcon, getWeight('balcon'));
+  score += balcon.score; attrScores.balcon = balcon.status;
+
+  const cochera = scoreNumerico(p.cocheras, getWeight('cochera'));
+  score += cochera.score; attrScores.cochera = cochera.status;
+
+  const luminosidad = scoreAtributo(p.luminosidad, getWeight('luminosidad'));
+  score += luminosidad.score; attrScores.luminosidad = luminosidad.status;
+
+  const frente = scoreDisposicion(p.disposicion, getWeight('frente'));
+  score += frente.score; attrScores.frente = frente.status;
+
+  // Contar datos faltantes para mostrar en UI
+  const missingCount = Object.values(attrScores).filter(s => s === 'missing').length;
+  calc._attrScores = attrScores;
+  calc._missingCount = missingCount;
+
   calc._score = score;
   calc._tier = tier;
   return calc;

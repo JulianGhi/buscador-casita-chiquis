@@ -31,13 +31,13 @@ const DEFAULT_CONDITIONS = {
 };
 
 const DEFAULT_WEIGHTS = {
-  bajo_mercado:  { label: 'Bajo mercado',   weight: 7,  desc: 'Precio bajo vs promedio barrio' },
-  m2:            { label: 'M² cubiertos',   weight: 5,  desc: 'Más m² = mejor' },
-  terraza:       { label: 'Terraza',        weight: 5,  desc: 'Tiene terraza' },
-  balcon:        { label: 'Balcón',         weight: 3,  desc: 'Tiene balcón' },
-  cochera:       { label: 'Cochera',        weight: 4,  desc: 'Tiene cochera' },
-  luminosidad:   { label: 'Luminoso',       weight: 4,  desc: 'Es luminoso' },
-  frente:        { label: 'Al frente',      weight: 3,  desc: 'Disposición frente' },
+  bajo_mercado:  { label: 'Bajo mercado',   weight: 7,  enabled: true, desc: 'Precio bajo vs promedio barrio' },
+  m2:            { label: 'M² cubiertos',   weight: 5,  enabled: true, desc: 'Más m² = mejor' },
+  terraza:       { label: 'Terraza',        weight: 5,  enabled: true, desc: 'Tiene terraza' },
+  balcon:        { label: 'Balcón',         weight: 3,  enabled: true, desc: 'Tiene balcón' },
+  cochera:       { label: 'Cochera',        weight: 4,  enabled: true, desc: 'Tiene cochera' },
+  luminosidad:   { label: 'Luminoso',       weight: 4,  enabled: true, desc: 'Es luminoso' },
+  frente:        { label: 'Al frente',      weight: 3,  enabled: true, desc: 'Disposición frente' },
 };
 
 const API_KEY = 'AIzaSyClZvK5NbmLEtxi9tqf1fcKxRIKEUqYnu0';
@@ -78,7 +78,15 @@ function loadWeights() {
       const parsed = JSON.parse(saved);
       const weights = JSON.parse(JSON.stringify(DEFAULT_WEIGHTS));
       Object.keys(parsed).forEach(k => {
-        if (weights[k]) weights[k].weight = parsed[k];
+        if (weights[k]) {
+          // Soportar formato viejo (solo número) y nuevo (objeto)
+          if (typeof parsed[k] === 'number') {
+            weights[k].weight = parsed[k];
+          } else if (typeof parsed[k] === 'object') {
+            weights[k].weight = parsed[k].weight ?? weights[k].weight;
+            weights[k].enabled = parsed[k].enabled ?? true;
+          }
+        }
       });
       return weights;
     }
@@ -88,7 +96,9 @@ function loadWeights() {
 
 function saveWeights(weights) {
   const toSave = {};
-  Object.keys(weights).forEach(k => { toSave[k] = weights[k].weight; });
+  Object.keys(weights).forEach(k => {
+    toSave[k] = { weight: weights[k].weight, enabled: weights[k].enabled };
+  });
   localStorage.setItem('casita_weights', JSON.stringify(toSave));
 }
 

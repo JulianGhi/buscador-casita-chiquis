@@ -254,6 +254,7 @@ function renderCards(filtered) {
         const warnings = [];
         if (isInactivo) warnings.push('<span class="text-red-600">INACTIVO</span>');
         if (noAptoCredito) warnings.push('<span class="text-amber-600">NO APTO CRÉDITO</span>');
+        if (p._missingCount > 0) warnings.push(`<span class="text-orange-500">${p._missingCount} DATO${p._missingCount > 1 ? 'S' : ''} FALTANTE${p._missingCount > 1 ? 'S' : ''}</span>`);
         return `
           <div class="${cardStyle} rounded-xl p-4 shadow-sm cursor-pointer hover:shadow-md transition-shadow" onclick="showDetail(${p._idx})">
             ${warnings.length ? '<div class="text-xs font-medium mb-1">' + warnings.join(' · ') + '</div>' : ''}
@@ -469,18 +470,22 @@ function renderConfigPanel() {
             </div>
           </div>
         </div>
-        <div class="text-xs text-slate-500 mb-2">Ponderación (bonus dentro de cada tier):</div>
+        <div class="text-xs text-slate-500 mb-2">Ponderación (bonus/penalidad dentro de cada tier):</div>
         <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-7 gap-2">
           ${Object.entries(WEIGHTS).map(([key, config]) => `
-            <div class="flex flex-col">
-              <div class="flex items-center justify-between text-xs mb-0.5">
-                <span class="text-slate-600 truncate" title="${config.desc}">${config.label}</span>
-                <span class="font-bold text-blue-600 ml-1">${config.weight}</span>
+            <div class="flex flex-col ${config.enabled ? '' : 'opacity-40'}">
+              <div class="flex items-center gap-1 text-xs mb-0.5">
+                <input type="checkbox" ${config.enabled ? 'checked' : ''}
+                  onchange="toggleWeightEnabled('${key}', this.checked)"
+                  class="w-3 h-3 accent-blue-500 rounded" />
+                <span class="${config.enabled ? 'text-slate-600' : 'text-slate-400'} truncate" title="${config.desc}">${config.label}</span>
+                <span class="font-bold ${config.enabled ? 'text-blue-600' : 'text-slate-400'} ml-auto">${config.weight}</span>
               </div>
               <input type="range" min="0" max="10" value="${config.weight}"
                 onchange="updateWeight('${key}', this.value)"
                 oninput="updateWeight('${key}', this.value)"
-                class="w-full h-1.5 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-blue-500" />
+                ${config.enabled ? '' : 'disabled'}
+                class="w-full h-1.5 bg-slate-200 rounded-lg appearance-none cursor-pointer ${config.enabled ? 'accent-blue-500' : 'accent-slate-300'}" />
             </div>
           `).join('')}
         </div>
@@ -563,6 +568,21 @@ function renderDetailModal(p) {
             ${evalIcon(p._vsRef)}
             ${p.link ? `<a href="${escapeHtml(p.link)}" target="_blank" class="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded hover:bg-blue-200">Ver aviso ↗</a>` : ''}
           </div>
+
+          <!-- Datos faltantes (penalizan score) -->
+          ${p._missingCount > 0 ? `
+          <div class="bg-orange-50 border border-orange-200 rounded-lg p-3">
+            <div class="text-xs font-medium text-orange-700 mb-2">⚠️ Datos faltantes (penalizan score):</div>
+            <div class="flex flex-wrap gap-2">
+              ${p._attrScores?.m2 === 'missing' ? '<span class="text-xs bg-orange-100 text-orange-700 px-2 py-0.5 rounded">m²</span>' : ''}
+              ${p._attrScores?.terraza === 'missing' ? '<span class="text-xs bg-orange-100 text-orange-700 px-2 py-0.5 rounded">Terraza</span>' : ''}
+              ${p._attrScores?.balcon === 'missing' ? '<span class="text-xs bg-orange-100 text-orange-700 px-2 py-0.5 rounded">Balcón</span>' : ''}
+              ${p._attrScores?.cochera === 'missing' ? '<span class="text-xs bg-orange-100 text-orange-700 px-2 py-0.5 rounded">Cochera</span>' : ''}
+              ${p._attrScores?.luminosidad === 'missing' ? '<span class="text-xs bg-orange-100 text-orange-700 px-2 py-0.5 rounded">Luminosidad</span>' : ''}
+              ${p._attrScores?.frente === 'missing' ? '<span class="text-xs bg-orange-100 text-orange-700 px-2 py-0.5 rounded">Disposición</span>' : ''}
+            </div>
+          </div>
+          ` : ''}
 
           <!-- Características -->
           ${caracteristicas.length > 0 || amenities.length > 0 ? `
