@@ -57,19 +57,72 @@ function calculateProperty(p) {
   calc._dif = CONFIG.PRESUPUESTO - calc._total;
   calc._completeness = [p.direccion, p.barrio, precio > 0, m2 > 0].filter(Boolean).length;
 
-  // Score de candidato
+  // Score de candidato con sistema de tiers
+  // Tier determina el orden principal, score es secundario dentro del tier
   let score = 0;
+  let tier = 4; // Peor tier por defecto
   const activo = (p.activo || '').toLowerCase();
   const aptoCredito = (p.apto_credito || '').toLowerCase();
   const W = WEIGHTS;
+  const C = CONDITIONS;
 
-  // Filtros básicos: si no pasa, score = 0
-  const pasaFiltros = p.link && activo !== 'no' && aptoCredito !== 'no' && (calc._ok || precio === 0);
+  // Evaluar condiciones
+  const esActivo = activo === 'si';
+  const esAptoCredito = aptoCredito === 'si';
+  const noSabemosCredito = aptoCredito === '' || aptoCredito === '?';
+  const noAptoCredito = aptoCredito === 'no';
+  const dentroPresupuesto = calc._ok || precio === 0;
+  const tieneLink = !!p.link;
 
-  if (!pasaFiltros) {
+  // Sistema de Tiers (orden estricto de prioridad):
+  // Tier 1: activo + apto_credito=si + dentro presupuesto (los mejores)
+  // Tier 2: activo + apto_credito=si + fuera presupuesto (buenos pero caros)
+  // Tier 3: activo + apto_credito=? (hay que averiguar)
+  // Tier 4: activo + apto_credito=no (no aceptan crédito)
+  // Tier 5: no activo o sin link (descartados)
+
+  if (!tieneLink || !esActivo) {
+    tier = 5;
     score = 0;
-  } else {
-    score = 10; // Base para los que pasan filtros
+  } else if (esAptoCredito && dentroPresupuesto) {
+    tier = 1;
+    score = 100; // Base alta para tier 1
+  } else if (esAptoCredito && !dentroPresupuesto) {
+    tier = 2;
+    score = 80; // Apto pero caro
+  } else if (noSabemosCredito) {
+    tier = 3;
+    score = 50; // Hay que averiguar
+  } else if (noAptoCredito) {
+    tier = 4;
+    score = 25; // No apto crédito
+  }
+
+  // Si CONDITIONS.apto_credito está deshabilitado, ignorar apto_credito en tiers
+  if (C.apto_credito && !C.apto_credito.enabled && tier >= 1 && tier <= 4) {
+    // Reagrupar: solo importa activo + presupuesto
+    if (dentroPresupuesto) {
+      tier = 1;
+      score = 100;
+    } else {
+      tier = 2;
+      score = 80;
+    }
+  }
+
+  // Si CONDITIONS.ok_presupuesto está deshabilitado, ignorar presupuesto en tiers
+  if (C.ok_presupuesto && !C.ok_presupuesto.enabled && tier >= 1 && tier <= 4) {
+    // Reagrupar: solo importa activo + apto_credito
+    if (esAptoCredito) {
+      tier = 1;
+      score = 100;
+    } else if (noSabemosCredito) {
+      tier = 2;
+      score = 80;
+    } else {
+      tier = 3;
+      score = 50;
+    }
   }
 
   if (calc._vsRef !== null && W.bajo_mercado.weight > 0) {
@@ -93,6 +146,7 @@ function calculateProperty(p) {
 
   score += calc._completeness * 3;
   calc._score = score;
+  calc._tier = tier;
   return calc;
 }
 
@@ -109,6 +163,15 @@ function getFiltered(properties) {
   if (state.filterActivo === 'si') result = result.filter(p => p.activo?.toLowerCase() === 'si');
   else if (state.filterActivo === 'no') result = result.filter(p => p.activo?.toLowerCase() === 'no');
   result.sort((a, b) => {
+    // Ordenamiento especial para 'score': primero por tier (menor = mejor), luego por score
+    if (state.sortBy === 'score') {
+      if (a._tier !== b._tier) {
+        return state.sortDir === 'asc' ? (a._tier - b._tier) : (a._tier - b._tier);
+      }
+      // Dentro del mismo tier, ordenar por score
+      return state.sortDir === 'asc' ? (a._score - b._score) : (b._score - a._score);
+    }
+    // Ordenamiento normal para otros campos
     let va = a['_' + state.sortBy] ?? a[state.sortBy] ?? 0;
     let vb = b['_' + state.sortBy] ?? b[state.sortBy] ?? 0;
     if (typeof va === 'string') va = va.toLowerCase();
@@ -185,6 +248,26 @@ function statusBadge(status) {
   if (s.includes('interesado')) return `<span class="text-xs bg-green-100 text-green-700 px-1.5 py-0.5 rounded">${status}</span>`;
   if (s.includes('descartado')) return `<span class="text-xs bg-red-100 text-red-700 px-1.5 py-0.5 rounded">${status}</span>`;
   return `<span class="text-xs bg-yellow-100 text-yellow-700 px-1.5 py-0.5 rounded">${status}</span>`;
+}
+
+function tierBadge(tier) {
+  const colors = {
+    1: 'bg-green-100 text-green-700',
+    2: 'bg-blue-100 text-blue-700',
+    3: 'bg-yellow-100 text-yellow-700',
+    4: 'bg-orange-100 text-orange-700',
+    5: 'bg-red-100 text-red-700 opacity-60'
+  };
+  const labels = { 1: 'T1', 2: 'T2', 3: 'T3', 4: 'T4', 5: 'T5' };
+  const titles = {
+    1: 'Activo + Apto crédito + OK$',
+    2: 'Activo + Apto crédito + Caro',
+    3: 'Activo + Crédito?',
+    4: 'Activo + No apto crédito',
+    5: 'Inactivo'
+  };
+  const color = colors[tier] || 'bg-slate-100 text-slate-500';
+  return `<span class="text-[10px] ${color} px-1 py-0.5 rounded font-medium" title="${titles[tier] || ''}">${labels[tier] || '?'}</span>`;
 }
 
 function ratingStars(rating) {

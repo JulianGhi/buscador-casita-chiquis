@@ -139,7 +139,7 @@ docs/
 ### Funcionalidades del dashboard
 
 - **Vista tabla/cards** con filtros (status, barrio, activo, apto crédito)
-- **Score de candidato** (0 = no pasa filtros, >0 = candidato viable)
+- **Sistema de tiers + score** para ordenar candidatos (ver abajo)
 - **Vista detallada** con:
   - Slider de negociación de precio (0-15%)
   - Slider de dólar estimado ($900-$1500)
@@ -155,11 +155,53 @@ source .venv/bin/activate
 python sheets/sync_sheet.py pull      # 1. Traer datos de Google Sheets
 # (agregar link en el JSON o en el Sheet)
 python sheets/sync_sheet.py scrape    # 2. Scrapear datos de los links
-python sheets/sync_sheet.py view      # 3. Preview cambios
-python sheets/sync_sheet.py push      # 4. Subir a Google Sheets
+# 3. IMPORTANTE: Completar datos manualmente (ver sheets/README.md)
+#    - Abrir cada link y leer descripción
+#    - Buscar: apto crédito, estado, terraza/balcón, ascensor
+#    - Verificar coherencia de m2, expensas, piso
+#    - Editar data/sheet_data.json
+python sheets/sync_sheet.py view      # 4. Preview cambios
+python sheets/sync_sheet.py push      # 5. Subir a Google Sheets
 ```
 
 Ver `sheets/README.md` para documentación completa del sync.
+
+### Sistema de valoración (Tiers + Score)
+
+El ordenamiento "Mejor candidato" usa un sistema de **tiers** (niveles de prioridad) combinado con un **score** (puntuación dentro de cada tier).
+
+#### Tiers (orden estricto)
+
+| Tier | Condición | Color | Descripción |
+|------|-----------|-------|-------------|
+| T1 | activo + apto_credito=si + OK$ | Verde | Mejores candidatos: aceptan crédito y entran en presupuesto |
+| T2 | activo + apto_credito=si + Caro | Azul | Buenos pero caros: aceptan crédito, hay que negociar |
+| T3 | activo + apto_credito=? | Amarillo | Hay que averiguar si aceptan crédito |
+| T4 | activo + apto_credito=no | Naranja | No aceptan crédito (difícil) |
+| T5 | inactivo o sin link | Rojo | Descartadas |
+
+#### Score (bonus dentro de cada tier)
+
+Dentro de cada tier, las propiedades se ordenan por score. El score base depende del tier, y se suman bonus por:
+- **Bajo precio de mercado**: +15 a +105 puntos según qué tan bajo (configurado por peso `bajo_mercado`)
+- **Metros cuadrados**: +10 a +40 puntos según m² (configurado por peso `m2`)
+- **Amenities**: terraza, balcón, cochera, luminosidad, disposición frente (+10 c/u × peso)
+- **Completitud de datos**: +3 puntos por cada campo completo
+
+#### Condiciones toggleables
+
+En la pestaña "Ponderación" del panel de configuración se pueden habilitar/deshabilitar:
+- **Activo**: Si se deshabilita, no filtra por estado del aviso
+- **Apto crédito**: Si se deshabilita, ignora si acepta crédito o no
+- **En presupuesto**: Si se deshabilita, ignora si entra en presupuesto o no
+
+Al deshabilitar condiciones, los tiers se recalculan automáticamente (ej: sin apto_credito, solo queda activo+presupuesto).
+
+#### Archivos relacionados
+
+- `docs/js/config.js`: Define `DEFAULT_CONDITIONS` y `DEFAULT_WEIGHTS`
+- `docs/js/utils.js`: Función `calculateProperty()` implementa tiers y score
+- `docs/js/components.js`: Función `renderConfigPanel()` muestra UI de configuración
 
 ## Para Continuar Desarrollo
 

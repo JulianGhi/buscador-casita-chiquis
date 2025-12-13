@@ -218,7 +218,7 @@ function renderTable(filtered) {
                 <td class="px-2 py-2.5 text-center">${evalIcon(p._vsRef)}</td>
                 <td class="px-3 py-2.5 text-right font-mono text-slate-800">${p._precio > 0 ? '$' + p._total.toLocaleString() : '<span class="text-slate-300">-</span>'}</td>
                 <td class="px-2 py-2.5 text-center">${p._precio > 0 ? okPill(p._ok) : '<span class="text-slate-300">-</span>'}</td>
-                <td class="px-2 py-2.5 text-center"><span class="text-xs font-mono ${p._score > 50 ? 'text-green-600 font-bold' : p._score > 0 ? 'text-green-500' : 'text-slate-400'}">${p._score}</span></td>
+                <td class="px-2 py-2.5 text-center"><span class="inline-flex items-center gap-1">${tierBadge(p._tier)}<span class="text-xs font-mono ${p._score > 50 ? 'text-green-600 font-bold' : p._score > 0 ? 'text-green-500' : 'text-slate-400'}">${p._score}</span></span></td>
                 <td class="px-2 py-2.5 text-center">${p.cocheras ? (p.cocheras !== '0' ? '<span class="text-green-600">✓</span>' : '<span class="text-slate-300">-</span>') : '<span class="text-slate-300">-</span>'}</td>
               </tr>
             `;}).join('')}
@@ -270,6 +270,7 @@ function renderCards(filtered) {
               ${statusBadge(p.status)}
               ${activoBadge(p.activo)}
               ${evalIcon(p._vsRef)}
+              ${tierBadge(p._tier)}
               <span class="text-xs font-mono px-1.5 py-0.5 rounded ${p._score > 50 ? 'bg-green-100 text-green-700 font-bold' : p._score > 0 ? 'bg-green-50 text-green-600' : 'bg-slate-100 text-slate-400'}">⭐${p._score}</span>
             </div>
           </div>
@@ -436,14 +437,31 @@ function renderConfigPanel() {
       ` : ''}
 
       ${state.configTab === 'pesos' ? `
-        <div class="flex flex-wrap items-center gap-2 text-xs mb-3">
-          <span class="font-medium text-slate-600">Orden fijo:</span>
-          <span class="bg-green-100 text-green-700 px-1.5 py-0.5 rounded">1. Activo+Apto+OK$</span>
-          <span class="bg-yellow-100 text-yellow-700 px-1.5 py-0.5 rounded">2. Activo+Apto+Caro</span>
-          <span class="bg-orange-100 text-orange-700 px-1.5 py-0.5 rounded">3. Activo+NoApto</span>
-          <span class="bg-red-100 text-red-700 px-1.5 py-0.5 rounded">4. Inactivo</span>
-          <span class="text-slate-400 ml-2">→ Dentro de cada capa ordena por:</span>
+        <div class="mb-4">
+          <div class="flex flex-wrap items-center gap-2 text-xs mb-3">
+            <span class="font-medium text-slate-600">Sistema de Tiers:</span>
+            <span class="bg-green-100 text-green-700 px-1.5 py-0.5 rounded">T1: Apto + OK$</span>
+            <span class="bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded">T2: Apto + Caro</span>
+            <span class="bg-yellow-100 text-yellow-700 px-1.5 py-0.5 rounded">T3: Crédito?</span>
+            <span class="bg-orange-100 text-orange-700 px-1.5 py-0.5 rounded">T4: No apto</span>
+            <span class="bg-red-100 text-red-700 px-1.5 py-0.5 rounded opacity-60">T5: Inactivo</span>
+          </div>
+          <div class="bg-slate-100 rounded-lg p-3 mb-4">
+            <div class="text-xs font-medium text-slate-600 mb-2">Condiciones habilitadas:</div>
+            <div class="flex flex-wrap gap-3">
+              ${Object.entries(CONDITIONS).map(([key, config]) => `
+                <label class="flex items-center gap-2 cursor-pointer">
+                  <input type="checkbox" ${config.enabled ? 'checked' : ''}
+                    onchange="updateCondition('${key}', this.checked)"
+                    class="w-4 h-4 accent-blue-500 rounded" />
+                  <span class="text-sm ${config.enabled ? 'text-slate-700' : 'text-slate-400'}">${config.label}</span>
+                  <span class="text-xs text-slate-400" title="${config.desc}">ⓘ</span>
+                </label>
+              `).join('')}
+            </div>
+          </div>
         </div>
+        <div class="text-xs text-slate-500 mb-2">Ponderación (bonus dentro de cada tier):</div>
         <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-7 gap-2">
           ${Object.entries(WEIGHTS).map(([key, config]) => `
             <div class="flex flex-col">
@@ -459,7 +477,8 @@ function renderConfigPanel() {
           `).join('')}
         </div>
         <div class="mt-2 text-right">
-          <button onclick="resetWeights()" class="text-xs text-slate-400 hover:text-red-500">Reset</button>
+          <button onclick="resetWeights()" class="text-xs text-slate-400 hover:text-red-500">Reset pesos</button>
+          <button onclick="resetConditions()" class="text-xs text-slate-400 hover:text-red-500 ml-3">Reset condiciones</button>
         </div>
       ` : ''}
     </div>

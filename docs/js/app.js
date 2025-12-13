@@ -68,11 +68,23 @@ function toggleCondition(key, enabled) {
   render();
 }
 
-function resetWeights() {
-  if (confirm('¿Resetear condiciones y preferencias a valores por defecto?')) {
+function updateCondition(key, enabled) {
+  CONDITIONS[key].enabled = enabled;
+  saveConditions(CONDITIONS);
+  render();
+}
+
+function resetConditions() {
+  if (confirm('¿Resetear condiciones a valores por defecto?')) {
     CONDITIONS = JSON.parse(JSON.stringify(DEFAULT_CONDITIONS));
-    WEIGHTS = JSON.parse(JSON.stringify(DEFAULT_WEIGHTS));
     saveConditions(CONDITIONS);
+    render();
+  }
+}
+
+function resetWeights() {
+  if (confirm('¿Resetear pesos a valores por defecto?')) {
+    WEIGHTS = JSON.parse(JSON.stringify(DEFAULT_WEIGHTS));
     saveWeights(WEIGHTS);
     render();
   }

@@ -1,5 +1,7 @@
 # Credentials - NEVER COMMIT
 credentials.json
+*-*.json
+*.iam.gserviceaccount.com.json
 
 # Python
 __pycache__/
