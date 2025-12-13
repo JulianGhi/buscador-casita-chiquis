@@ -19,23 +19,57 @@ Descarga los datos actuales de Google Sheets a `data/sheet_data.json`.
 ### 2. Scrapear links
 
 ```bash
-python sheets/sync_sheet.py scrape        # Solo filas sin precio/m²
-python sheets/sync_sheet.py scrape --all  # Todos los links (re-verifica activo)
+python sheets/sync_sheet.py scrape              # Solo filas sin precio/m²
+python sheets/sync_sheet.py scrape --all        # Todos los links (re-verifica activo)
+python sheets/sync_sheet.py scrape --no-cache   # Ignora cache, re-scrapea todo
+python sheets/sync_sheet.py scrape --update     # Sobrescribe valores existentes (no solo vacíos)
+python sheets/sync_sheet.py scrape --all --no-cache --update  # Re-scrapear y actualizar todo
 ```
 Recorre las filas que tienen link, scrapea los datos y actualiza el JSON local.
 
 **Datos extraídos:**
-- `precio`, `m2_cub`, `m2_tot`, `amb`
-- `direccion`, `barrio`
-- `expensas`, `antiguedad`, `terraza`
+- `precio`, `m2_cub`, `m2_tot`, `m2_terr`, `amb`
+- `direccion`, `barrio`, `inmobiliaria`
+- `expensas`, `antiguedad`, `banos`, `dormitorios`
+- `terraza`, `balcon`, `cocheras`, `ascensor`, `luminosidad`
+- `disposicion`, `piso`, `tipo`, `apto_credito`
+- `fecha_publicado`
 - `activo` (si/no según estado del link)
+
+**Sistema de validaciones:**
+
+Al final del scrape se muestra un resumen de warnings:
+- `m2_inconsistente`: m² cubiertos > m² totales
+- `m2_no_cierra`: cubiertos + descubiertos ≠ totales
+- `atributo_incierto`: terraza/balcon/etc detectado pero valor ambiguo (marcado como "?")
+- `dato_faltante`: sin barrio o sin m²
+- `precio_bajo/alto`: precios sospechosos (<$30k o >$500k)
+
+**Detección de atributos si/no:**
+
+El scraper usa `ATTR_PATTERNS` para detectar valores correctamente:
+```python
+# Ejemplo: "terraza: no" → terraza='no', no terraza='si'
+ATTR_PATTERNS = {
+    'terraza': {
+        'si': ['terraza: si', 'con terraza'],
+        'no': ['terraza: no', 'sin terraza'],
+    },
+    # ... balcon, cochera, luminosidad, ascensor, apto_credito
+}
+```
+Los patrones de negación se evalúan primero para evitar falsos positivos.
 
 **Dominios soportados:**
 | Dominio | Método | Notas |
 |---------|--------|-------|
-| mercadolibre.com.ar | httpx | Detecta "Publicación finalizada" |
-| argenprop.com | httpx | Algunos links caen (410) |
+| mercadolibre.com.ar | httpx | Puede bloquear por rate limiting, usar cache |
+| argenprop.com | httpx | Funciona bien, algunos links caen (410) |
 | zonaprop.com.ar | - | No soportado (requiere Playwright) |
+
+**Nota sobre MercadoLibre:** Si devuelve errores 403 o no extrae datos, es probable
+que haya rate limiting. Esperar unas horas o usar el cache (`--no-cache` NO recomendado
+para muchas requests seguidas).
 
 **Detección de links inactivos:**
 - HTTP 404/410 → `activo = no`
@@ -161,6 +195,9 @@ python sheets/sync_sheet.py push --force   # Sobrescribe incluyendo activo
 
 ```bash
 pip install httpx beautifulsoup4 lxml gspread google-auth
+
+# Opcional: para sitios que requieren JavaScript (zonaprop)
+pip install playwright && playwright install chromium
 ```
 
 ### Google Sheets API
