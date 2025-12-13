@@ -188,10 +188,17 @@ def scrape_argenprop(url):
                 match = re.search(r'(\d+)', txt)
                 if match:
                     data['antiguedad'] = match.group(1)
-            elif txt == 'terraza':
-                data['terraza'] = 'si'
-            elif txt == 'balcón' or txt == 'balcon':
-                data['balcon'] = 'si'
+            elif 'terraza' in txt:
+                # Verificar si dice "no" o solo es el label
+                if 'no' in txt:
+                    data['terraza'] = 'no'
+                elif 'si' in txt or 'sí' in txt or txt == 'terraza':
+                    data['terraza'] = 'si'
+            elif 'balcón' in txt or 'balcon' in txt:
+                if 'no' in txt:
+                    data['balcon'] = 'no'
+                elif 'si' in txt or 'sí' in txt or txt == 'balcón' or txt == 'balcon':
+                    data['balcon'] = 'si'
             elif 'cochera' in txt:
                 match = re.search(r'(\d+)', txt)
                 data['cocheras'] = match.group(1) if match else '1'
@@ -444,8 +451,11 @@ def scrape_mercadolibre(url):
         full_text = title_lower + ' ' + desc_text
 
         if title_lower:
-            if 'terraza' in title_lower or 'balcon' in title_lower or 'balcón' in title_lower:
+            # Solo marcar terraza/balcon si NO dice "sin" antes
+            if 'terraza' in title_lower and 'sin terraza' not in title_lower:
                 data['terraza'] = 'si'
+            if ('balcon' in title_lower or 'balcón' in title_lower) and 'sin balcon' not in title_lower and 'sin balcón' not in title_lower:
+                data['balcon'] = 'si'
             if 'sin expensas' in title_lower or 'sin exp' in title_lower:
                 data['expensas'] = '0'
 
