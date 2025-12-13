@@ -526,6 +526,24 @@ function renderDetailModal(p) {
   const hayAjuste = state.negotiationPct > 0 || (state.dolarEstimado && state.dolarEstimado !== CONFIG.DOLAR_BASE);
   const hayAjusteDolar = state.dolarEstimado && state.dolarEstimado !== CONFIG.DOLAR_BASE;
 
+  // Calcular quita necesaria para que entre en presupuesto
+  // Fórmula: encontrar precio donde total <= PRESUPUESTO
+  // total = tu10 + precio * (ESCR + SELL + REG + INMOB + HIP) + CERT
+  // Si precio > credito/0.9: tu10 = precio - credito
+  //   total = precio - credito + precio * costos + CERT = precio * (1 + costos) - credito + CERT
+  //   precio_target = (PRESUPUESTO + credito - CERT) / (1 + costos)
+  // Si precio <= credito/0.9: tu10 = precio * 0.1
+  //   total = precio * (0.1 + costos) + CERT
+  //   precio_target = (PRESUPUESTO - CERT) / (0.1 + costos)
+  const tieneInmob = p.inmobiliaria && p.inmobiliaria.trim() !== '';
+  const costosRate = CONFIG.ESCRIBANO + CONFIG.SELLOS + CONFIG.REGISTRALES + (tieneInmob ? CONFIG.INMOB : 0) + CONFIG.HIPOTECA;
+  const precioTarget1 = (CONFIG.PRESUPUESTO + creditoEstimado - CONFIG.CERTIFICADOS) / (1 + costosRate);
+  const precioTarget2 = (CONFIG.PRESUPUESTO - CONFIG.CERTIFICADOS) / (0.1 + costosRate);
+  const umbral = creditoEstimado / 0.9;
+  const precioTarget = precioTarget1 > umbral ? precioTarget1 : precioTarget2;
+  const quitaNecesaria = p._precio > 0 ? Math.max(0, ((p._precio - precioTarget) / p._precio) * 100) : 0;
+  const entraConQuita = quitaNecesaria > 0 && quitaNecesaria <= 20; // Realista hasta 20%
+
   // Características de la propiedad
   const caracteristicas = [
     p.tipo ? { label: 'Tipo', value: p.tipo.toUpperCase() } : null,
@@ -656,6 +674,25 @@ function renderDetailModal(p) {
               ${hayAjusteDolar ? `<div class="text-xs text-center mt-2 ${diferenciaCredito > 0 ? 'text-red-600' : 'text-green-600'}">Crédito: $${creditoEstimado.toLocaleString()} (${diferenciaCredito > 0 ? '-' : '+'}$${Math.abs(diferenciaCredito).toLocaleString()})</div>` : ''}
             </div>
           </div>
+
+          <!-- Sugerencia de quita si no alcanza -->
+          ${!okNeg && quitaNecesaria > 0 ? `
+          <div class="bg-gradient-to-r ${entraConQuita ? 'from-purple-50 to-pink-50 border-purple-200' : 'from-red-50 to-orange-50 border-red-200'} rounded-xl p-4 border">
+            <div class="flex items-center gap-2 mb-1">
+              <span class="text-lg">${entraConQuita ? '💡' : '⚠️'}</span>
+              <span class="font-medium ${entraConQuita ? 'text-purple-800' : 'text-red-800'}">
+                ${entraConQuita ? 'Para que entre en presupuesto:' : 'Muy cara para tu presupuesto'}
+              </span>
+            </div>
+            <div class="text-sm ${entraConQuita ? 'text-purple-700' : 'text-red-700'}">
+              ${entraConQuita
+                ? `Necesitás negociar <span class="font-bold">-${quitaNecesaria.toFixed(1)}%</span> (precio objetivo: <span class="font-mono font-bold">$${Math.round(precioTarget).toLocaleString()}</span>)`
+                : `Necesitarías <span class="font-bold">-${quitaNecesaria.toFixed(1)}%</span> de quita, poco realista`
+              }
+            </div>
+            ${entraConQuita ? `<div class="text-xs text-purple-500 mt-1">Con dólar a $${dolarActual} y crédito de $${creditoEstimado.toLocaleString()}</div>` : ''}
+          </div>
+          ` : ''}
 
           <!-- Desglose de costos -->
           <div class="bg-slate-50 rounded-xl p-4">
