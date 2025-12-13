@@ -177,6 +177,7 @@ function renderTable(filtered) {
         <table class="w-full text-sm">
           <thead class="bg-slate-50 border-b border-slate-200">
             <tr>
+              <th class="px-2 py-2.5 text-center font-medium text-slate-600" title="Tier + Score">⭐</th>
               <th class="px-2 py-2.5 text-center font-medium text-slate-600">Activo</th>
               <th class="px-2 py-2.5 text-center font-medium text-slate-600" title="Apto Crédito">Apto</th>
               <th class="px-2 py-2.5 text-center font-medium text-slate-600">Status</th>
@@ -185,12 +186,15 @@ function renderTable(filtered) {
               <th class="px-2 py-2.5 text-center font-medium text-slate-600">Tipo</th>
               <th class="px-3 py-2.5 text-right font-medium text-slate-600">Precio</th>
               <th class="px-2 py-2.5 text-right font-medium text-slate-600">m²</th>
+              <th class="px-2 py-2.5 text-right font-medium text-slate-600" title="m² descubiertos">desc</th>
               <th class="px-3 py-2.5 text-right font-medium text-slate-600">$/m²</th>
               <th class="px-2 py-2.5 text-center font-medium text-slate-600" title="Diferencia vs precio promedio del barrio">vs Ref</th>
               <th class="px-3 py-2.5 text-right font-medium text-slate-600">A juntar</th>
               <th class="px-2 py-2.5 text-center font-medium text-slate-600">OK</th>
-              <th class="px-2 py-2.5 text-center font-medium text-slate-600" title="Score de candidato">⭐</th>
               <th class="px-2 py-2.5 text-center font-medium text-slate-600" title="Cocheras">🚗</th>
+              <th class="px-2 py-2.5 text-center font-medium text-slate-600" title="Terraza">🌿</th>
+              <th class="px-2 py-2.5 text-center font-medium text-slate-600" title="Balcón">🪴</th>
+              <th class="px-2 py-2.5 text-center font-medium text-slate-600" title="Baños">🚿</th>
             </tr>
           </thead>
           <tbody class="divide-y divide-slate-100">
@@ -206,6 +210,7 @@ function renderTable(filtered) {
                 : (p._ok ? 'bg-green-50/30' : '');
               return `
               <tr class="hover:bg-slate-100 transition-colors cursor-pointer ${rowBg}" onclick="showDetail(${p._idx})">
+                <td class="px-2 py-2.5 text-center"><span class="inline-flex items-center gap-1">${tierBadge(p._tier)}<span class="text-xs font-mono ${p._score > 50 ? 'text-green-600 font-bold' : p._score > 0 ? 'text-green-500' : 'text-slate-400'}">${p._score}</span></span></td>
                 <td class="px-2 py-2.5 text-center">${activoBadge(p.activo)}</td>
                 <td class="px-2 py-2.5 text-center">${aptoCreditoBadge(p.apto_credito)}</td>
                 <td class="px-2 py-2.5 text-center">${statusBadge(p.status)}</td>
@@ -214,12 +219,15 @@ function renderTable(filtered) {
                 <td class="px-2 py-2.5 text-center text-xs text-slate-600">${p.tipo ? escapeHtml(p.tipo.toUpperCase()) : '<span class="text-slate-300">-</span>'}</td>
                 <td class="px-3 py-2.5 text-right font-mono text-slate-800">${p._precio > 0 ? '$' + p._precio.toLocaleString() : '<span class="text-slate-300">-</span>'}</td>
                 <td class="px-2 py-2.5 text-right text-slate-600">${p._m2 ? p._m2 : '<span class="text-slate-300">-</span>'}</td>
+                <td class="px-2 py-2.5 text-right text-slate-500 text-xs">${p.m2_terr && p.m2_terr !== '0' ? p.m2_terr : '<span class="text-slate-300">-</span>'}</td>
                 <td class="px-3 py-2.5 text-right font-mono text-slate-600">${p._preciom2 > 0 ? '$' + p._preciom2.toLocaleString() : '<span class="text-slate-300">-</span>'}</td>
                 <td class="px-2 py-2.5 text-center">${evalIcon(p._vsRef)}</td>
                 <td class="px-3 py-2.5 text-right font-mono text-slate-800">${p._precio > 0 ? '$' + p._total.toLocaleString() : '<span class="text-slate-300">-</span>'}</td>
                 <td class="px-2 py-2.5 text-center">${p._precio > 0 ? okPill(p._ok) : '<span class="text-slate-300">-</span>'}</td>
-                <td class="px-2 py-2.5 text-center"><span class="inline-flex items-center gap-1">${tierBadge(p._tier)}<span class="text-xs font-mono ${p._score > 50 ? 'text-green-600 font-bold' : p._score > 0 ? 'text-green-500' : 'text-slate-400'}">${p._score}</span></span></td>
                 <td class="px-2 py-2.5 text-center">${p.cocheras ? (p.cocheras !== '0' ? '<span class="text-green-600">✓</span>' : '<span class="text-slate-300">-</span>') : '<span class="text-slate-300">-</span>'}</td>
+                <td class="px-2 py-2.5 text-center">${p.terraza?.toLowerCase() === 'si' ? '<span class="text-green-600">✓</span>' : '<span class="text-slate-300">-</span>'}</td>
+                <td class="px-2 py-2.5 text-center">${p.balcon?.toLowerCase() === 'si' ? '<span class="text-green-600">✓</span>' : '<span class="text-slate-300">-</span>'}</td>
+                <td class="px-2 py-2.5 text-center text-xs">${p.banos && p.banos !== '0' ? p.banos : '<span class="text-slate-300">-</span>'}</td>
               </tr>
             `;}).join('')}
           </tbody>
@@ -518,7 +526,10 @@ function renderDetailModal(p) {
     p.tipo ? { label: 'Tipo', value: p.tipo.toUpperCase() } : null,
     p.amb ? { label: 'Ambientes', value: p.amb } : null,
     p.m2_tot && p.m2_tot !== '0' ? { label: 'm² totales', value: p.m2_tot } : null,
+    p.m2_terr && p.m2_terr !== '0' ? { label: 'm² desc.', value: p.m2_terr } : null,
+    p.banos && p.banos !== '0' ? { label: 'Baños', value: p.banos } : null,
     p.antiguedad ? { label: 'Antigüedad', value: p.antiguedad + ' años' } : null,
+    p.estado ? { label: 'Estado', value: p.estado } : null,
     p.expensas && p.expensas !== '0' ? { label: 'Expensas', value: '$' + parseInt(p.expensas).toLocaleString() } : null,
     p.disposicion ? { label: 'Disposición', value: p.disposicion } : null,
     p.piso ? { label: 'Piso', value: p.piso } : null,
@@ -674,6 +685,23 @@ function renderDetailModal(p) {
           <div>
             <h3 class="text-sm font-medium text-slate-700 mb-2">📝 Notas</h3>
             <p class="text-sm text-slate-600 bg-slate-50 rounded-xl p-4">${escapeHtml(p.notas)}</p>
+          </div>
+          ` : ''}
+
+          <!-- Rating -->
+          ${p.rating ? `
+          <div class="flex items-center gap-2">
+            <span class="text-sm text-slate-500">Tu valoración:</span>
+            <span class="text-yellow-500">${ratingStars(p.rating)}</span>
+          </div>
+          ` : ''}
+
+          <!-- Fechas y seguimiento -->
+          ${(p.fecha_publicado || p.fecha_contacto || p.fecha_visita) ? `
+          <div class="flex flex-wrap gap-4 text-xs text-slate-400">
+            ${p.fecha_publicado ? `<span>📅 Publicado: ${p.fecha_publicado}</span>` : ''}
+            ${p.fecha_contacto ? `<span>📞 Contactado: ${p.fecha_contacto}</span>` : ''}
+            ${p.fecha_visita ? `<span>🏠 Visitado: ${p.fecha_visita}</span>` : ''}
           </div>
           ` : ''}
 

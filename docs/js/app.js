@@ -62,12 +62,6 @@ function updateWeight(key, value) {
   render();
 }
 
-function toggleCondition(key, enabled) {
-  CONDITIONS[key].enabled = enabled;
-  saveConditions(CONDITIONS);
-  render();
-}
-
 function updateCondition(key, enabled) {
   CONDITIONS[key].enabled = enabled;
   saveConditions(CONDITIONS);

@@ -166,7 +166,7 @@ function getFiltered(properties) {
     // Ordenamiento especial para 'score': primero por tier (menor = mejor), luego por score
     if (state.sortBy === 'score') {
       if (a._tier !== b._tier) {
-        return state.sortDir === 'asc' ? (a._tier - b._tier) : (a._tier - b._tier);
+        return state.sortDir === 'asc' ? (b._tier - a._tier) : (a._tier - b._tier);
       }
       // Dentro del mismo tier, ordenar por score
       return state.sortDir === 'asc' ? (a._score - b._score) : (b._score - a._score);
@@ -278,10 +278,6 @@ function ratingStars(rating) {
 
 function fechaIndicators(p) {
   const pubDias = diasHace(p.fecha_publicado);
-  const trackDias = diasHace(p.fecha_agregado);
-  let parts = [];
-  if (pubDias !== null) parts.push(`📅${pubDias}d`);
-  if (trackDias !== null) parts.push(`👁${trackDias}d`);
-  if (parts.length === 0) return '';
-  return `<div class="text-[10px] text-slate-400 mt-0.5">${parts.join(' · ')}</div>`;
+  if (pubDias === null) return '';
+  return `<div class="text-[10px] text-slate-400 mt-0.5">📅${pubDias}d</div>`;
 }

@@ -43,10 +43,10 @@ LOCAL_FILE = Path('data/sheet_data.json')
 CACHE_FILE = Path('data/scrape_cache.json')
 
 # Columnas que el scraper puede llenar
-SCRAPEABLE_COLS = ['precio', 'm2_cub', 'm2_tot', 'amb', 'barrio', 'direccion',
+SCRAPEABLE_COLS = ['precio', 'm2_cub', 'm2_tot', 'm2_terr', 'amb', 'barrio', 'direccion',
                    'expensas', 'terraza', 'antiguedad', 'apto_credito', 'tipo', 'activo',
                    'cocheras', 'disposicion', 'piso', 'ascensor', 'balcon', 'luminosidad',
-                   'fecha_publicado']
+                   'fecha_publicado', 'banos', 'inmobiliaria', 'dormitorios']
 
 
 def get_client():
@@ -176,6 +176,10 @@ def scrape_argenprop(url):
                 match = re.search(r'(\d+)', txt)
                 if match:
                     data['m2_tot'] = match.group(1)
+            elif 'descubierta' in txt or 'm² desc' in txt or 'terraza' in txt and 'm²' in txt:
+                match = re.search(r'(\d+)', txt)
+                if match:
+                    data['m2_terr'] = match.group(1)
             elif 'ambiente' in txt and 'cant' in txt:
                 match = re.search(r'(\d+)', txt)
                 if match:
@@ -191,6 +195,10 @@ def scrape_argenprop(url):
             elif 'cochera' in txt:
                 match = re.search(r'(\d+)', txt)
                 data['cocheras'] = match.group(1) if match else '1'
+            elif 'baño' in txt:
+                match = re.search(r'(\d+)', txt)
+                if match:
+                    data['banos'] = match.group(1)
             elif 'expensas' in txt:
                 match = re.search(r'(\d+)', txt.replace('.', ''))
                 if match:
@@ -329,6 +337,10 @@ def scrape_mercadolibre(url):
                     match = re.search(r'(\d+)', v)
                     if match:
                         data['m2_tot'] = match.group(1)
+                elif 'superficie descubierta' in h or 'sup. descubierta' in h:
+                    match = re.search(r'(\d+)', v)
+                    if match:
+                        data['m2_terr'] = match.group(1)
                 elif 'ambientes' in h:
                     match = re.search(r'(\d+)', v)
                     if match:
@@ -608,6 +620,17 @@ def cmd_scrape(check_all=False, no_cache=False):
             updated += 1
         else:
             print(f"      ⚪ Sin datos nuevos")
+
+        # Validación: m2_tot debería ser >= m2_cub
+        m2_cub = int(rows[idx].get('m2_cub') or 0)
+        m2_tot = int(rows[idx].get('m2_tot') or 0)
+        m2_terr = int(rows[idx].get('m2_terr') or 0)
+        if m2_cub > 0 and m2_tot > 0:
+            if m2_cub > m2_tot:
+                print(f"      ⚠️  m² cub ({m2_cub}) > m² tot ({m2_tot}) - posible error")
+            elif m2_terr > 0 and m2_cub + m2_terr != m2_tot:
+                expected = m2_cub + m2_terr
+                print(f"      ℹ️  m² cub({m2_cub}) + desc({m2_terr}) = {expected} ≠ tot({m2_tot})")
 
         time.sleep(0.5)
 
