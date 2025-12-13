@@ -73,9 +73,11 @@ ARSCRAPER_DEFAULT_DELAY_MAX=5.0
 - **Problema**: `networkidle` nunca completa por trackers
 - **Solución**: Usar `domcontentloaded` + sleep manual (ya implementado)
 
-### MercadoLibre 403
-- **Problema**: API requiere autenticación
-- **Solución**: Registrar app en developers.mercadolibre.com.ar, obtener token OAuth
+### MercadoLibre 403 / Rate Limiting
+- **Problema**: MercadoLibre bloquea requests después de muchas seguidas (rate limiting)
+- **Síntomas**: Status 403, o "No se pudo extraer precio"
+- **Solución**: Usar cache (evitar `--no-cache`), esperar unas horas, o usar proxy
+- **Nota**: El scraper usa headers mejorados (Sec-Ch-Ua, Sec-Fetch-*, etc.) para simular navegador real
 
 ### Precios no parseados en Zonaprop
 - Los selectores de precio pueden necesitar actualización si Zonaprop cambia el HTML
@@ -139,12 +141,14 @@ docs/
 ### Funcionalidades del dashboard
 
 - **Vista tabla/cards** con filtros (status, barrio, activo, apto crédito)
+- **Columnas**: tier/score, activo, apto, status, barrio, dirección, tipo, precio, m², m² desc, $/m², vs ref, a juntar, OK, cocheras, terraza, balcón, baños
 - **Sistema de tiers + score** para ordenar candidatos (ver abajo)
 - **Vista detallada** con:
   - Slider de negociación de precio (0-15%)
   - Slider de dólar estimado ($900-$1500)
   - Desglose completo de costos (escribano, sellos, etc.)
-  - Características y amenities
+  - Características: tipo, ambientes, m² totales/desc, baños, antigüedad, estado, expensas, disposición, piso, etc.
+  - Rating personal y fechas (publicado, contacto, visita)
 - **Página de stats** con gráfico precio vs m²
 - **Cotización dólar BNA** en tiempo real
 
@@ -155,14 +159,26 @@ source .venv/bin/activate
 python sheets/sync_sheet.py pull      # 1. Traer datos de Google Sheets
 # (agregar link en el JSON o en el Sheet)
 python sheets/sync_sheet.py scrape    # 2. Scrapear datos de los links
-# 3. IMPORTANTE: Completar datos manualmente (ver sheets/README.md)
-#    - Abrir cada link y leer descripción
-#    - Buscar: apto crédito, estado, terraza/balcón, ascensor
-#    - Verificar coherencia de m2, expensas, piso
-#    - Editar data/sheet_data.json
-python sheets/sync_sheet.py view      # 4. Preview cambios
-python sheets/sync_sheet.py push      # 5. Subir a Google Sheets
+python sheets/sync_sheet.py view      # 3. Preview cambios
+python sheets/sync_sheet.py push      # 4. Subir a Google Sheets
 ```
+
+**Flags útiles del scraper:**
+```bash
+python sheets/sync_sheet.py scrape --all        # Re-scrapea todos (no solo faltantes)
+python sheets/sync_sheet.py scrape --no-cache   # Ignora cache
+python sheets/sync_sheet.py scrape --update     # Sobrescribe valores existentes
+python sheets/sync_sheet.py scrape --all --no-cache --update  # Full refresh
+```
+
+**Sistema de validaciones:** Al final del scrape muestra warnings de:
+- m² inconsistentes (cub > tot, o cub + desc ≠ tot)
+- Atributos inciertos (terraza/balcon detectado pero valor ambiguo → "?")
+- Datos faltantes (sin barrio, sin m²)
+- Precios sospechosos
+
+**Detección de si/no:** El scraper usa `ATTR_PATTERNS` en `sync_sheet.py` para detectar
+correctamente valores como "terraza: no" (antes se marcaba como "si" incorrectamente).
 
 Ver `sheets/README.md` para documentación completa del sync.
 
