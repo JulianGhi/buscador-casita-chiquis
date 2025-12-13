@@ -48,6 +48,86 @@ SCRAPEABLE_COLS = ['precio', 'm2_cub', 'm2_tot', 'm2_terr', 'amb', 'barrio', 'di
                    'cocheras', 'disposicion', 'piso', 'ascensor', 'balcon', 'luminosidad',
                    'fecha_publicado', 'banos', 'inmobiliaria', 'dormitorios']
 
+# =============================================================================
+# PATRONES DE DETECCIÓN PARA ATRIBUTOS BOOLEANOS
+# =============================================================================
+# Cada atributo tiene:
+#   - 'si': patrones que indican presencia (cualquiera matchea → 'si')
+#   - 'no': patrones que indican ausencia (cualquiera matchea → 'no')
+#   - 'solo_label': si True, el label solo (ej: "terraza") sin valor cuenta como 'si'
+#
+# IMPORTANTE: Los patrones 'no' se evalúan PRIMERO. Si matchea 'no', no se evalúa 'si'.
+
+ATTR_PATTERNS = {
+    'terraza': {
+        'si': ['terraza: si', 'terraza: sí', 'terraza:si', 'terraza:sí', 'con terraza'],
+        'no': ['terraza: no', 'terraza:no', 'sin terraza', 'no tiene terraza'],
+        'solo_label': True,  # "terraza" solo = tiene terraza (en lista de amenities)
+    },
+    'balcon': {
+        'si': ['balcon: si', 'balcón: si', 'balcon: sí', 'balcón: sí', 'con balcon', 'con balcón'],
+        'no': ['balcon: no', 'balcón: no', 'sin balcon', 'sin balcón', 'no tiene balcon', 'no tiene balcón'],
+        'solo_label': True,
+    },
+    'cochera': {
+        'si': ['cochera: si', 'cochera: sí', 'con cochera', 'tiene cochera'],
+        'no': ['cochera: no', 'sin cochera', 'no tiene cochera', 'cocheras: 0', 'cochera: 0'],
+        'solo_label': True,  # "cochera" o "1 cochera" = tiene
+    },
+    'luminosidad': {
+        'si': ['luminoso', 'muy luminoso', 'luz natural', 'buena luz', 'excelente luz'],
+        'no': ['poco luminoso', 'no luminoso', 'no es luminoso', 'sin luz', 'oscuro', 'poca luz'],
+        'solo_label': False,
+    },
+    'ascensor': {
+        'si': ['ascensor: si', 'ascensor: sí', 'con ascensor', 'tiene ascensor'],
+        'no': ['ascensor: no', 'sin ascensor', 'no tiene ascensor'],
+        'solo_label': False,
+    },
+    'apto_credito': {
+        'si': ['apto credito: si', 'apto crédito: si', 'apto credito: sí', 'apto crédito: sí',
+               'apto banco', 'acepta credito', 'acepta crédito'],
+        'no': ['apto credito: no', 'apto crédito: no', 'no apto credito', 'no apto crédito',
+               'no acepta credito', 'no acepta crédito'],
+        'solo_label': False,
+    },
+}
+
+
+def detectar_atributo(texto, atributo):
+    """
+    Detecta si un atributo está presente o ausente basado en patrones.
+
+    Args:
+        texto: string a analizar (ya en lowercase)
+        atributo: nombre del atributo ('terraza', 'balcon', etc.)
+
+    Returns:
+        'si', 'no', o None si no se puede determinar
+    """
+    if atributo not in ATTR_PATTERNS:
+        return None
+
+    patterns = ATTR_PATTERNS[atributo]
+    texto = texto.lower()
+
+    # Primero verificar patrones de negación
+    for patron in patterns['no']:
+        if patron in texto:
+            return 'no'
+
+    # Luego verificar patrones positivos
+    for patron in patterns['si']:
+        if patron in texto:
+            return 'si'
+
+    # Si solo_label está activo, verificar si el label aparece solo
+    if patterns.get('solo_label') and atributo in texto:
+        # Ya verificamos que no hay negación, así que es positivo
+        return 'si'
+
+    return None
+
 
 def get_client():
     """Get authenticated gspread client"""
@@ -189,21 +269,18 @@ def scrape_argenprop(url):
                 if match:
                     data['antiguedad'] = match.group(1)
             elif 'terraza' in txt:
-                # Verificar si dice "no" o solo es el label
-                if 'no' in txt:
-                    data['terraza'] = 'no'
-                elif 'si' in txt or 'sí' in txt or txt == 'terraza':
-                    data['terraza'] = 'si'
+                result = detectar_atributo(txt, 'terraza')
+                if result:
+                    data['terraza'] = result
             elif 'balcón' in txt or 'balcon' in txt:
-                if 'no' in txt:
-                    data['balcon'] = 'no'
-                elif 'si' in txt or 'sí' in txt or txt == 'balcón' or txt == 'balcon':
-                    data['balcon'] = 'si'
+                result = detectar_atributo(txt, 'balcon')
+                if result:
+                    data['balcon'] = result
             elif 'cochera' in txt:
-                # Verificar que no diga "sin cochera"
-                if 'sin' in txt or 'no' == txt.split()[0]:
+                result = detectar_atributo(txt, 'cochera')
+                if result == 'no':
                     data['cocheras'] = '0'
-                else:
+                elif result == 'si':
                     match = re.search(r'(\d+)', txt)
                     data['cocheras'] = match.group(1) if match else '1'
             elif 'baño' in txt:
@@ -389,11 +466,24 @@ def scrape_mercadolibre(url):
                     if match:
                         data['piso'] = match.group(1)
                 elif 'ascensor' in h:
-                    data['ascensor'] = 'si' if 'sí' in v.lower() or 'si' in v.lower() else 'no'
+                    result = detectar_atributo(f"{h}: {v}", 'ascensor')
+                    if result:
+                        data['ascensor'] = result
+                    else:
+                        # Fallback: si dice "sí" o "si" es positivo
+                        data['ascensor'] = 'si' if 'sí' in v.lower() or v.lower() == 'si' else 'no'
                 elif h == 'balcón' or h == 'balcon':
-                    data['balcon'] = 'si' if 'sí' in v.lower() or 'si' in v.lower() else 'no'
+                    result = detectar_atributo(f"{h}: {v}", 'balcon')
+                    if result:
+                        data['balcon'] = result
+                    else:
+                        data['balcon'] = 'si' if 'sí' in v.lower() or v.lower() == 'si' else 'no'
                 elif h == 'terraza':
-                    data['terraza'] = 'si' if 'sí' in v.lower() or 'si' in v.lower() else 'no'
+                    result = detectar_atributo(f"{h}: {v}", 'terraza')
+                    if result:
+                        data['terraza'] = result
+                    else:
+                        data['terraza'] = 'si' if 'sí' in v.lower() or v.lower() == 'si' else 'no'
 
         # Info del título y URL
         title = soup.select_one('h1.ui-pdp-title')
@@ -455,19 +545,19 @@ def scrape_mercadolibre(url):
         full_text = title_lower + ' ' + desc_text
 
         if title_lower:
-            # Solo marcar terraza/balcon si NO dice "sin" antes
-            if 'terraza' in title_lower and 'sin terraza' not in title_lower:
+            # Detectar terraza/balcon del título usando patrones
+            result_terraza = detectar_atributo(title_lower, 'terraza')
+            if result_terraza == 'si':
                 data['terraza'] = 'si'
-            if ('balcon' in title_lower or 'balcón' in title_lower) and 'sin balcon' not in title_lower and 'sin balcón' not in title_lower:
+            result_balcon = detectar_atributo(title_lower, 'balcon')
+            if result_balcon == 'si':
                 data['balcon'] = 'si'
             if 'sin expensas' in title_lower or 'sin exp' in title_lower:
                 data['expensas'] = '0'
 
-        # Luminosidad (de título o descripción)
-        # Verificar que no diga "poco luminoso", "no luminoso", etc.
-        has_luminoso = 'luminoso' in full_text or 'luz natural' in full_text
-        negado = 'poco luminoso' in full_text or 'no luminoso' in full_text or 'no es luminoso' in full_text or 'sin luz' in full_text
-        if has_luminoso and not negado:
+        # Luminosidad (de título o descripción) usando patrones
+        result_luz = detectar_atributo(full_text, 'luminosidad')
+        if result_luz == 'si':
             data['luminosidad'] = 'si'
 
         # Tipo de propiedad (del título o URL) - orden de prioridad
