@@ -343,12 +343,12 @@ function diasHace(fecha) {
 
 // Función genérica para badges de si/no/?
 function booleanBadge(value, options = {}) {
-  const { noColor = 'text-red-600', size = 'text-lg' } = options;
-  if (!value) return '<span class="text-slate-300">?</span>';
+  const { noColor = THEME.error.textLight, size = 'text-lg' } = options;
+  if (!value) return `<span class="text-slate-300">${ICONS.question}</span>`;
   const s = value.toLowerCase();
-  if (s === 'si' || s === 'sí') return `<span class="text-green-600 ${size}">✓</span>`;
-  if (s === 'no') return `<span class="${noColor} ${size}">✗</span>`;
-  return `<span class="text-yellow-600">${value}</span>`;
+  if (s === 'si' || s === 'sí') return `<span class="${THEME.success.textLight} ${size}">${ICONS.check}</span>`;
+  if (s === 'no') return `<span class="${noColor} ${size}">${ICONS.cross}</span>`;
+  return `<span class="${THEME.warning.textLight}">${value}</span>`;
 }
 
 // Función para colorear variaciones porcentuales (positivo=rojo, negativo=verde)
@@ -368,26 +368,35 @@ function evalIcon(vsRef) {
 }
 
 function okPill(ok) {
-  return ok
-    ? '<span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800">✓</span>'
-    : '<span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-red-100 text-red-800">✗</span>';
+  const t = ok ? THEME.success : THEME.error;
+  const icon = ok ? ICONS.check : ICONS.cross;
+  return `<span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${t.bg} ${t.textDark}">${icon}</span>`;
 }
 
 function activoBadge(activo) {
-  return booleanBadge(activo, { noColor: 'text-red-600' });
+  return booleanBadge(activo, { noColor: THEME.error.textLight });
 }
 
 function aptoCreditoBadge(apto) {
   return booleanBadge(apto, { noColor: 'text-amber-600' });
 }
 
+// Badge de status usando STATUS_CONFIG
 function statusBadge(status) {
   if (!status) return '<span class="text-slate-300 text-xs italic">status?</span>';
   const s = status.toLowerCase();
-  if (s.includes('visitado')) return `<span class="text-xs bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded">${status}</span>`;
-  if (s.includes('interesado')) return `<span class="text-xs bg-green-100 text-green-700 px-1.5 py-0.5 rounded">${status}</span>`;
-  if (s.includes('descartado')) return `<span class="text-xs bg-red-100 text-red-700 px-1.5 py-0.5 rounded">${status}</span>`;
-  return `<span class="text-xs bg-yellow-100 text-yellow-700 px-1.5 py-0.5 rounded">${status}</span>`;
+
+  // Buscar config por coincidencia parcial
+  let config = STATUS_CONFIG.default;
+  for (const [key, cfg] of Object.entries(STATUS_CONFIG)) {
+    if (key !== 'default' && s.includes(key)) {
+      config = cfg;
+      break;
+    }
+  }
+
+  const theme = THEME[config.theme];
+  return `<span class="text-xs ${theme.bg} ${theme.text} px-1.5 py-0.5 rounded">${status}</span>`;
 }
 
 function tierBadge(tier) {

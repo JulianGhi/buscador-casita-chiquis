@@ -2,6 +2,101 @@
 // CONFIGURACIÓN Y ESTADO
 // ============================================
 
+// ============================================
+// TEMA DE COLORES (Tailwind classes)
+// ============================================
+const THEME = {
+  // Estados semánticos
+  success: {
+    bg: 'bg-green-100', text: 'text-green-700', border: 'border-green-200',
+    bgSolid: 'bg-green-500', textLight: 'text-green-600', textDark: 'text-green-800'
+  },
+  warning: {
+    bg: 'bg-yellow-100', text: 'text-yellow-700', border: 'border-yellow-200',
+    bgSolid: 'bg-yellow-500', textLight: 'text-yellow-600', textDark: 'text-yellow-800'
+  },
+  error: {
+    bg: 'bg-red-100', text: 'text-red-700', border: 'border-red-200',
+    bgSolid: 'bg-red-500', textLight: 'text-red-600', textDark: 'text-red-800'
+  },
+  info: {
+    bg: 'bg-blue-100', text: 'text-blue-700', border: 'border-blue-200',
+    bgSolid: 'bg-blue-500', textLight: 'text-blue-600', textDark: 'text-blue-800'
+  },
+  neutral: {
+    bg: 'bg-slate-100', text: 'text-slate-700', border: 'border-slate-200',
+    bgSolid: 'bg-slate-500', textLight: 'text-slate-600', textDark: 'text-slate-800'
+  },
+  // Colores específicos del dominio
+  negociar: {
+    bg: 'bg-orange-100', text: 'text-orange-700', border: 'border-orange-200',
+    bgSolid: 'bg-orange-500', textLight: 'text-orange-600'
+  },
+  purple: {
+    bg: 'bg-purple-100', text: 'text-purple-700', border: 'border-purple-200',
+    bgSolid: 'bg-purple-500', textLight: 'text-purple-600'
+  }
+};
+
+// ============================================
+// SISTEMA DE ICONOS
+// ============================================
+const ICONS = {
+  // Acciones
+  check: '✓',
+  cross: '✗',
+  question: '?',
+  refresh: '↻',
+  external: '↗',
+  close: '×',
+
+  // Navegación
+  arrowUp: '↑',
+  arrowDown: '↓',
+
+  // Propiedades
+  terraza: '🌿',
+  balcon: '🪴',
+  cochera: '🚗',
+  banos: '🚿',
+  ambientes: '🚪',
+  m2: '📐',
+  precio: '💰',
+  expensas: '💵',
+  antiguedad: '✨',
+  luminosidad: '☀️',
+  frente: '🪟',
+
+  // UI
+  star: '⭐',
+  calendar: '📅',
+  phone: '📞',
+  house: '🏠',
+  building: '🏢',
+  notes: '📝',
+  chart: '📊',
+  mobile: '📱',
+  config: '⚙️',
+  help: '?',
+  filter: '🔍',
+  dolar: '💵',
+  handshake: '🤝',
+  lightbulb: '💡',
+  warning: '⚠️',
+  info: 'ⓘ'
+};
+
+// ============================================
+// CONFIGURACIÓN DE STATUS
+// ============================================
+const STATUS_CONFIG = {
+  'visitado':   { theme: 'info',    label: 'Visitado' },
+  'interesado': { theme: 'success', label: 'Interesado' },
+  'descartado': { theme: 'error',   label: 'Descartado' },
+  'por ver':    { theme: 'warning', label: 'Por ver' },
+  'default':    { theme: 'warning', label: null }
+};
+
 const DEFAULT_CONFIG = {
   CREDITO_ARS: 126000000,
   DOLAR_BASE: 1450,

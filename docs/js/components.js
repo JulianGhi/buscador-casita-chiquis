@@ -495,33 +495,65 @@ function renderConfigPanel() {
 }
 
 // ============================================
-// MODAL DE DETALLE
+// MODAL DE DETALLE - COMPONENTES
 // ============================================
 
-function renderDetailModal(p) {
-  if (!p) return '';
+// Lista de atributos que pueden faltar (para datos faltantes)
+const MISSING_ATTRS = [
+  { key: 'm2', label: 'm²' },
+  { key: 'ambientes', label: 'Ambientes' },
+  { key: 'banos', label: 'Baños' },
+  { key: 'antiguedad', label: 'Antigüedad' },
+  { key: 'expensas', label: 'Expensas' },
+  { key: 'terraza', label: 'Terraza' },
+  { key: 'balcon', label: 'Balcón' },
+  { key: 'cochera', label: 'Cochera' },
+  { key: 'luminosidad', label: 'Luminosidad' },
+  { key: 'frente', label: 'Disposición' }
+];
 
-  const dolarActual = state.dolarEstimado || CONFIG.DOLAR_BASE;
-  const creditoBase = getCreditoUSD();
-  const creditoEstimado = getCreditoUSD(dolarActual);
-  const diferenciaCredito = creditoBase - creditoEstimado;
-  const tieneInmob = p.inmobiliaria && p.inmobiliaria.trim() !== '';
+// Renderiza badges de la propiedad
+function renderModalBadges(p) {
+  const aptoBadge = p.apto_credito?.toLowerCase() === 'si'
+    ? `<span class="text-xs ${THEME.purple.bg} ${THEME.purple.text} px-1.5 py-0.5 rounded">${ICONS.check} Apto crédito</span>`
+    : p.apto_credito?.toLowerCase() === 'no'
+      ? `<span class="text-xs ${THEME.error.bg} ${THEME.error.text} px-1.5 py-0.5 rounded">${ICONS.cross} No apto</span>`
+      : '';
 
-  // Usar calculateCosts() para cálculos con negociación
-  const costsNeg = calculateCosts(p._precio, {
-    tieneInmob,
-    dolar: dolarActual,
-    negociacionPct: state.negotiationPct
-  });
+  const linkBadge = p.link
+    ? `<a href="${escapeHtml(p.link)}" target="_blank" class="text-xs ${THEME.info.bg} ${THEME.info.text} px-2 py-0.5 rounded hover:bg-blue-200">Ver aviso ${ICONS.external}</a>`
+    : '';
 
-  const ahorro = p._total - costsNeg.total;
-  const hayAjuste = state.negotiationPct > 0 || (state.dolarEstimado && state.dolarEstimado !== CONFIG.DOLAR_BASE);
-  const hayAjusteDolar = state.dolarEstimado && state.dolarEstimado !== CONFIG.DOLAR_BASE;
+  return `
+    <div class="flex flex-wrap gap-2 items-center">
+      ${statusBadge(p.status)}
+      ${activoBadge(p.activo)}
+      ${aptoBadge}
+      ${evalIcon(p._vsRef)}
+      ${linkBadge}
+    </div>
+  `;
+}
 
-  // Usar calculateQuitaNecesaria() para sugerencia
-  const quita = calculateQuitaNecesaria(p._precio, tieneInmob, dolarActual);
+// Renderiza alerta de datos faltantes
+function renderMissingData(p) {
+  if (p._missingCount <= 0) return '';
 
-  // Características de la propiedad
+  const missingBadges = MISSING_ATTRS
+    .filter(attr => p._attrScores?.[attr.key] === 'missing')
+    .map(attr => `<span class="text-xs ${THEME.negociar.bg} ${THEME.negociar.text} px-2 py-0.5 rounded">${attr.label}</span>`)
+    .join('');
+
+  return `
+    <div class="${THEME.negociar.bg.replace('100', '50')} border ${THEME.negociar.border} rounded-lg p-3">
+      <div class="text-xs font-medium ${THEME.negociar.text} mb-2">${ICONS.warning} Datos faltantes (penalizan score):</div>
+      <div class="flex flex-wrap gap-2">${missingBadges}</div>
+    </div>
+  `;
+}
+
+// Renderiza características y amenities
+function renderCaracteristicas(p) {
   const caracteristicas = [
     p.tipo ? { label: 'Tipo', value: p.tipo.toUpperCase() } : null,
     p.amb ? { label: 'Ambientes', value: p.amb } : null,
@@ -536,219 +568,264 @@ function renderDetailModal(p) {
   ].filter(Boolean);
 
   const amenities = [
-    p.terraza?.toLowerCase() === 'si' ? '🌿 Terraza' : null,
-    p.balcon?.toLowerCase() === 'si' ? '🏠 Balcón' : null,
-    p.cocheras && p.cocheras !== '0' ? '🚗 Cochera' : null,
+    p.terraza?.toLowerCase() === 'si' ? `${ICONS.terraza} Terraza` : null,
+    p.balcon?.toLowerCase() === 'si' ? `${ICONS.house} Balcón` : null,
+    p.cocheras && p.cocheras !== '0' ? `${ICONS.cochera} Cochera` : null,
     p.ascensor?.toLowerCase() === 'si' ? '🛗 Ascensor' : null,
-    p.luminosidad?.toLowerCase() === 'si' || p.luminosidad?.toLowerCase() === 'buena' ? '☀️ Luminoso' : null,
+    p.luminosidad?.toLowerCase() === 'si' || p.luminosidad?.toLowerCase() === 'buena' ? `${ICONS.luminosidad} Luminoso` : null,
   ].filter(Boolean);
+
+  if (caracteristicas.length === 0 && amenities.length === 0) return '';
+
+  return `
+    <div class="${THEME.neutral.bg} rounded-xl p-4">
+      <div class="flex flex-wrap gap-x-6 gap-y-2 text-sm">
+        ${caracteristicas.map(c => `<div><span class="text-slate-500">${c.label}:</span> <span class="font-medium">${c.value}</span></div>`).join('')}
+      </div>
+      ${amenities.length > 0 ? `<div class="flex flex-wrap gap-2 mt-3 text-sm">${amenities.map(a => `<span class="bg-white px-2 py-1 rounded border">${a}</span>`).join('')}</div>` : ''}
+    </div>
+  `;
+}
+
+// Renderiza stats principales (precio, m², etc)
+function renderPriceStats(p, costsNeg, hayAjuste) {
+  return `
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
+      <div class="${THEME.neutral.bg} rounded-xl p-3 text-center">
+        ${state.negotiationPct > 0 && p._precio > 0 ? `
+          <div class="text-xs line-through text-slate-400">$${p._precio.toLocaleString()}</div>
+          <div class="text-xl font-bold ${THEME.negociar.textLight}">$${costsNeg.precio.toLocaleString()}</div>
+        ` : `<div class="text-xl font-bold ${THEME.neutral.textDark}">$${p._precio > 0 ? p._precio.toLocaleString() : '-'}</div>`}
+        <div class="text-xs text-slate-500">Precio</div>
+      </div>
+      <div class="${THEME.neutral.bg} rounded-xl p-3 text-center">
+        <div class="text-xl font-bold ${THEME.neutral.textDark}">${p._m2 || '-'}</div>
+        <div class="text-xs text-slate-500">m² cub</div>
+      </div>
+      <div class="${THEME.neutral.bg} rounded-xl p-3 text-center">
+        <div class="text-xl font-bold ${THEME.neutral.textDark}">${p._preciom2 > 0 ? '$' + p._preciom2.toLocaleString() : '-'}</div>
+        <div class="text-xs text-slate-500">$/m² ${p._ref ? `<span class="text-slate-400">(ref: $${p._ref.toLocaleString()})</span>` : ''}</div>
+      </div>
+      <div class="${THEME.neutral.bg} rounded-xl p-3 text-center">
+        ${hayAjuste && p._precio > 0 ? `
+          <div class="text-xs line-through text-slate-400">$${p._total.toLocaleString()}</div>
+          <div class="text-xl font-bold ${costsNeg.ok ? THEME.success.textLight : THEME.error.textLight}">$${costsNeg.total.toLocaleString()}</div>
+        ` : `<div class="text-xl font-bold ${p._ok ? THEME.success.textLight : THEME.error.textLight}">$${p._precio > 0 ? p._total.toLocaleString() : '-'}</div>`}
+        <div class="text-xs text-slate-500">A juntar</div>
+      </div>
+    </div>
+  `;
+}
+
+// Renderiza sliders de negociación y dólar
+function renderSimulationSliders(dolarActual, hayAjusteDolar, diferenciaCredito, creditoEstimado) {
+  const negPct = state.negotiationPct;
+  const negDisplay = negPct > 0 ? '-' + (negPct % 1 === 0 ? negPct : negPct.toFixed(1)) + '%' : '0%';
+
+  return `
+    <div class="grid md:grid-cols-2 gap-4">
+      <div class="bg-gradient-to-r from-orange-50 to-amber-50 rounded-xl p-4 border ${THEME.negociar.border}">
+        <div class="flex items-center justify-between mb-2">
+          <span class="text-sm font-medium text-orange-800">${ICONS.handshake} Negociar</span>
+          <span class="text-lg font-bold ${negPct > 0 ? THEME.negociar.textLight : 'text-slate-400'}">${negDisplay}</span>
+        </div>
+        <input type="range" min="0" max="15" step="0.5" value="${negPct}"
+          onchange="updateNegotiation(this.value)" oninput="updateNegotiation(this.value)"
+          class="w-full h-2 bg-orange-200 rounded-lg appearance-none cursor-pointer accent-orange-500" />
+        <div class="flex justify-between text-xs ${THEME.negociar.textLight} mt-1"><span>Publicado</span><span>-15%</span></div>
+      </div>
+
+      <div class="bg-gradient-to-r from-green-50 to-emerald-50 rounded-xl p-4 border ${THEME.success.border}">
+        <div class="flex items-center justify-between mb-2">
+          <span class="text-sm font-medium text-green-800">${ICONS.dolar} Dólar estimado</span>
+          <span class="text-lg font-bold ${hayAjusteDolar ? THEME.success.textLight : 'text-slate-400'}">$${dolarActual}</span>
+        </div>
+        <input type="range" min="900" max="2000" step="10" value="${dolarActual}"
+          onchange="updateDolarEstimado(this.value)" oninput="updateDolarEstimado(this.value)"
+          class="w-full h-2 bg-green-200 rounded-lg appearance-none cursor-pointer accent-green-500" />
+        <div class="flex justify-between text-xs ${THEME.success.textLight} mt-1">
+          <span>$900</span>
+          <span>Base: $${CONFIG.DOLAR_BASE}</span>
+          <span>$2000</span>
+        </div>
+        ${hayAjusteDolar ? `<div class="text-xs text-center mt-2 ${diferenciaCredito > 0 ? THEME.error.textLight : THEME.success.textLight}">Crédito: $${creditoEstimado.toLocaleString()} (${diferenciaCredito > 0 ? '-' : '+'}$${Math.abs(diferenciaCredito).toLocaleString()})</div>` : ''}
+      </div>
+    </div>
+  `;
+}
+
+// Renderiza sugerencia de quita necesaria
+function renderQuitaSugerencia(quita, dolarActual, creditoEstimado) {
+  if (quita.quitaPct <= 0) return '';
+
+  const isRealista = quita.esRealista;
+  const gradientClass = isRealista ? 'from-purple-50 to-pink-50' : 'from-red-50 to-orange-50';
+  const borderClass = isRealista ? THEME.purple.border : THEME.error.border;
+  const textClass = isRealista ? 'text-purple-800' : 'text-red-800';
+  const textClass2 = isRealista ? 'text-purple-700' : 'text-red-700';
+
+  return `
+    <div class="bg-gradient-to-r ${gradientClass} rounded-xl p-4 border ${borderClass}">
+      <div class="flex items-center gap-2 mb-1">
+        <span class="text-lg">${isRealista ? ICONS.lightbulb : ICONS.warning}</span>
+        <span class="font-medium ${textClass}">
+          ${isRealista ? 'Para que entre en presupuesto:' : 'Muy cara para tu presupuesto'}
+        </span>
+      </div>
+      <div class="text-sm ${textClass2}">
+        ${isRealista
+          ? `Necesitás negociar <span class="font-bold">-${quita.quitaPct.toFixed(1)}%</span> (<span class="font-mono">-$${quita.quitaUSD.toLocaleString()}</span>) → precio objetivo: <span class="font-mono font-bold">$${quita.precioTarget.toLocaleString()}</span>`
+          : `Necesitarías <span class="font-bold">-${quita.quitaPct.toFixed(1)}%</span> (<span class="font-mono">-$${quita.quitaUSD.toLocaleString()}</span>), poco realista`
+        }
+      </div>
+      ${isRealista ? `<div class="text-xs text-purple-500 mt-1">Con dólar a $${dolarActual} y crédito de $${creditoEstimado.toLocaleString()}</div>` : ''}
+    </div>
+  `;
+}
+
+// Renderiza desglose de costos
+function renderCostsBreakdown(p, costsNeg, hayAjuste, ahorro) {
+  const costItems = [
+    { label: 'Tu 10% (o precio - crédito)', value: hayAjuste ? costsNeg.tu10 : p._tu10, highlight: hayAjuste },
+    { label: `Escribano (${(CONFIG.ESCRIBANO * 100).toFixed(1)}%)`, value: hayAjuste ? costsNeg.escr : p._escr },
+    {
+      label: `Sellos ${(hayAjuste ? costsNeg.precio : p._precio) <= CONFIG.SELLOS_EXENTO
+        ? `<span class="${THEME.success.textLight} text-xs">(exento)</span>`
+        : `(${(CONFIG.SELLOS * 100).toFixed(2)}%)`}`,
+      value: hayAjuste ? costsNeg.sell : p._sell
+    },
+    { label: `Registrales (${(CONFIG.REGISTRALES * 100).toFixed(1)}%)`, value: hayAjuste ? costsNeg.reg : p._reg },
+  ];
+
+  if (p.inmobiliaria) {
+    costItems.push({ label: `Inmobiliaria (${(CONFIG.INMOB * 100).toFixed(2)}%)`, value: hayAjuste ? costsNeg.inmob : p._inmob });
+  }
+
+  costItems.push(
+    { label: `Hipoteca (${(CONFIG.HIPOTECA * 100).toFixed(1)}%)`, value: hayAjuste ? costsNeg.hip : p._hip },
+    { label: 'Certificados', value: costsNeg.cert }
+  );
+
+  const totalOk = hayAjuste ? costsNeg.ok : p._ok;
+  const totalVal = hayAjuste ? costsNeg.total : p._total;
+  const difVal = hayAjuste ? costsNeg.dif : p._dif;
+
+  return `
+    <div class="${THEME.neutral.bg} rounded-xl p-4">
+      <h3 class="text-sm font-medium ${THEME.neutral.text} mb-3">${ICONS.precio} Desglose de costos</h3>
+      <div class="space-y-2 text-sm">
+        ${costItems.map(item => `
+          <div class="flex justify-between">
+            <span class="text-slate-600">${item.label}</span>
+            <span class="font-mono ${item.highlight ? THEME.negociar.textLight : ''} ${item.highlight ? 'font-medium' : ''}">$${item.value.toLocaleString()}</span>
+          </div>
+        `).join('')}
+        <div class="border-t pt-2 mt-2 flex justify-between font-medium">
+          <span>TOTAL A JUNTAR</span>
+          <span class="font-mono ${totalOk ? THEME.success.textLight : THEME.error.textLight}">$${totalVal.toLocaleString()}</span>
+        </div>
+        <div class="flex justify-between text-xs">
+          <span class="text-slate-500">Tengo: $${CONFIG.PRESUPUESTO.toLocaleString()}</span>
+          <span class="${difVal >= 0 ? THEME.success.textLight : THEME.error.textLight}">${difVal >= 0 ? 'Sobran' : 'Faltan'} $${Math.abs(difVal).toLocaleString()}</span>
+        </div>
+        ${hayAjuste && ahorro > 0 ? `<div class="text-center ${THEME.success.textLight} text-xs mt-1">${ICONS.lightbulb} Con estos ajustes ahorrás $${ahorro.toLocaleString()}</div>` : ''}
+      </div>
+    </div>
+  `;
+}
+
+// Renderiza sección de notas, rating, fechas e inmobiliaria
+function renderModalFooter(p) {
+  const sections = [];
+
+  if (p.notas) {
+    sections.push(`
+      <div>
+        <h3 class="text-sm font-medium ${THEME.neutral.text} mb-2">${ICONS.notes} Notas</h3>
+        <p class="text-sm text-slate-600 ${THEME.neutral.bg} rounded-xl p-4">${escapeHtml(p.notas)}</p>
+      </div>
+    `);
+  }
+
+  if (p.rating) {
+    sections.push(`
+      <div class="flex items-center gap-2">
+        <span class="text-sm text-slate-500">Tu valoración:</span>
+        <span class="text-yellow-500">${ratingStars(p.rating)}</span>
+      </div>
+    `);
+  }
+
+  if (p.fecha_publicado || p.fecha_contacto || p.fecha_visita) {
+    const fechas = [
+      p.fecha_publicado ? `<span>${ICONS.calendar} Publicado: ${p.fecha_publicado}</span>` : '',
+      p.fecha_contacto ? `<span>${ICONS.phone} Contactado: ${p.fecha_contacto}</span>` : '',
+      p.fecha_visita ? `<span>${ICONS.house} Visitado: ${p.fecha_visita}</span>` : ''
+    ].filter(Boolean).join('');
+
+    sections.push(`<div class="flex flex-wrap gap-4 text-xs text-slate-400">${fechas}</div>`);
+  }
+
+  if (p.inmobiliaria) {
+    sections.push(`
+      <div class="text-xs text-slate-400">
+        ${ICONS.building} ${escapeHtml(p.inmobiliaria)} ${p.contacto ? '· ' + escapeHtml(p.contacto) : ''}
+      </div>
+    `);
+  }
+
+  return sections.join('');
+}
+
+// ============================================
+// MODAL PRINCIPAL
+// ============================================
+
+function renderDetailModal(p) {
+  if (!p) return '';
+
+  // Calcular datos
+  const dolarActual = state.dolarEstimado || CONFIG.DOLAR_BASE;
+  const creditoBase = getCreditoUSD();
+  const creditoEstimado = getCreditoUSD(dolarActual);
+  const diferenciaCredito = creditoBase - creditoEstimado;
+  const tieneInmob = p.inmobiliaria && p.inmobiliaria.trim() !== '';
+
+  const costsNeg = calculateCosts(p._precio, {
+    tieneInmob,
+    dolar: dolarActual,
+    negociacionPct: state.negotiationPct
+  });
+
+  const ahorro = p._total - costsNeg.total;
+  const hayAjuste = state.negotiationPct > 0 || (state.dolarEstimado && state.dolarEstimado !== CONFIG.DOLAR_BASE);
+  const hayAjusteDolar = state.dolarEstimado && state.dolarEstimado !== CONFIG.DOLAR_BASE;
+  const quita = calculateQuitaNecesaria(p._precio, tieneInmob, dolarActual);
 
   return `
     <div class="fixed inset-0 modal-backdrop z-50 flex items-center justify-center p-4" onclick="if(event.target===this)closeDetail()">
       <div class="bg-white rounded-2xl shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
         <div class="sticky top-0 bg-white border-b px-6 py-4 flex justify-between items-start z-10">
           <div>
-            <h2 class="text-xl font-bold text-slate-800">${escapeHtml(p.direccion) || '<span class="text-slate-400">Sin dirección</span>'}</h2>
+            <h2 class="text-xl font-bold ${THEME.neutral.textDark}">${escapeHtml(p.direccion) || '<span class="text-slate-400">Sin dirección</span>'}</h2>
             <p class="text-slate-500">${escapeHtml(p.barrio) || 'Sin barrio'} ${p.tipo ? '· ' + p.tipo.toUpperCase() : ''}</p>
           </div>
-          <button onclick="closeDetail()" class="text-slate-400 hover:text-slate-600 text-2xl">&times;</button>
+          <button onclick="closeDetail()" class="text-slate-400 hover:text-slate-600 text-2xl">${ICONS.close}</button>
         </div>
 
         <div class="p-6 space-y-5">
-          <!-- Badges -->
-          <div class="flex flex-wrap gap-2 items-center">
-            ${statusBadge(p.status)}
-            ${activoBadge(p.activo)}
-            ${p.apto_credito?.toLowerCase() === 'si' ? '<span class="text-xs bg-purple-100 text-purple-700 px-1.5 py-0.5 rounded">✓ Apto crédito</span>' : p.apto_credito?.toLowerCase() === 'no' ? '<span class="text-xs bg-red-100 text-red-700 px-1.5 py-0.5 rounded">✗ No apto</span>' : ''}
-            ${evalIcon(p._vsRef)}
-            ${p.link ? `<a href="${escapeHtml(p.link)}" target="_blank" class="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded hover:bg-blue-200">Ver aviso ↗</a>` : ''}
-          </div>
-
-          <!-- Datos faltantes (penalizan score) -->
-          ${p._missingCount > 0 ? `
-          <div class="bg-orange-50 border border-orange-200 rounded-lg p-3">
-            <div class="text-xs font-medium text-orange-700 mb-2">⚠️ Datos faltantes (penalizan score):</div>
-            <div class="flex flex-wrap gap-2">
-              ${p._attrScores?.m2 === 'missing' ? '<span class="text-xs bg-orange-100 text-orange-700 px-2 py-0.5 rounded">m²</span>' : ''}
-              ${p._attrScores?.ambientes === 'missing' ? '<span class="text-xs bg-orange-100 text-orange-700 px-2 py-0.5 rounded">Ambientes</span>' : ''}
-              ${p._attrScores?.banos === 'missing' ? '<span class="text-xs bg-orange-100 text-orange-700 px-2 py-0.5 rounded">Baños</span>' : ''}
-              ${p._attrScores?.antiguedad === 'missing' ? '<span class="text-xs bg-orange-100 text-orange-700 px-2 py-0.5 rounded">Antigüedad</span>' : ''}
-              ${p._attrScores?.expensas === 'missing' ? '<span class="text-xs bg-orange-100 text-orange-700 px-2 py-0.5 rounded">Expensas</span>' : ''}
-              ${p._attrScores?.terraza === 'missing' ? '<span class="text-xs bg-orange-100 text-orange-700 px-2 py-0.5 rounded">Terraza</span>' : ''}
-              ${p._attrScores?.balcon === 'missing' ? '<span class="text-xs bg-orange-100 text-orange-700 px-2 py-0.5 rounded">Balcón</span>' : ''}
-              ${p._attrScores?.cochera === 'missing' ? '<span class="text-xs bg-orange-100 text-orange-700 px-2 py-0.5 rounded">Cochera</span>' : ''}
-              ${p._attrScores?.luminosidad === 'missing' ? '<span class="text-xs bg-orange-100 text-orange-700 px-2 py-0.5 rounded">Luminosidad</span>' : ''}
-              ${p._attrScores?.frente === 'missing' ? '<span class="text-xs bg-orange-100 text-orange-700 px-2 py-0.5 rounded">Disposición</span>' : ''}
-            </div>
-          </div>
-          ` : ''}
-
-          <!-- Características -->
-          ${caracteristicas.length > 0 || amenities.length > 0 ? `
-          <div class="bg-slate-50 rounded-xl p-4">
-            <div class="flex flex-wrap gap-x-6 gap-y-2 text-sm">
-              ${caracteristicas.map(c => `<div><span class="text-slate-500">${c.label}:</span> <span class="font-medium">${c.value}</span></div>`).join('')}
-            </div>
-            ${amenities.length > 0 ? `<div class="flex flex-wrap gap-2 mt-3 text-sm">${amenities.map(a => `<span class="bg-white px-2 py-1 rounded border">${a}</span>`).join('')}</div>` : ''}
-          </div>
-          ` : ''}
-
-          <!-- Stats principales -->
-          <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
-            <div class="bg-slate-50 rounded-xl p-3 text-center">
-              ${state.negotiationPct > 0 && p._precio > 0 ? `
-                <div class="text-xs line-through text-slate-400">$${p._precio.toLocaleString()}</div>
-                <div class="text-xl font-bold text-orange-600">$${costsNeg.precio.toLocaleString()}</div>
-              ` : `<div class="text-xl font-bold text-slate-800">$${p._precio > 0 ? p._precio.toLocaleString() : '-'}</div>`}
-              <div class="text-xs text-slate-500">Precio</div>
-            </div>
-            <div class="bg-slate-50 rounded-xl p-3 text-center">
-              <div class="text-xl font-bold text-slate-800">${p._m2 || '-'}</div>
-              <div class="text-xs text-slate-500">m² cub</div>
-            </div>
-            <div class="bg-slate-50 rounded-xl p-3 text-center">
-              <div class="text-xl font-bold text-slate-800">${p._preciom2 > 0 ? '$' + p._preciom2.toLocaleString() : '-'}</div>
-              <div class="text-xs text-slate-500">$/m² ${p._ref ? `<span class="text-slate-400">(ref: $${p._ref.toLocaleString()})</span>` : ''}</div>
-            </div>
-            <div class="bg-slate-50 rounded-xl p-3 text-center">
-              ${hayAjuste && p._precio > 0 ? `
-                <div class="text-xs line-through text-slate-400">$${p._total.toLocaleString()}</div>
-                <div class="text-xl font-bold ${costsNeg.ok ? 'text-green-600' : 'text-red-600'}">$${costsNeg.total.toLocaleString()}</div>
-              ` : `<div class="text-xl font-bold ${p._ok ? 'text-green-600' : 'text-red-600'}">$${p._precio > 0 ? p._total.toLocaleString() : '-'}</div>`}
-              <div class="text-xs text-slate-500">A juntar</div>
-            </div>
-          </div>
+          ${renderModalBadges(p)}
+          ${renderMissingData(p)}
+          ${renderCaracteristicas(p)}
+          ${renderPriceStats(p, costsNeg, hayAjuste)}
 
           ${p._precio > 0 ? `
-          <!-- Sliders de simulación -->
-          <div class="grid md:grid-cols-2 gap-4">
-            <!-- Negociar precio -->
-            <div class="bg-gradient-to-r from-orange-50 to-amber-50 rounded-xl p-4 border border-orange-200">
-              <div class="flex items-center justify-between mb-2">
-                <span class="text-sm font-medium text-orange-800">🤝 Negociar</span>
-                <span class="text-lg font-bold ${state.negotiationPct > 0 ? 'text-orange-600' : 'text-slate-400'}">${state.negotiationPct > 0 ? '-' + (state.negotiationPct % 1 === 0 ? state.negotiationPct : state.negotiationPct.toFixed(1)) + '%' : '0%'}</span>
-              </div>
-              <input type="range" min="0" max="15" step="0.5" value="${state.negotiationPct}"
-                onchange="updateNegotiation(this.value)" oninput="updateNegotiation(this.value)"
-                class="w-full h-2 bg-orange-200 rounded-lg appearance-none cursor-pointer accent-orange-500" />
-              <div class="flex justify-between text-xs text-orange-600 mt-1"><span>Publicado</span><span>-15%</span></div>
-            </div>
-
-            <!-- Dólar estimado -->
-            <div class="bg-gradient-to-r from-green-50 to-emerald-50 rounded-xl p-4 border border-green-200">
-              <div class="flex items-center justify-between mb-2">
-                <span class="text-sm font-medium text-green-800">💵 Dólar estimado</span>
-                <span class="text-lg font-bold ${hayAjusteDolar ? 'text-green-600' : 'text-slate-400'}">$${dolarActual}</span>
-              </div>
-              <input type="range" min="900" max="2000" step="10" value="${dolarActual}"
-                onchange="updateDolarEstimado(this.value)" oninput="updateDolarEstimado(this.value)"
-                class="w-full h-2 bg-green-200 rounded-lg appearance-none cursor-pointer accent-green-500" />
-              <div class="flex justify-between text-xs text-green-600 mt-1">
-                <span>$900</span>
-                <span>Base: $${CONFIG.DOLAR_BASE}</span>
-                <span>$2000</span>
-              </div>
-              ${hayAjusteDolar ? `<div class="text-xs text-center mt-2 ${diferenciaCredito > 0 ? 'text-red-600' : 'text-green-600'}">Crédito: $${creditoEstimado.toLocaleString()} (${diferenciaCredito > 0 ? '-' : '+'}$${Math.abs(diferenciaCredito).toLocaleString()})</div>` : ''}
-            </div>
-          </div>
-
-          <!-- Sugerencia de quita si no alcanza -->
-          ${!costsNeg.ok && quita.quitaPct > 0 ? `
-          <div class="bg-gradient-to-r ${quita.esRealista ? 'from-purple-50 to-pink-50 border-purple-200' : 'from-red-50 to-orange-50 border-red-200'} rounded-xl p-4 border">
-            <div class="flex items-center gap-2 mb-1">
-              <span class="text-lg">${quita.esRealista ? '💡' : '⚠️'}</span>
-              <span class="font-medium ${quita.esRealista ? 'text-purple-800' : 'text-red-800'}">
-                ${quita.esRealista ? 'Para que entre en presupuesto:' : 'Muy cara para tu presupuesto'}
-              </span>
-            </div>
-            <div class="text-sm ${quita.esRealista ? 'text-purple-700' : 'text-red-700'}">
-              ${quita.esRealista
-                ? `Necesitás negociar <span class="font-bold">-${quita.quitaPct.toFixed(1)}%</span> (<span class="font-mono">-$${quita.quitaUSD.toLocaleString()}</span>) → precio objetivo: <span class="font-mono font-bold">$${quita.precioTarget.toLocaleString()}</span>`
-                : `Necesitarías <span class="font-bold">-${quita.quitaPct.toFixed(1)}%</span> (<span class="font-mono">-$${quita.quitaUSD.toLocaleString()}</span>), poco realista`
-              }
-            </div>
-            ${quita.esRealista ? `<div class="text-xs text-purple-500 mt-1">Con dólar a $${dolarActual} y crédito de $${creditoEstimado.toLocaleString()}</div>` : ''}
-          </div>
+            ${renderSimulationSliders(dolarActual, hayAjusteDolar, diferenciaCredito, creditoEstimado)}
+            ${!costsNeg.ok ? renderQuitaSugerencia(quita, dolarActual, creditoEstimado) : ''}
+            ${renderCostsBreakdown(p, costsNeg, hayAjuste, ahorro)}
           ` : ''}
 
-          <!-- Desglose de costos -->
-          <div class="bg-slate-50 rounded-xl p-4">
-            <h3 class="text-sm font-medium text-slate-700 mb-3">💰 Desglose de costos</h3>
-            <div class="space-y-2 text-sm">
-              <div class="flex justify-between">
-                <span class="text-slate-600">Tu 10% (o precio - crédito)</span>
-                <span class="font-mono font-medium ${hayAjuste ? 'text-orange-600' : ''}">$${(hayAjuste ? costsNeg.tu10 : p._tu10).toLocaleString()}</span>
-              </div>
-              <div class="flex justify-between">
-                <span class="text-slate-600">Escribano (${(CONFIG.ESCRIBANO * 100).toFixed(1)}%)</span>
-                <span class="font-mono">$${(hayAjuste ? costsNeg.escr : p._escr).toLocaleString()}</span>
-              </div>
-              <div class="flex justify-between">
-                <span class="text-slate-600">Sellos ${(hayAjuste ? costsNeg.precio : p._precio) <= CONFIG.SELLOS_EXENTO ? '<span class="text-green-600 text-xs">(exento)</span>' : `(${(CONFIG.SELLOS * 100).toFixed(2)}%)`}</span>
-                <span class="font-mono">$${(hayAjuste ? costsNeg.sell : p._sell).toLocaleString()}</span>
-              </div>
-              <div class="flex justify-between">
-                <span class="text-slate-600">Registrales (${(CONFIG.REGISTRALES * 100).toFixed(1)}%)</span>
-                <span class="font-mono">$${(hayAjuste ? costsNeg.reg : p._reg).toLocaleString()}</span>
-              </div>
-              ${p.inmobiliaria ? `
-              <div class="flex justify-between">
-                <span class="text-slate-600">Inmobiliaria (${(CONFIG.INMOB * 100).toFixed(2)}%)</span>
-                <span class="font-mono">$${(hayAjuste ? costsNeg.inmob : p._inmob).toLocaleString()}</span>
-              </div>
-              ` : ''}
-              <div class="flex justify-between">
-                <span class="text-slate-600">Hipoteca (${(CONFIG.HIPOTECA * 100).toFixed(1)}%)</span>
-                <span class="font-mono">$${(hayAjuste ? costsNeg.hip : p._hip).toLocaleString()}</span>
-              </div>
-              <div class="flex justify-between">
-                <span class="text-slate-600">Certificados</span>
-                <span class="font-mono">$${costsNeg.cert.toLocaleString()}</span>
-              </div>
-              <div class="border-t pt-2 mt-2 flex justify-between font-medium">
-                <span>TOTAL A JUNTAR</span>
-                <span class="font-mono ${(hayAjuste ? costsNeg.ok : p._ok) ? 'text-green-600' : 'text-red-600'}">$${(hayAjuste ? costsNeg.total : p._total).toLocaleString()}</span>
-              </div>
-              <div class="flex justify-between text-xs">
-                <span class="text-slate-500">Tengo: $${CONFIG.PRESUPUESTO.toLocaleString()}</span>
-                <span class="${(hayAjuste ? costsNeg.dif : p._dif) >= 0 ? 'text-green-600' : 'text-red-600'}">${(hayAjuste ? costsNeg.dif : p._dif) >= 0 ? 'Sobran' : 'Faltan'} $${Math.abs(hayAjuste ? costsNeg.dif : p._dif).toLocaleString()}</span>
-              </div>
-              ${hayAjuste && ahorro > 0 ? `<div class="text-center text-green-600 text-xs mt-1">💡 Con estos ajustes ahorrás $${ahorro.toLocaleString()}</div>` : ''}
-            </div>
-          </div>
-          ` : ''}
-
-          <!-- Notas -->
-          ${p.notas ? `
-          <div>
-            <h3 class="text-sm font-medium text-slate-700 mb-2">📝 Notas</h3>
-            <p class="text-sm text-slate-600 bg-slate-50 rounded-xl p-4">${escapeHtml(p.notas)}</p>
-          </div>
-          ` : ''}
-
-          <!-- Rating -->
-          ${p.rating ? `
-          <div class="flex items-center gap-2">
-            <span class="text-sm text-slate-500">Tu valoración:</span>
-            <span class="text-yellow-500">${ratingStars(p.rating)}</span>
-          </div>
-          ` : ''}
-
-          <!-- Fechas y seguimiento -->
-          ${(p.fecha_publicado || p.fecha_contacto || p.fecha_visita) ? `
-          <div class="flex flex-wrap gap-4 text-xs text-slate-400">
-            ${p.fecha_publicado ? `<span>📅 Publicado: ${p.fecha_publicado}</span>` : ''}
-            ${p.fecha_contacto ? `<span>📞 Contactado: ${p.fecha_contacto}</span>` : ''}
-            ${p.fecha_visita ? `<span>🏠 Visitado: ${p.fecha_visita}</span>` : ''}
-          </div>
-          ` : ''}
-
-          <!-- Inmobiliaria -->
-          ${p.inmobiliaria ? `
-          <div class="text-xs text-slate-400">
-            🏢 ${escapeHtml(p.inmobiliaria)} ${p.contacto ? '· ' + escapeHtml(p.contacto) : ''}
-          </div>
-          ` : ''}
+          ${renderModalFooter(p)}
         </div>
       </div>
     </div>
