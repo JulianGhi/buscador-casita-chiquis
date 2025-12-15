@@ -71,6 +71,12 @@ from core import (
     get_warnings,
     print_warnings_summary,
     validar_propiedad,
+    # Prints
+    PRINT_DIAS_VENCIMIENTO,
+    PRINT_PATTERN_ID,
+    PRINT_PATTERN_FILA,
+    generar_nombre_print,
+    get_prints_index,
 )
 
 # =============================================================================
@@ -83,7 +89,6 @@ if not SHEET_ID:
 
 # Constantes específicas de este CLI (no están en core/)
 PENDIENTES_FILE = Path('data/prints/pendientes.json')
-PRINT_DIAS_VENCIMIENTO = 30
 
 CAMPOS_IMPORTANTES = ['terraza', 'balcon', 'cocheras', 'luminosidad', 'disposicion',
                       'ascensor', 'antiguedad', 'expensas', 'banos', 'apto_credito']
@@ -727,151 +732,8 @@ def cmd_view(check_links=False):
 
 
 # =============================================================================
-# SISTEMA DE PRINTS - Backup de publicaciones
+# SISTEMA DE PRINTS - Comandos CLI
 # =============================================================================
-
-# Formato estándar: {ID}_{YYYY-MM-DD}.ext donde ID es MLA123456 o AP123456
-# Ejemplos: MLA1513702911_2025-12-15.pdf, AP17094976_2025-12-15.png
-PRINT_PATTERN_ID = re.compile(r'^(MLA\d+|AP\d+)(?:_(\d{4}-\d{2}-\d{2}))?\.(?:pdf|png|jpg|jpeg)$', re.IGNORECASE)
-# Formato legacy: fila_XX_YYYY-MM-DD.ext (mantener compatibilidad)
-PRINT_PATTERN_FILA = re.compile(r'^fila_(\d+)(?:_(\d{4}-\d{2}-\d{2}))?\.(?:pdf|png|jpg|jpeg)$', re.IGNORECASE)
-
-
-def generar_nombre_print(link_or_id, extension='pdf'):
-    """Genera nombre estándar para un print: {ID}_YYYY-MM-DD.ext"""
-    fecha = datetime.now().strftime('%Y-%m-%d')
-    if link_or_id.startswith('http'):
-        prop_id = extraer_id_propiedad(link_or_id)
-    else:
-        prop_id = link_or_id
-    if not prop_id:
-        return None
-    return f"{prop_id}_{fecha}.{extension}"
-
-
-def normalizar_texto(texto):
-    """Normaliza texto para comparación (minúsculas, sin acentos, sin espacios extras)."""
-    if not texto:
-        return ''
-    texto = unicodedata.normalize('NFD', texto.lower())
-    texto = ''.join(c for c in texto if unicodedata.category(c) != 'Mn')
-    texto = re.sub(r'[^a-z0-9]', '', texto)
-    return texto
-
-
-def extraer_id_meli(url):
-    """Extrae el ID de MercadoLibre de una URL (ej: MLA-1234567890)."""
-    match = re.search(r'MLA-?(\d+)', url, re.IGNORECASE)
-    return f"MLA-{match.group(1)}" if match else None
-
-
-def extraer_id_argenprop(url):
-    """Extrae el ID de Argenprop de una URL (ej: --12345678)."""
-    match = re.search(r'--(\d+)$', url)
-    return match.group(1) if match else None
-
-
-def get_prints_index(rows):
-    """
-    Construye índice de prints asociando archivos con propiedades.
-    Detecta por: ID del portal (MLA/AP), fila_XX (legacy), o título similar.
-    Retorna dict: {fila: {archivo, fecha, dias, vencido, prop_id, historial}}
-    """
-    if not PRINTS_DIR.exists():
-        return {}
-
-    # Construir lookup de propiedades por ID único
-    props_by_id = {}      # {MLA123: fila}
-    props_by_fila = {}    # {fila: row}
-
-    for row in rows:
-        fila = row.get('_row', 0)
-        if fila < 2:
-            continue
-
-        link = row.get('link', '')
-        props_by_fila[fila] = row
-
-        # Indexar por ID único del portal
-        prop_id = extraer_id_propiedad(link)
-        if prop_id:
-            props_by_id[prop_id.upper()] = fila
-
-    # Escanear archivos de prints
-    prints_index = {}      # {fila: info_del_print_mas_reciente}
-    prints_historial = {}  # {fila: [lista de todos los prints]}
-
-    for f in PRINTS_DIR.iterdir():
-        if not f.is_file():
-            continue
-        if f.suffix.lower() not in ['.png', '.pdf', '.jpg', '.jpeg']:
-            continue
-        if f.name.startswith('.'):
-            continue
-
-        # Obtener fecha de modificación
-        mtime = datetime.fromtimestamp(f.stat().st_mtime)
-        dias_antiguedad = (datetime.now() - mtime).days
-        vencido = dias_antiguedad > PRINT_DIAS_VENCIMIENTO
-
-        archivo_info = {
-            'archivo': f.name,
-            'fecha': mtime.strftime('%Y-%m-%d'),
-            'dias': dias_antiguedad,
-            'vencido': vencido,
-            'prop_id': None
-        }
-
-        fila_asociada = None
-
-        # 1. Detectar por patrón nuevo: {ID}_YYYY-MM-DD.ext (MLA123_2025-12-15.pdf)
-        match = PRINT_PATTERN_ID.match(f.name)
-        if match:
-            prop_id = match.group(1).upper()
-            archivo_info['prop_id'] = prop_id
-            if match.group(2):
-                archivo_info['fecha_nombre'] = match.group(2)
-            if prop_id in props_by_id:
-                fila_asociada = props_by_id[prop_id]
-
-        # 2. Detectar por patrón legacy: fila_XX_YYYY-MM-DD.ext
-        if not fila_asociada:
-            match = PRINT_PATTERN_FILA.match(f.name)
-            if match:
-                fila_asociada = int(match.group(1))
-                if match.group(2):
-                    archivo_info['fecha_nombre'] = match.group(2)
-
-        # 3. Detectar por ID en cualquier parte del nombre
-        if not fila_asociada:
-            # Buscar MLA o AP seguido de números
-            for prop_id, fila in props_by_id.items():
-                if prop_id in f.name.upper():
-                    fila_asociada = fila
-                    archivo_info['prop_id'] = prop_id
-                    break
-
-        if fila_asociada and fila_asociada in props_by_fila:
-            # Agregar al historial
-            if fila_asociada not in prints_historial:
-                prints_historial[fila_asociada] = []
-            prints_historial[fila_asociada].append(archivo_info)
-
-            # Guardar solo el más reciente en el índice principal
-            if fila_asociada not in prints_index:
-                prints_index[fila_asociada] = archivo_info
-            elif prints_index[fila_asociada]['dias'] > dias_antiguedad:
-                prints_index[fila_asociada] = archivo_info
-
-    # Agregar historial al índice
-    for fila, info in prints_index.items():
-        historial = prints_historial.get(fila, [])
-        if len(historial) > 1:
-            info['historial'] = sorted(historial, key=lambda x: x['fecha'], reverse=True)
-            info['versiones'] = len(historial)
-
-    return prints_index
-
 
 def cmd_prints_open(limit=None):
     """Abre en el browser todas las propiedades sin print."""
