@@ -33,6 +33,10 @@ from .scrapers import (
     scrape_link,
     HEADERS_SIMPLE,
     HEADERS_BROWSER,
+    # Helpers de scraping
+    get_rows_to_scrape,
+    apply_scraped_data,
+    is_offline_error,
 )
 
 from .sheets_api import (

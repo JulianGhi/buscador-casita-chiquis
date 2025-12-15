@@ -65,6 +65,9 @@ from core import (
     scrape_argenprop,
     scrape_mercadolibre,
     scrape_link,
+    get_rows_to_scrape,
+    apply_scraped_data,
+    is_offline_error,
     # Validation
     add_warning,
     clear_warnings,
@@ -187,23 +190,9 @@ def cmd_scrape(check_all=False, no_cache=False, force_update=False):
     headers = data['headers']
     rows = data['rows']
 
-    # Cargar cache
+    # Cargar cache y encontrar filas a scrapear
     cache = load_cache() if not no_cache else {}
-    cache_hits = 0
-
-    # Encontrar filas que necesitan scraping
-    to_scrape = []
-    for i, row in enumerate(rows):
-        link = row.get('link', '').strip()
-        if not link:
-            continue
-
-        precio = row.get('precio', '').strip()
-        m2 = row.get('m2_cub', '').strip()
-
-        # Scrapear si faltan datos O si se pidió check_all (para verificar activo)
-        if check_all or not precio or not m2:
-            to_scrape.append((i, row))
+    to_scrape = get_rows_to_scrape(rows, check_all)
 
     if not to_scrape:
         print("✅ No hay filas que necesiten scraping")
@@ -214,10 +203,9 @@ def cmd_scrape(check_all=False, no_cache=False, force_update=False):
         print(f"   (usando cache de {len(cache)} links)")
     if force_update:
         print(f"   ⚠️  Modo --update: sobrescribiendo valores existentes")
-    updated = 0
-    offline = 0
 
-    # Limpiar warnings de corridas anteriores
+    # Contadores
+    updated, offline, cache_hits = 0, 0, 0
     clear_warnings()
 
     for idx, row in to_scrape:
@@ -236,79 +224,49 @@ def cmd_scrape(check_all=False, no_cache=False, force_update=False):
             cache_hits += 1
             print(f"      📦 Cache", end='')
 
+        # Manejar errores
         if '_error' in scraped:
-            error = scraped['_error']
-            print(f"      ❌ {error}")
-            # Si es 404, 410 o marcado como offline, marcar como no activo
-            if '404' in error or '410' in error or scraped.get('_offline'):
-                if 'activo' in headers:
-                    rows[idx]['activo'] = 'no'
-                    offline += 1
-                    print(f"      📴 Marcado como NO activo")
+            print(f"      ❌ {scraped['_error']}")
+            if is_offline_error(scraped) and 'activo' in headers:
+                rows[idx]['activo'] = 'no'
+                offline += 1
+                print(f"      📴 Marcado como NO activo")
             continue
 
-        # Si llegamos acá, el link está activo - siempre marcar como activo
+        # Link activo - marcar y aplicar datos
         if 'activo' in headers:
             rows[idx]['activo'] = 'si'
 
-        # Actualizar campos
-        changes = []
-        updates = []
-        for col in SCRAPEABLE_COLS:
-            if col in scraped and col in headers:
-                current = row.get(col, '').strip()
-                new_val = str(scraped[col]).strip()
+        result = apply_scraped_data(rows[idx], scraped, SCRAPEABLE_COLS, headers, force_update)
 
-                # Llenar vacíos siempre
-                if not current and new_val:
-                    rows[idx][col] = new_val
-                    changes.append(f'{col}={new_val}')
-                # Sobrescribir existentes solo si --update y valor diferente
-                elif force_update and current and new_val and current != new_val:
-                    rows[idx][col] = new_val
-                    updates.append(f'{col}: {current}→{new_val}')
-
-        # Calcular m² faltantes si tenemos 2 de 3
-        m2_calculados = calcular_m2_faltantes(rows[idx])
-        for col, val in m2_calculados.items():
-            if col in headers and not rows[idx].get(col, '').strip():
-                rows[idx][col] = val
-                changes.append(f'{col}={val} (calc)')
-
-        if changes:
-            print(f"      ✅ Nuevo: {', '.join(changes)}")
+        if result['changes']:
+            print(f"      ✅ Nuevo: {', '.join(result['changes'])}")
             updated += 1
-        if updates:
-            print(f"      🔄 Actualizado: {', '.join(updates)}")
+        if result['updates']:
+            print(f"      🔄 Actualizado: {', '.join(result['updates'])}")
             updated += 1
-        if not changes and not updates:
+        if not result['changes'] and not result['updates']:
             print(f"      ⚪ Sin cambios")
 
-        # Validar datos de la propiedad
         validar_propiedad(rows[idx], contexto=direccion)
-
         time.sleep(0.5)
 
     # Guardar cambios
     data['rows'] = rows
     data['scraped_at'] = time.strftime('%Y-%m-%d %H:%M:%S')
-
     with open(LOCAL_FILE, 'w', encoding='utf-8') as f:
         json.dump(data, f, ensure_ascii=False, indent=2)
 
-    # Guardar cache
     if not no_cache:
         save_cache(cache)
 
+    # Resumen
     print(f"\n✅ {updated} filas actualizadas en {LOCAL_FILE}")
     if cache_hits:
         print(f"📦 {cache_hits} desde cache, {len(to_scrape) - cache_hits} scrapeados")
     if offline:
         print(f"📴 {offline} links marcados como NO activos")
-
-    # Mostrar resumen de warnings
     print_warnings_summary()
-
     print(f"\n   Revisá con: python sync_sheet.py view")
     print(f"   Subí con: python sync_sheet.py push")
 

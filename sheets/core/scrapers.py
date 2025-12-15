@@ -19,6 +19,7 @@ from .helpers import (
     detectar_barrio,
     detectar_atributo,
     extraer_numero,
+    calcular_m2_faltantes,
 )
 
 
@@ -448,3 +449,99 @@ def scrape_link(url, use_cache=True, cache=None):
         cache[url] = data
 
     return data, False
+
+
+# =============================================================================
+# FUNCIONES HELPER PARA PROCESO DE SCRAPING
+# =============================================================================
+
+def get_rows_to_scrape(rows, check_all=False):
+    """
+    Filtra filas que necesitan scraping.
+
+    Args:
+        rows: Lista de filas del sheet
+        check_all: Si True, incluye todas las filas con link (para verificar activo)
+
+    Returns:
+        Lista de tuplas (indice, fila) que necesitan scraping
+    """
+    to_scrape = []
+    for i, row in enumerate(rows):
+        link = row.get('link', '').strip()
+        if not link:
+            continue
+
+        precio = row.get('precio', '').strip()
+        m2 = row.get('m2_cub', '').strip()
+
+        # Scrapear si faltan datos O si se pidio check_all
+        if check_all or not precio or not m2:
+            to_scrape.append((i, row))
+
+    return to_scrape
+
+
+def apply_scraped_data(row, scraped, scrapeable_cols, headers, force_update=False):
+    """
+    Aplica datos scrapeados a una fila.
+
+    Args:
+        row: Dict de la fila a actualizar (se modifica in-place)
+        scraped: Dict con datos scrapeados
+        scrapeable_cols: Lista de columnas que se pueden actualizar
+        headers: Lista de headers del sheet
+        force_update: Si True, sobrescribe valores existentes
+
+    Returns:
+        Dict con listas 'changes' (nuevos) y 'updates' (modificados)
+    """
+    changes = []
+    updates = []
+
+    for col in scrapeable_cols:
+        if col not in scraped or col not in headers:
+            continue
+
+        current = row.get(col, '').strip() if row.get(col) else ''
+        new_val = str(scraped[col]).strip()
+
+        # Llenar vacios siempre
+        if not current and new_val:
+            row[col] = new_val
+            changes.append(f'{col}={new_val}')
+        # Sobrescribir existentes solo si force_update
+        elif force_update and current and new_val and current != new_val:
+            row[col] = new_val
+            updates.append(f'{col}: {current}->{new_val}')
+
+    # Calcular m2 faltantes si tenemos 2 de 3
+    m2_calculados = calcular_m2_faltantes(row)
+    for col, val in m2_calculados.items():
+        if col in headers and not row.get(col, '').strip():
+            row[col] = val
+            changes.append(f'{col}={val} (calc)')
+
+    return {'changes': changes, 'updates': updates}
+
+
+def is_offline_error(scraped):
+    """
+    Determina si el resultado del scraping indica que el aviso esta offline.
+
+    Args:
+        scraped: Dict con resultado del scraping
+
+    Returns:
+        bool: True si el aviso esta offline
+    """
+    if not scraped or '_error' not in scraped:
+        return False
+
+    error = scraped.get('_error', '')
+    if scraped.get('_offline'):
+        return True
+    if '404' in error or '410' in error:
+        return True
+
+    return False
