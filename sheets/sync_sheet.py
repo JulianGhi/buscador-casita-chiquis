@@ -1572,11 +1572,11 @@ def cmd_prints_open(limit=None):
         webbrowser.open(p['link'])
         time.sleep(0.3)  # Pequeña pausa entre tabs
 
-    print(f"\n📁 Guardá los PDFs en: {PRINTS_DIR.absolute()}")
+    print(f"\n📁 Guardá los PDFs en: {(PRINTS_DIR / 'nuevos').absolute()}")
 
 
 def cmd_prints_scan():
-    """Analiza PDFs nuevos en el directorio, extrae IDs y los renombra."""
+    """Analiza PDFs nuevos en la carpeta 'nuevos/', extrae IDs y los mueve a prints/."""
     import subprocess
 
     data = load_local_data()
@@ -1603,27 +1603,24 @@ def cmd_prints_scan():
                     'prop_id': prop_id,
                 }
 
-    # Buscar archivos sin procesar (que no tengan formato {ID}_{FECHA})
+    # Carpeta buffer para PDFs nuevos
+    NUEVOS_DIR = PRINTS_DIR / 'nuevos'
+    NUEVOS_DIR.mkdir(parents=True, exist_ok=True)
     PRINTS_DIR.mkdir(parents=True, exist_ok=True)
-    archivos_nuevos = []
 
-    for f in PRINTS_DIR.iterdir():
+    archivos_nuevos = []
+    for f in NUEVOS_DIR.iterdir():
         if not f.is_file():
             continue
         if f.suffix.lower() not in ['.pdf', '.png', '.jpg', '.jpeg']:
             continue
         if f.name.startswith('.'):
             continue
-        # Si ya tiene formato ID_FECHA, ignorar
-        if PRINT_PATTERN_ID.match(f.name):
-            continue
-        if PRINT_PATTERN_FILA.match(f.name):
-            continue
         archivos_nuevos.append(f)
 
     if not archivos_nuevos:
         print("✅ No hay archivos nuevos para procesar")
-        print(f"   (Los PDFs deben estar en {PRINTS_DIR})")
+        print(f"   (Guardá los PDFs en: {NUEVOS_DIR.absolute()})")
         return
 
     print(f"\n🔍 Analizando {len(archivos_nuevos)} archivos...")
