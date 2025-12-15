@@ -195,15 +195,7 @@ function renderTable(filtered) {
           </thead>
           <tbody class="divide-y divide-slate-100">
             ${filtered.map((p, i) => {
-              const activo = (p.activo || '').toLowerCase();
-              const apto = (p.apto_credito || '').toLowerCase();
-              const isInactivo = activo === 'no';
-              const needsCheck = (activo === '?' || apto === '?' || !apto) && p._ok;
-              const noApto = apto === 'no';
-              const rowBg = isInactivo ? 'bg-red-100/70 opacity-60'
-                : needsCheck ? 'bg-yellow-200/70 border-l-4 border-yellow-500'
-                : noApto ? 'bg-yellow-100'
-                : (p._ok ? 'bg-green-50/30' : '');
+              const rowBg = getRowBgColor(p);
               return `
               <tr class="hover:bg-slate-100 transition-colors cursor-pointer ${rowBg}" onclick="showDetail(${p._idx})">
                 <td class="px-2 py-2.5 text-center"><span class="inline-flex items-center gap-1">${tierBadge(p._tier)}<span class="text-xs font-mono ${p._score > 50 ? 'text-green-600 font-bold' : p._score > 0 ? 'text-green-500' : 'text-slate-400'}">${p._score}</span></span></td>
@@ -337,159 +329,174 @@ function renderHelpPanel() {
   `;
 }
 
+// ============================================
+// CONFIG PANEL - SUB-COMPONENTES
+// ============================================
+
+// Helper para campos de input
+function configInput(label, value, onChange, options = {}) {
+  const { type = 'number', step, className = '' } = options;
+  const stepAttr = step ? `step="${step}"` : '';
+  return `
+    <div class="${className}">
+      <label class="block text-xs text-slate-500 mb-1">${label}</label>
+      <input type="${type}" ${stepAttr} value="${value}" onchange="${onChange}" class="w-full px-3 py-2 border rounded-lg text-sm" />
+    </div>
+  `;
+}
+
+// Helper para campos de solo lectura
+function configDisplay(label, value, colorClass = 'text-slate-700') {
+  return `
+    <div>
+      <label class="block text-xs text-slate-500 mb-1">${label}</label>
+      <div class="px-3 py-2 ${THEME.neutral.bg} rounded-lg text-sm font-mono ${colorClass}">${value}</div>
+    </div>
+  `;
+}
+
+function renderConfigTab_General() {
+  return `
+    <div class="grid grid-cols-2 md:grid-cols-3 gap-4">
+      ${configInput('Crédito hipotecario (ARS)', CONFIG.CREDITO_ARS, "updateConfig('CREDITO_ARS', parseInt(this.value))")}
+      ${configInput('Dólar base (ARS/USD)', CONFIG.DOLAR_BASE, "updateConfig('DOLAR_BASE', parseInt(this.value))")}
+      ${configDisplay('= Crédito en USD', '$' + getCreditoUSD().toLocaleString(), 'font-bold ' + THEME.success.text)}
+      ${configInput('Tengo para poner (USD)', CONFIG.PRESUPUESTO, "updateConfig('PRESUPUESTO', parseInt(this.value))")}
+      ${configDisplay('= Rango de precios', '$' + getPrecioRange().min.toLocaleString() + ' - $' + getPrecioRange().max.toLocaleString())}
+      ${configInput('Auto-refresh (seg, 0=off)', CONFIG.AUTO_REFRESH, "updateConfig('AUTO_REFRESH', parseInt(this.value)); startAutoRefresh();")}
+    </div>
+  `;
+}
+
+function renderConfigTab_Gastos() {
+  return `
+    <div class="grid grid-cols-2 md:grid-cols-3 gap-4">
+      ${configInput('Escribano (%)', toPct(CONFIG.ESCRIBANO), "updateConfig('ESCRIBANO', fromPct(this.value))", { step: '0.01' })}
+      ${configInput('Sellos (%)', toPct(CONFIG.SELLOS), "updateConfig('SELLOS', fromPct(this.value))", { step: '0.01' })}
+      ${configInput('Exento sellos hasta (USD)', CONFIG.SELLOS_EXENTO, "updateConfig('SELLOS_EXENTO', parseInt(this.value))")}
+      ${configInput('Registrales (%)', toPct(CONFIG.REGISTRALES), "updateConfig('REGISTRALES', fromPct(this.value))", { step: '0.01' })}
+      ${configInput('Inmobiliaria (%)', toPct(CONFIG.INMOB), "updateConfig('INMOB', fromPct(this.value))", { step: '0.01' })}
+      ${configInput('Hipoteca (%)', toPct(CONFIG.HIPOTECA), "updateConfig('HIPOTECA', fromPct(this.value))", { step: '0.01' })}
+      ${configInput('Certificados (USD fijo)', CONFIG.CERTIFICADOS, "updateConfig('CERTIFICADOS', parseInt(this.value))")}
+      ${configInput('Margen referencia (%)', toPct(CONFIG.MARGEN_REF, 0), "updateConfig('MARGEN_REF', fromPct(this.value))", { step: '1' })}
+    </div>
+  `;
+}
+
+function renderConfigTab_Barrios() {
+  const barrioItems = Object.entries(REF_M2).sort((a, b) => a[0].localeCompare(b[0])).map(([barrio, valor]) => `
+    <div class="flex items-center gap-2 ${THEME.neutral.bg} rounded-lg p-2">
+      <input type="number" value="${valor}" onchange="updateRefM2('${escapeHtml(barrio)}', this.value)" class="w-20 px-2 py-1 border rounded text-sm" />
+      <span class="text-sm text-slate-600 flex-1 truncate" title="${escapeHtml(barrio)}">${escapeHtml(barrio)}</span>
+      <button onclick="deleteBarrio('${escapeHtml(barrio)}')" class="${THEME.error.textLight} hover:${THEME.error.text} text-sm">${ICONS.cross}</button>
+    </div>
+  `).join('');
+
+  return `
+    <div class="mb-3">
+      <button onclick="addBarrio()" class="px-3 py-1.5 ${THEME.info.bgSolid} text-white text-sm rounded-lg hover:bg-blue-600">+ Agregar barrio</button>
+    </div>
+    <div class="grid grid-cols-2 md:grid-cols-3 gap-2 max-h-64 overflow-y-auto">
+      ${barrioItems}
+    </div>
+  `;
+}
+
+function renderConfigTab_Pesos() {
+  // Tier badges
+  const tierBadges = Object.entries(TIER_CONFIG).map(([tier, cfg]) =>
+    `<span class="${cfg.css} px-1.5 py-0.5 rounded">${cfg.label}: ${cfg.name}</span>`
+  ).join('');
+
+  // Condiciones
+  const condicionItems = Object.entries(CONDITIONS).map(([key, config]) => `
+    <label class="flex items-center gap-2 cursor-pointer">
+      <input type="checkbox" ${config.enabled ? 'checked' : ''}
+        onchange="updateCondition('${key}', this.checked)"
+        class="w-4 h-4 accent-blue-500 rounded" />
+      <span class="text-sm ${config.enabled ? THEME.neutral.text : 'text-slate-400'}">${config.label}</span>
+      <span class="text-xs text-slate-400" title="${config.desc}">${ICONS.info}</span>
+    </label>
+  `).join('');
+
+  // Pesos
+  const pesoItems = Object.entries(WEIGHTS).map(([key, config]) => `
+    <div class="flex flex-col p-2 rounded-lg ${config.enabled ? 'bg-blue-50/50' : THEME.neutral.bg + ' opacity-50'}" title="${config.desc}">
+      <div class="flex items-center gap-1.5 text-xs mb-1">
+        <input type="checkbox" ${config.enabled ? 'checked' : ''}
+          onchange="toggleWeightEnabled('${key}', this.checked)"
+          class="w-3.5 h-3.5 accent-blue-500 rounded" />
+        <span class="${config.enabled ? THEME.neutral.text + ' font-medium' : 'text-slate-400'}">${config.label}</span>
+        <span class="font-bold ${config.enabled ? THEME.info.text : 'text-slate-400'} ml-auto text-sm">${config.weight}</span>
+      </div>
+      <input type="range" min="0" max="10" value="${config.weight}"
+        onchange="updateWeight('${key}', this.value)"
+        oninput="updateWeight('${key}', this.value)"
+        ${config.enabled ? '' : 'disabled'}
+        class="w-full h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer ${config.enabled ? 'accent-blue-500' : 'accent-slate-300'}" />
+    </div>
+  `).join('');
+
+  return `
+    <div class="mb-4">
+      <div class="flex flex-wrap items-center gap-2 text-xs mb-3">
+        <span class="font-medium text-slate-600">Sistema de Tiers:</span>
+        ${tierBadges}
+      </div>
+      <div class="${THEME.neutral.bg} rounded-lg p-3 mb-4">
+        <div class="text-xs font-medium text-slate-600 mb-2">Condiciones habilitadas:</div>
+        <div class="flex flex-wrap gap-3">${condicionItems}</div>
+      </div>
+    </div>
+    <div class="text-xs text-slate-500 mb-2">Ponderación (${ICONS.arrowUp} peso = más importante, hover para ver qué prioriza):</div>
+    <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">${pesoItems}</div>
+    <div class="mt-2 text-right">
+      <button onclick="resetWeights()" class="text-xs text-slate-400 hover:${THEME.error.textLight}">Reset pesos</button>
+      <button onclick="resetConditions()" class="text-xs text-slate-400 hover:${THEME.error.textLight} ml-3">Reset condiciones</button>
+    </div>
+  `;
+}
+
+// ============================================
+// CONFIG PANEL - PRINCIPAL
+// ============================================
+
 function renderConfigPanel() {
   const tabClass = (tab) => state.configTab === tab
     ? 'px-3 py-1.5 text-sm font-medium text-blue-600 border-b-2 border-blue-600'
     : 'px-3 py-1.5 text-sm text-slate-500 hover:text-slate-700 cursor-pointer';
 
+  const tabs = [
+    { id: 'general', label: 'General' },
+    { id: 'gastos', label: 'Costos' },
+    { id: 'barrios', label: 'Barrios $/m²' },
+    { id: 'pesos', label: `${ICONS.config} Ponderación` }
+  ];
+
+  const tabButtons = tabs.map(t =>
+    `<button onclick="state.configTab='${t.id}';render()" class="${tabClass(t.id)}">${t.label}</button>`
+  ).join('');
+
+  const tabContent = {
+    general: renderConfigTab_General,
+    gastos: renderConfigTab_Gastos,
+    barrios: renderConfigTab_Barrios,
+    pesos: renderConfigTab_Pesos
+  };
+
   return `
     <div>
       <div class="flex items-center justify-between mb-3">
         <div class="flex items-center gap-4">
-          <h3 class="font-medium text-slate-700">⚙️ Configuración</h3>
-          <div class="flex border-b border-slate-200">
-            <button onclick="state.configTab='general';render()" class="${tabClass('general')}">General</button>
-            <button onclick="state.configTab='gastos';render()" class="${tabClass('gastos')}">Costos</button>
-            <button onclick="state.configTab='barrios';render()" class="${tabClass('barrios')}">Barrios $/m²</button>
-            <button onclick="state.configTab='pesos';render()" class="${tabClass('pesos')}">⚖️ Ponderación</button>
-          </div>
+          <h3 class="font-medium ${THEME.neutral.text}">${ICONS.config} Configuración</h3>
+          <div class="flex border-b ${THEME.neutral.border}">${tabButtons}</div>
         </div>
         <div class="flex items-center gap-3">
-          <button onclick="resetConfig()" class="text-xs text-slate-400 hover:text-red-500">Reset todo</button>
-          <button onclick="state.showConfig=false;render()" class="p-1 text-slate-400 hover:text-slate-600 hover:bg-slate-200 rounded" title="Cerrar">✕</button>
+          <button onclick="resetConfig()" class="text-xs text-slate-400 hover:${THEME.error.textLight}">Reset todo</button>
+          <button onclick="state.showConfig=false;render()" class="p-1 text-slate-400 hover:text-slate-600 hover:bg-slate-200 rounded" title="Cerrar">${ICONS.cross}</button>
         </div>
       </div>
-
-      ${state.configTab === 'general' ? `
-        <div class="grid grid-cols-2 md:grid-cols-3 gap-4">
-          <div>
-            <label class="block text-xs text-slate-500 mb-1">Crédito hipotecario (ARS)</label>
-            <input type="number" value="${CONFIG.CREDITO_ARS}" onchange="updateConfig('CREDITO_ARS', parseInt(this.value))" class="w-full px-3 py-2 border rounded-lg text-sm" />
-          </div>
-          <div>
-            <label class="block text-xs text-slate-500 mb-1">Dólar base (ARS/USD)</label>
-            <input type="number" value="${CONFIG.DOLAR_BASE}" onchange="updateConfig('DOLAR_BASE', parseInt(this.value))" class="w-full px-3 py-2 border rounded-lg text-sm" />
-          </div>
-          <div>
-            <label class="block text-xs text-slate-500 mb-1">= Crédito en USD</label>
-            <div class="px-3 py-2 bg-slate-100 rounded-lg text-sm font-mono font-bold text-green-700">$${getCreditoUSD().toLocaleString()}</div>
-          </div>
-          <div>
-            <label class="block text-xs text-slate-500 mb-1">Tengo para poner (USD)</label>
-            <input type="number" value="${CONFIG.PRESUPUESTO}" onchange="updateConfig('PRESUPUESTO', parseInt(this.value))" class="w-full px-3 py-2 border rounded-lg text-sm" />
-          </div>
-          <div>
-            <label class="block text-xs text-slate-500 mb-1">= Rango de precios</label>
-            <div class="px-3 py-2 bg-slate-100 rounded-lg text-sm font-mono text-slate-700">$${getPrecioRange().min.toLocaleString()} - $${getPrecioRange().max.toLocaleString()}</div>
-          </div>
-          <div>
-            <label class="block text-xs text-slate-500 mb-1">Auto-refresh (seg, 0=off)</label>
-            <input type="number" value="${CONFIG.AUTO_REFRESH}" onchange="updateConfig('AUTO_REFRESH', parseInt(this.value)); startAutoRefresh();" class="w-full px-3 py-2 border rounded-lg text-sm" />
-          </div>
-        </div>
-      ` : ''}
-
-      ${state.configTab === 'gastos' ? `
-        <div class="grid grid-cols-2 md:grid-cols-3 gap-4">
-          <div>
-            <label class="block text-xs text-slate-500 mb-1">Escribano (%)</label>
-            <input type="number" step="0.01" value="${(CONFIG.ESCRIBANO * 100).toFixed(2)}" onchange="updateConfig('ESCRIBANO', parseFloat(this.value)/100)" class="w-full px-3 py-2 border rounded-lg text-sm" />
-          </div>
-          <div>
-            <label class="block text-xs text-slate-500 mb-1">Sellos (%)</label>
-            <input type="number" step="0.01" value="${(CONFIG.SELLOS * 100).toFixed(2)}" onchange="updateConfig('SELLOS', parseFloat(this.value)/100)" class="w-full px-3 py-2 border rounded-lg text-sm" />
-          </div>
-          <div>
-            <label class="block text-xs text-slate-500 mb-1">Exento sellos hasta (USD)</label>
-            <input type="number" value="${CONFIG.SELLOS_EXENTO}" onchange="updateConfig('SELLOS_EXENTO', parseInt(this.value))" class="w-full px-3 py-2 border rounded-lg text-sm" />
-          </div>
-          <div>
-            <label class="block text-xs text-slate-500 mb-1">Registrales (%)</label>
-            <input type="number" step="0.01" value="${(CONFIG.REGISTRALES * 100).toFixed(2)}" onchange="updateConfig('REGISTRALES', parseFloat(this.value)/100)" class="w-full px-3 py-2 border rounded-lg text-sm" />
-          </div>
-          <div>
-            <label class="block text-xs text-slate-500 mb-1">Inmobiliaria (%)</label>
-            <input type="number" step="0.01" value="${(CONFIG.INMOB * 100).toFixed(2)}" onchange="updateConfig('INMOB', parseFloat(this.value)/100)" class="w-full px-3 py-2 border rounded-lg text-sm" />
-          </div>
-          <div>
-            <label class="block text-xs text-slate-500 mb-1">Hipoteca (%)</label>
-            <input type="number" step="0.01" value="${(CONFIG.HIPOTECA * 100).toFixed(2)}" onchange="updateConfig('HIPOTECA', parseFloat(this.value)/100)" class="w-full px-3 py-2 border rounded-lg text-sm" />
-          </div>
-          <div>
-            <label class="block text-xs text-slate-500 mb-1">Certificados (USD fijo)</label>
-            <input type="number" value="${CONFIG.CERTIFICADOS}" onchange="updateConfig('CERTIFICADOS', parseInt(this.value))" class="w-full px-3 py-2 border rounded-lg text-sm" />
-          </div>
-          <div>
-            <label class="block text-xs text-slate-500 mb-1">Margen referencia (%)</label>
-            <input type="number" step="1" value="${(CONFIG.MARGEN_REF * 100).toFixed(0)}" onchange="updateConfig('MARGEN_REF', parseFloat(this.value)/100)" class="w-full px-3 py-2 border rounded-lg text-sm" />
-          </div>
-        </div>
-      ` : ''}
-
-      ${state.configTab === 'barrios' ? `
-        <div class="mb-3">
-          <button onclick="addBarrio()" class="px-3 py-1.5 bg-blue-500 text-white text-sm rounded-lg hover:bg-blue-600">+ Agregar barrio</button>
-        </div>
-        <div class="grid grid-cols-2 md:grid-cols-3 gap-2 max-h-64 overflow-y-auto">
-          ${Object.entries(REF_M2).sort((a,b) => a[0].localeCompare(b[0])).map(([barrio, valor]) => `
-            <div class="flex items-center gap-2 bg-slate-50 rounded-lg p-2">
-              <input type="number" value="${valor}" onchange="updateRefM2('${escapeHtml(barrio)}', this.value)" class="w-20 px-2 py-1 border rounded text-sm" />
-              <span class="text-sm text-slate-600 flex-1 truncate" title="${escapeHtml(barrio)}">${escapeHtml(barrio)}</span>
-              <button onclick="deleteBarrio('${escapeHtml(barrio)}')" class="text-red-400 hover:text-red-600 text-sm">✕</button>
-            </div>
-          `).join('')}
-        </div>
-      ` : ''}
-
-      ${state.configTab === 'pesos' ? `
-        <div class="mb-4">
-          <div class="flex flex-wrap items-center gap-2 text-xs mb-3">
-            <span class="font-medium text-slate-600">Sistema de Tiers:</span>
-            <span class="bg-green-100 text-green-700 px-1.5 py-0.5 rounded">T1: Apto + OK$</span>
-            <span class="bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded">T2: Apto + Caro</span>
-            <span class="bg-yellow-100 text-yellow-700 px-1.5 py-0.5 rounded">T3: Crédito?</span>
-            <span class="bg-orange-100 text-orange-700 px-1.5 py-0.5 rounded">T4: No apto</span>
-            <span class="bg-red-100 text-red-700 px-1.5 py-0.5 rounded opacity-60">T5: Inactivo</span>
-          </div>
-          <div class="bg-slate-100 rounded-lg p-3 mb-4">
-            <div class="text-xs font-medium text-slate-600 mb-2">Condiciones habilitadas:</div>
-            <div class="flex flex-wrap gap-3">
-              ${Object.entries(CONDITIONS).map(([key, config]) => `
-                <label class="flex items-center gap-2 cursor-pointer">
-                  <input type="checkbox" ${config.enabled ? 'checked' : ''}
-                    onchange="updateCondition('${key}', this.checked)"
-                    class="w-4 h-4 accent-blue-500 rounded" />
-                  <span class="text-sm ${config.enabled ? 'text-slate-700' : 'text-slate-400'}">${config.label}</span>
-                  <span class="text-xs text-slate-400" title="${config.desc}">ⓘ</span>
-                </label>
-              `).join('')}
-            </div>
-          </div>
-        </div>
-        <div class="text-xs text-slate-500 mb-2">Ponderación (↑ peso = más importante, hover para ver qué prioriza):</div>
-        <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
-          ${Object.entries(WEIGHTS).map(([key, config]) => `
-            <div class="flex flex-col p-2 rounded-lg ${config.enabled ? 'bg-blue-50/50' : 'bg-slate-50 opacity-50'}" title="${config.desc}">
-              <div class="flex items-center gap-1.5 text-xs mb-1">
-                <input type="checkbox" ${config.enabled ? 'checked' : ''}
-                  onchange="toggleWeightEnabled('${key}', this.checked)"
-                  class="w-3.5 h-3.5 accent-blue-500 rounded" />
-                <span class="${config.enabled ? 'text-slate-700 font-medium' : 'text-slate-400'}">${config.label}</span>
-                <span class="font-bold ${config.enabled ? 'text-blue-600' : 'text-slate-400'} ml-auto text-sm">${config.weight}</span>
-              </div>
-              <input type="range" min="0" max="10" value="${config.weight}"
-                onchange="updateWeight('${key}', this.value)"
-                oninput="updateWeight('${key}', this.value)"
-                ${config.enabled ? '' : 'disabled'}
-                class="w-full h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer ${config.enabled ? 'accent-blue-500' : 'accent-slate-300'}" />
-            </div>
-          `).join('')}
-        </div>
-        <div class="mt-2 text-right">
-          <button onclick="resetWeights()" class="text-xs text-slate-400 hover:text-red-500">Reset pesos</button>
-          <button onclick="resetConditions()" class="text-xs text-slate-400 hover:text-red-500 ml-3">Reset condiciones</button>
-        </div>
-      ` : ''}
+      ${tabContent[state.configTab]()}
     </div>
   `;
 }

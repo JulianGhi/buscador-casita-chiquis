@@ -260,51 +260,91 @@ const SAMPLE_CSV = `direccion,barrio,precio,m2_cub,m2_tot,m2_terr,amb,apto_credi
 Av Juan B Alberdi 4600,Parque Avellaneda,105000,70,140,70,3,si,si,0,GOLDEN HAUS,Visitado,Visita 30/8. Norte/Frente. 40 años.,https://www.argenprop.com/ficha--17094976,si,,,,,Bueno,Buena,`;
 
 // ============================================
-// PERSISTENCIA LOCAL
+// HELPERS DE FORMATO
+// ============================================
+
+// Conversión decimal <-> porcentaje
+const toPct = (decimal, decimals = 2) => (decimal * 100).toFixed(decimals);
+const fromPct = (pct) => parseFloat(pct) / 100;
+
+// Formato de variación con signo
+const formatPctSign = (val) => (parseFloat(val) > 0 ? '+' : '') + val + '%';
+
+// ============================================
+// PERSISTENCIA LOCAL (helpers genéricos)
+// ============================================
+
+function loadFromStorage(key, defaultValue) {
+  try {
+    const saved = localStorage.getItem(key);
+    return saved ? JSON.parse(saved) : null;
+  } catch { return null; }
+}
+
+function saveToStorage(key, value) {
+  localStorage.setItem(key, JSON.stringify(value));
+}
+
+function cloneDefault(obj) {
+  return JSON.parse(JSON.stringify(obj));
+}
+
+// ============================================
+// FUNCIONES DE CARGA ESPECÍFICAS
 // ============================================
 
 function loadConditions() {
-  try {
-    const saved = localStorage.getItem('casita_conditions');
-    if (saved) {
-      const parsed = JSON.parse(saved);
-      const conditions = JSON.parse(JSON.stringify(DEFAULT_CONDITIONS));
-      Object.keys(parsed).forEach(k => {
-        if (conditions[k]) conditions[k].enabled = parsed[k];
-      });
-      return conditions;
-    }
-    return JSON.parse(JSON.stringify(DEFAULT_CONDITIONS));
-  } catch { return JSON.parse(JSON.stringify(DEFAULT_CONDITIONS)); }
+  const saved = loadFromStorage('casita_conditions');
+  const conditions = cloneDefault(DEFAULT_CONDITIONS);
+  if (saved) {
+    Object.keys(saved).forEach(k => {
+      if (conditions[k]) conditions[k].enabled = saved[k];
+    });
+  }
+  return conditions;
 }
+
+function loadWeights() {
+  const saved = loadFromStorage('casita_weights');
+  const weights = cloneDefault(DEFAULT_WEIGHTS);
+  if (saved) {
+    Object.keys(saved).forEach(k => {
+      if (weights[k]) {
+        // Soportar formato viejo (solo número) y nuevo (objeto)
+        if (typeof saved[k] === 'number') {
+          weights[k].weight = saved[k];
+        } else if (typeof saved[k] === 'object') {
+          weights[k].weight = saved[k].weight ?? weights[k].weight;
+          weights[k].enabled = saved[k].enabled ?? true;
+        }
+      }
+    });
+  }
+  return weights;
+}
+
+function loadConfig() {
+  const saved = loadFromStorage('casita_config');
+  if (saved) {
+    // Migración: valor viejo de auto-refresh
+    if (saved.AUTO_REFRESH === 60) saved.AUTO_REFRESH = DEFAULT_CONFIG.AUTO_REFRESH;
+    return { ...DEFAULT_CONFIG, ...saved };
+  }
+  return { ...DEFAULT_CONFIG };
+}
+
+function loadRefM2() {
+  return loadFromStorage('casita_ref_m2') || { ...DEFAULT_REF_M2 };
+}
+
+// ============================================
+// FUNCIONES DE GUARDADO ESPECÍFICAS
+// ============================================
 
 function saveConditions(conditions) {
   const toSave = {};
   Object.keys(conditions).forEach(k => { toSave[k] = conditions[k].enabled; });
-  localStorage.setItem('casita_conditions', JSON.stringify(toSave));
-}
-
-function loadWeights() {
-  try {
-    const saved = localStorage.getItem('casita_weights');
-    if (saved) {
-      const parsed = JSON.parse(saved);
-      const weights = JSON.parse(JSON.stringify(DEFAULT_WEIGHTS));
-      Object.keys(parsed).forEach(k => {
-        if (weights[k]) {
-          // Soportar formato viejo (solo número) y nuevo (objeto)
-          if (typeof parsed[k] === 'number') {
-            weights[k].weight = parsed[k];
-          } else if (typeof parsed[k] === 'object') {
-            weights[k].weight = parsed[k].weight ?? weights[k].weight;
-            weights[k].enabled = parsed[k].enabled ?? true;
-          }
-        }
-      });
-      return weights;
-    }
-    return JSON.parse(JSON.stringify(DEFAULT_WEIGHTS));
-  } catch { return JSON.parse(JSON.stringify(DEFAULT_WEIGHTS)); }
+  saveToStorage('casita_conditions', toSave);
 }
 
 function saveWeights(weights) {
@@ -312,36 +352,15 @@ function saveWeights(weights) {
   Object.keys(weights).forEach(k => {
     toSave[k] = { weight: weights[k].weight, enabled: weights[k].enabled };
   });
-  localStorage.setItem('casita_weights', JSON.stringify(toSave));
-}
-
-function loadConfig() {
-  try {
-    const saved = localStorage.getItem('casita_config');
-    if (saved) {
-      const parsed = JSON.parse(saved);
-      if (parsed.AUTO_REFRESH === 60) {
-        parsed.AUTO_REFRESH = DEFAULT_CONFIG.AUTO_REFRESH;
-      }
-      return { ...DEFAULT_CONFIG, ...parsed };
-    }
-    return { ...DEFAULT_CONFIG };
-  } catch { return { ...DEFAULT_CONFIG }; }
-}
-
-function loadRefM2() {
-  try {
-    const saved = localStorage.getItem('casita_ref_m2');
-    return saved ? JSON.parse(saved) : { ...DEFAULT_REF_M2 };
-  } catch { return { ...DEFAULT_REF_M2 }; }
+  saveToStorage('casita_weights', toSave);
 }
 
 function saveConfig(config) {
-  localStorage.setItem('casita_config', JSON.stringify(config));
+  saveToStorage('casita_config', config);
 }
 
 function saveRefM2(refM2) {
-  localStorage.setItem('casita_ref_m2', JSON.stringify(refM2));
+  saveToStorage('casita_ref_m2', refM2);
 }
 
 // ============================================

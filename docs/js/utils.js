@@ -341,6 +341,28 @@ function diasHace(fecha) {
 // BADGES Y INDICADORES
 // ============================================
 
+// Determina el color de fondo de una fila de la tabla basado en su estado
+function getRowBgColor(p) {
+  const activo = (p.activo || '').toLowerCase();
+  const apto = (p.apto_credito || '').toLowerCase();
+
+  // Inactivo = rojo desaturado
+  if (activo === 'no') return `${THEME.error.bg}/70 opacity-60`;
+
+  // Datos por verificar (activo o apto dudoso) pero entra en presupuesto
+  if ((activo === '?' || apto === '?' || !apto) && p._ok) {
+    return `${THEME.warning.bg.replace('100', '200')}/70 border-l-4 border-yellow-500`;
+  }
+
+  // No apto crédito
+  if (apto === 'no') return THEME.warning.bg;
+
+  // OK presupuesto = verde suave
+  if (p._ok) return `${THEME.success.bg}/30`;
+
+  return '';
+}
+
 // Función genérica para badges de si/no/?
 function booleanBadge(value, options = {}) {
   const { noColor = THEME.error.textLight, size = 'text-lg' } = options;
