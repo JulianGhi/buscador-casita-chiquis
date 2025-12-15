@@ -141,7 +141,8 @@ docs/
 ### Funcionalidades del dashboard
 
 - **Vista tabla/cards** con filtros (status, barrio, activo, apto crédito)
-- **Columnas**: tier/score, activo, apto, status, barrio, dirección, tipo, precio, m², m² desc, $/m², vs ref, a juntar, OK, cocheras, terraza, balcón, baños
+- **Columnas**: tier/score, activo, apto, status, barrio, dirección, tipo, precio, m² cub, m² desc, $/m², vs ref, a juntar, OK, cocheras, terraza, balcón, baños
+- **Iconos terraza/balcón**: ✓ verde (si), ✗ rojo (no), - gris (desconocido)
 - **Sistema de tiers + score** para ordenar candidatos (ver abajo)
 - **Vista detallada** con:
   - Slider de negociación de precio (0-15%)
@@ -149,7 +150,7 @@ docs/
   - **Calculadora de quita necesaria**: Si no alcanza el presupuesto, muestra cuánto % y USD hay que negociar para que entre
   - Desglose completo de costos (escribano, sellos, etc.)
   - Indicador de datos faltantes (qué atributos faltan y penalizan el score)
-  - Características: tipo, ambientes, m² totales/desc, baños, antigüedad, estado, expensas, disposición, piso, etc.
+  - Características: tipo, ambientes, m² cub/desc/tot/terreno, baños, antigüedad, estado, expensas, disposición, piso, etc.
   - Rating personal y fechas (publicado, contacto, visita)
 - **Página de stats** con gráfico precio vs m²
 - **Cotización dólar BNA** en tiempo real
@@ -175,9 +176,16 @@ python sheets/sync_sheet.py scrape --all --no-cache --update  # Full refresh
 
 **Sistema de validaciones:** Al final del scrape muestra warnings de:
 - m² inconsistentes (cub > tot, o cub + desc ≠ tot)
+- m² desc inconsistentes (tiene balcón/terraza pero m²_desc = 0)
 - Atributos inciertos (terraza/balcon detectado pero valor ambiguo → "?")
 - Datos faltantes (sin barrio, sin m²)
 - Precios sospechosos
+
+**Cálculo automático de m²:** Si tenés 2 de los 3 valores (m2_cub, m2_tot, m2_desc),
+el scraper calcula el tercero automáticamente:
+- `m2_desc = m2_tot - m2_cub`
+- `m2_cub = m2_tot - m2_desc`
+- `m2_tot = m2_cub + m2_desc`
 
 **Detección de si/no:** El scraper usa `ATTR_PATTERNS` en `sync_sheet.py` para detectar
 correctamente valores como "terraza: no" (antes se marcaba como "si" incorrectamente).

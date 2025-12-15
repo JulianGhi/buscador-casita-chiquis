@@ -54,7 +54,7 @@ CAMPOS_IMPORTANTES = ['terraza', 'balcon', 'cocheras', 'luminosidad', 'disposici
                       'ascensor', 'antiguedad', 'expensas', 'banos', 'apto_credito']
 
 # Columnas que el scraper puede llenar
-SCRAPEABLE_COLS = ['precio', 'm2_cub', 'm2_tot', 'm2_terr', 'amb', 'barrio', 'direccion',
+SCRAPEABLE_COLS = ['precio', 'm2_cub', 'm2_tot', 'm2_desc', 'm2_terr', 'amb', 'barrio', 'direccion',
                    'expensas', 'terraza', 'antiguedad', 'apto_credito', 'tipo', 'activo',
                    'cocheras', 'disposicion', 'piso', 'ascensor', 'balcon', 'luminosidad',
                    'fecha_publicado', 'banos', 'inmobiliaria', 'dormitorios', 'fecha_print']
@@ -108,6 +108,40 @@ def print_warnings_summary():
     print(f"\n{'='*60}")
 
 
+def calcular_m2_faltantes(data):
+    """
+    Calcula m² faltantes si tenemos 2 de los 3 valores.
+
+    Lógica: m2_tot = m2_cub + m2_desc
+
+    Returns:
+        dict con campos calculados (vacío si no se pudo calcular nada)
+    """
+    calculados = {}
+
+    m2_cub = int(data.get('m2_cub') or 0)
+    m2_tot = int(data.get('m2_tot') or 0)
+    m2_desc = int(data.get('m2_desc') or 0)
+
+    # Si tenemos tot y cub pero no desc → calcular desc
+    if m2_tot > 0 and m2_cub > 0 and m2_desc == 0:
+        calculado = m2_tot - m2_cub
+        if calculado >= 0:
+            calculados['m2_desc'] = str(calculado)
+
+    # Si tenemos tot y desc pero no cub → calcular cub
+    elif m2_tot > 0 and m2_desc > 0 and m2_cub == 0:
+        calculado = m2_tot - m2_desc
+        if calculado > 0:
+            calculados['m2_cub'] = str(calculado)
+
+    # Si tenemos cub y desc pero no tot → calcular tot
+    elif m2_cub > 0 and m2_desc > 0 and m2_tot == 0:
+        calculados['m2_tot'] = str(m2_cub + m2_desc)
+
+    return calculados
+
+
 def validar_propiedad(data, contexto=None):
     """
     Valida los datos de una propiedad y agrega warnings si hay problemas.
@@ -121,15 +155,15 @@ def validar_propiedad(data, contexto=None):
     # Validar m² (cub + desc = tot)
     m2_cub = int(data.get('m2_cub') or 0)
     m2_tot = int(data.get('m2_tot') or 0)
-    m2_terr = int(data.get('m2_terr') or 0)
+    m2_desc = int(data.get('m2_desc') or 0)
 
     if m2_cub > 0 and m2_tot > 0:
         if m2_cub > m2_tot:
             add_warning('m2_inconsistente', f"m² cub ({m2_cub}) > m² tot ({m2_tot})", ctx)
-        elif m2_terr > 0:
-            esperado = m2_cub + m2_terr
+        elif m2_desc > 0:
+            esperado = m2_cub + m2_desc
             if esperado != m2_tot and abs(esperado - m2_tot) > 2:  # tolerancia de 2m²
-                add_warning('m2_no_cierra', f"cub({m2_cub}) + desc({m2_terr}) = {esperado} ≠ tot({m2_tot})", ctx)
+                add_warning('m2_no_cierra', f"cub({m2_cub}) + desc({m2_desc}) = {esperado} ≠ tot({m2_tot})", ctx)
 
     # Validar precio sospechoso
     precio = int(data.get('precio') or 0)
@@ -149,6 +183,18 @@ def validar_propiedad(data, contexto=None):
         add_warning('dato_faltante', "Sin barrio", ctx)
     if not data.get('m2_cub') and not data.get('m2_tot'):
         add_warning('dato_faltante', "Sin m²", ctx)
+
+    # Validar balcón/terraza vs m2_desc
+    balcon = (data.get('balcon') or '').lower()
+    terraza = (data.get('terraza') or '').lower()
+    tiene_exterior = balcon == 'si' or terraza == 'si'
+    if tiene_exterior and m2_desc <= 0:
+        exterior = []
+        if balcon == 'si':
+            exterior.append('balcón')
+        if terraza == 'si':
+            exterior.append('terraza')
+        add_warning('m2_desc_inconsistente', f"Tiene {'+'.join(exterior)} pero m²_desc={m2_desc}", ctx)
 
 # =============================================================================
 # PATRONES DE DETECCIÓN PARA ATRIBUTOS BOOLEANOS
@@ -899,6 +945,13 @@ def cmd_scrape(check_all=False, no_cache=False, force_update=False):
                 elif force_update and current and new_val and current != new_val:
                     rows[idx][col] = new_val
                     updates.append(f'{col}: {current}→{new_val}')
+
+        # Calcular m² faltantes si tenemos 2 de 3
+        m2_calculados = calcular_m2_faltantes(rows[idx])
+        for col, val in m2_calculados.items():
+            if col in headers and not rows[idx].get(col, '').strip():
+                rows[idx][col] = val
+                changes.append(f'{col}={val} (calc)')
 
         if changes:
             print(f"      ✅ Nuevo: {', '.join(changes)}")

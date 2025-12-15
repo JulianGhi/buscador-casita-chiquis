@@ -182,8 +182,8 @@ function renderTable(filtered) {
               <th class="px-3 py-2.5 text-left font-medium text-slate-600">Barrio</th>
               <th class="px-2 py-2.5 text-center font-medium text-slate-600">Tipo</th>
               <th class="px-3 py-2.5 text-right font-medium text-slate-600">Precio</th>
-              <th class="px-2 py-2.5 text-right font-medium text-slate-600">m²</th>
-              <th class="px-2 py-2.5 text-right font-medium text-slate-600" title="m² descubiertos">desc</th>
+              <th class="px-2 py-2.5 text-right font-medium text-slate-600" title="m² cubiertos">m² cub</th>
+              <th class="px-2 py-2.5 text-right font-medium text-slate-600" title="m² descubiertos (balcón + terraza)">m² desc</th>
               <th class="px-3 py-2.5 text-right font-medium text-slate-600">$/m²</th>
               <th class="px-2 py-2.5 text-center font-medium text-slate-600" title="Diferencia vs precio promedio del barrio">vs Ref</th>
               <th class="px-3 py-2.5 text-right font-medium text-slate-600">A juntar</th>
@@ -209,14 +209,14 @@ function renderTable(filtered) {
                 <td class="px-2 py-2.5 text-center text-xs text-slate-600">${p.tipo ? escapeHtml(p.tipo.toUpperCase()) : '<span class="text-slate-300">-</span>'}</td>
                 <td class="px-3 py-2.5 text-right font-mono text-slate-800">${p._precio > 0 ? '$' + p._precio.toLocaleString() : '<span class="text-slate-300">-</span>'}</td>
                 <td class="px-2 py-2.5 text-right text-slate-600">${p._m2 ? p._m2 : '<span class="text-slate-300">-</span>'}</td>
-                <td class="px-2 py-2.5 text-right text-slate-600">${p.m2_terr && p.m2_terr !== '0' ? p.m2_terr : '<span class="text-slate-300">-</span>'}</td>
+                <td class="px-2 py-2.5 text-right text-slate-600">${p.m2_desc && p.m2_desc !== '0' ? p.m2_desc : '<span class="text-slate-300">-</span>'}</td>
                 <td class="px-3 py-2.5 text-right font-mono text-slate-600">${p._preciom2 > 0 ? '$' + p._preciom2.toLocaleString() : '<span class="text-slate-300">-</span>'}</td>
                 <td class="px-2 py-2.5 text-center">${evalIcon(p._vsRef)}</td>
                 <td class="px-3 py-2.5 text-right font-mono text-slate-800">${p._precio > 0 ? '$' + p._total.toLocaleString() : '<span class="text-slate-300">-</span>'}</td>
                 <td class="px-2 py-2.5 text-center">${p._precio > 0 ? okPill(p._ok) : '<span class="text-slate-300">-</span>'}</td>
                 <td class="px-2 py-2.5 text-center">${p.cocheras ? (p.cocheras !== '0' ? '<span class="text-green-600">✓</span>' : '<span class="text-slate-300">-</span>') : '<span class="text-slate-300">-</span>'}</td>
-                <td class="px-2 py-2.5 text-center">${p.terraza?.toLowerCase() === 'si' ? '<span class="text-green-600">✓</span>' : '<span class="text-slate-300">-</span>'}</td>
-                <td class="px-2 py-2.5 text-center">${p.balcon?.toLowerCase() === 'si' ? '<span class="text-green-600">✓</span>' : '<span class="text-slate-300">-</span>'}</td>
+                <td class="px-2 py-2.5 text-center">${p.terraza?.toLowerCase() === 'si' ? '<span class="text-green-600">✓</span>' : p.terraza?.toLowerCase() === 'no' ? '<span class="text-red-400">✗</span>' : '<span class="text-slate-300">-</span>'}</td>
+                <td class="px-2 py-2.5 text-center">${p.balcon?.toLowerCase() === 'si' ? '<span class="text-green-600">✓</span>' : p.balcon?.toLowerCase() === 'no' ? '<span class="text-red-400">✗</span>' : '<span class="text-slate-300">-</span>'}</td>
                 <td class="px-2 py-2.5 text-center text-xs">${p.banos && p.banos !== '0' ? p.banos : '<span class="text-slate-300">-</span>'}</td>
               </tr>
             `;}).join('')}
@@ -566,8 +566,10 @@ function renderCaracteristicas(p) {
   const caracteristicas = [
     p.tipo ? { label: 'Tipo', value: p.tipo.toUpperCase() } : null,
     p.amb ? { label: 'Ambientes', value: p.amb } : null,
-    p.m2_tot && p.m2_tot !== '0' ? { label: 'm² totales', value: p.m2_tot } : null,
-    p.m2_terr && p.m2_terr !== '0' ? { label: 'm² desc.', value: p.m2_terr } : null,
+    p._m2 ? { label: 'm² cub', value: p._m2 } : null,
+    p.m2_desc && p.m2_desc !== '0' ? { label: 'm² desc', value: p.m2_desc } : null,
+    p.m2_tot && p.m2_tot !== '0' ? { label: 'm² tot', value: p.m2_tot } : null,
+    p.m2_terr && p.m2_terr !== '0' ? { label: 'm² terreno', value: p.m2_terr } : null,
     p.banos && p.banos !== '0' ? { label: 'Baños', value: p.banos } : null,
     p.antiguedad ? { label: 'Antigüedad', value: p.antiguedad + ' años' } : null,
     p.estado ? { label: 'Estado', value: p.estado } : null,
