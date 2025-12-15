@@ -270,6 +270,10 @@ const fromPct = (pct) => parseFloat(pct) / 100;
 // Formato de variación con signo
 const formatPctSign = (val) => (parseFloat(val) > 0 ? '+' : '') + val + '%';
 
+// Formato de moneda (USD)
+const fmt = (n) => n != null && !isNaN(n) ? '$' + n.toLocaleString() : '-';
+const fmtNum = (n) => n != null && !isNaN(n) ? n.toLocaleString() : '-';
+
 // ============================================
 // PERSISTENCIA LOCAL (helpers genéricos)
 // ============================================

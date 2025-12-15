@@ -62,53 +62,47 @@ function updateCondition(key, enabled) {
 }
 
 function resetConditions() {
-  if (confirm('¿Resetear condiciones a valores por defecto?')) {
-    CONDITIONS = JSON.parse(JSON.stringify(DEFAULT_CONDITIONS));
-    saveConditions(CONDITIONS);
-    render();
-  }
+  if (!confirm('¿Resetear condiciones a valores por defecto?')) return;
+  CONDITIONS = cloneDefault(DEFAULT_CONDITIONS);
+  saveConditions(CONDITIONS);
+  render();
 }
 
 function resetWeights() {
-  if (confirm('¿Resetear pesos a valores por defecto?')) {
-    WEIGHTS = JSON.parse(JSON.stringify(DEFAULT_WEIGHTS));
-    saveWeights(WEIGHTS);
-    render();
-  }
+  if (!confirm('¿Resetear pesos a valores por defecto?')) return;
+  WEIGHTS = cloneDefault(DEFAULT_WEIGHTS);
+  saveWeights(WEIGHTS);
+  render();
 }
 
 function addBarrio() {
-  const nombre = prompt('Nombre del barrio:');
-  if (nombre && nombre.trim()) {
-    const valor = prompt('$/m² de referencia:');
-    if (valor) {
-      REF_M2[nombre.trim()] = parseInt(valor) || 0;
-      saveRefM2(REF_M2);
-      render();
-    }
-  }
+  const nombre = prompt('Nombre del barrio:')?.trim();
+  if (!nombre) return;
+  const valor = prompt('$/m² de referencia:');
+  if (!valor) return;
+  REF_M2[nombre] = parseInt(valor) || 0;
+  saveRefM2(REF_M2);
+  render();
 }
 
 function deleteBarrio(barrio) {
-  if (confirm(`¿Eliminar ${barrio}?`)) {
-    delete REF_M2[barrio];
-    saveRefM2(REF_M2);
-    render();
-  }
+  if (!confirm(`¿Eliminar ${barrio}?`)) return;
+  delete REF_M2[barrio];
+  saveRefM2(REF_M2);
+  render();
 }
 
 function resetConfig() {
-  if (confirm('¿Resetear toda la configuración a los valores por defecto?')) {
-    CONFIG = { ...DEFAULT_CONFIG };
-    REF_M2 = { ...DEFAULT_REF_M2 };
-    CONDITIONS = JSON.parse(JSON.stringify(DEFAULT_CONDITIONS));
-    WEIGHTS = JSON.parse(JSON.stringify(DEFAULT_WEIGHTS));
-    saveConfig(CONFIG);
-    saveRefM2(REF_M2);
-    saveConditions(CONDITIONS);
-    saveWeights(WEIGHTS);
-    render();
-  }
+  if (!confirm('¿Resetear toda la configuración a los valores por defecto?')) return;
+  CONFIG = { ...DEFAULT_CONFIG };
+  REF_M2 = { ...DEFAULT_REF_M2 };
+  CONDITIONS = cloneDefault(DEFAULT_CONDITIONS);
+  WEIGHTS = cloneDefault(DEFAULT_WEIGHTS);
+  saveConfig(CONFIG);
+  saveRefM2(REF_M2);
+  saveConditions(CONDITIONS);
+  saveWeights(WEIGHTS);
+  render();
 }
 
 // ============================================
