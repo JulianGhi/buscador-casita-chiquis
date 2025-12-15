@@ -4,6 +4,7 @@
 // Nota: updateContentPadding() está en utils.js (compartido)
 
 let chart = null;
+let scoreChart = null;
 let allProperties = [];
 let statsFilters = {
   activo: 'todos',       // 'todos', 'activos', 'inactivos'
@@ -124,8 +125,9 @@ function renderStatsPage() {
       : `${filtered.length} de ${allProperties.length} propiedades`;
   }
 
-  // Render chart and stats
+  // Render charts and stats
   renderChart(filtered);
+  renderScoreChart(filtered);
   renderStatsGrid(filtered);
 
   updateContentPadding();
@@ -143,112 +145,179 @@ function renderBarrioCheckboxes() {
   `).join('');
 }
 
-// Usa TIER_CONFIG de config.js
+// ============================================
+// HELPERS DE CHART (usa TIER_CONFIG y CHART_CONFIG de config.js)
+// ============================================
 
-function renderChart(properties) {
-  const ctx = document.getElementById('scatterChart');
-  if (!ctx) return;
-
-  const validProps = properties.filter(p => p._precio > 0 && p._m2 > 0);
-
-  const data = validProps.map(p => {
-    const tier = p._tier || 5;
-    return {
+// Extrae datos de propiedades para scatter plots
+function toChartData(properties) {
+  return properties
+    .filter(p => p._precio > 0 && p._m2 > 0)
+    .map(p => ({
       x: p._m2,
       y: p._precio,
       label: p.direccion || 'Sin dirección',
       barrio: p.barrio || 'Sin barrio',
       preciom2: p._preciom2,
-      ok: p._ok,
       vsRef: p._vsRef,
-      tier: tier,
-      score: p._score || 0
-    };
-  });
+      tier: p._tier || 5,
+      score: p._score || 0,
+      link: p.link || null
+    }));
+}
 
-  // Calculate trend line
-  let trendData = [];
+// Regresión lineal simple
+function linearRegression(data, xKey = 'x') {
   const n = data.length;
-  if (n > 1) {
-    const sumX = data.reduce((a, b) => a + b.x, 0);
-    const sumY = data.reduce((a, b) => a + b.y, 0);
-    const sumXY = data.reduce((a, b) => a + b.x * b.y, 0);
-    const sumX2 = data.reduce((a, b) => a + b.x * b.x, 0);
+  if (n < 2) return [];
 
-    const slope = (n * sumXY - sumX * sumY) / (n * sumX2 - sumX * sumX);
-    const intercept = (sumY - slope * sumX) / n;
+  const sum = (arr, fn) => arr.reduce((a, b) => a + fn(b), 0);
+  const sumX = sum(data, d => d[xKey]);
+  const sumY = sum(data, d => d.y);
+  const sumXY = sum(data, d => d[xKey] * d.y);
+  const sumX2 = sum(data, d => d[xKey] ** 2);
 
-    const minX = Math.min(...data.map(d => d.x));
-    const maxX = Math.max(...data.map(d => d.x));
+  const slope = (n * sumXY - sumX * sumY) / (n * sumX2 - sumX ** 2);
+  const intercept = (sumY - slope * sumX) / n;
 
-    trendData = [
-      { x: minX, y: slope * minX + intercept },
-      { x: maxX, y: slope * maxX + intercept }
-    ];
-  }
+  const xs = data.map(d => d[xKey]);
+  return [
+    { x: Math.min(...xs), y: slope * Math.min(...xs) + intercept },
+    { x: Math.max(...xs), y: slope * Math.max(...xs) + intercept }
+  ];
+}
+
+// Genera tooltip con info de propiedad
+function chartTooltip(d, showM2 = true) {
+  const tierCfg = TIER_CONFIG[d.tier];
+  const vsRefStr = d.vsRef != null ? ` (${formatPctSign(Math.round(d.vsRef * 100))} vs barrio)` : '';
+
+  const lines = [d.label, d.barrio];
+  lines.push(showM2 ? `${fmt(d.y)} · ${d.x}m²` : fmt(d.y));
+  if (showM2) lines.push(`${fmt(d.preciom2)}/m²${vsRefStr}`);
+  lines.push(`${tierCfg.label} ${tierCfg.name} · Score: ${d.score}`);
+  if (d.link) lines.push(`${ICONS.external} Click para ver aviso`);
+  return lines;
+}
+
+// Abre link al hacer click en punto
+function onPointClick(event, elements, chart) {
+  if (!elements.length || elements[0].datasetIndex !== 0) return;
+  const point = chart.data.datasets[0].data[elements[0].index];
+  if (point.link) window.open(point.link, '_blank');
+}
+
+// Crea dataset de propiedades con estilos por tier
+function createPropertiesDataset(data) {
+  return {
+    label: 'Propiedades',
+    data: data,
+    backgroundColor: data.map(d => TIER_CONFIG[d.tier].chart.bg),
+    borderColor: data.map(d => TIER_CONFIG[d.tier].chart.border),
+    borderWidth: data.map(d => TIER_CONFIG[d.tier].borderWidth),
+    pointRadius: data.map(d => TIER_CONFIG[d.tier].pointRadius),
+    pointHoverRadius: 12,
+    pointStyle: data.map(d => TIER_CONFIG[d.tier].pointStyle)
+  };
+}
+
+// Crea dataset de línea de tendencia
+function createTrendDataset(trendData) {
+  return {
+    label: 'Tendencia',
+    data: trendData,
+    type: 'line',
+    ...CHART_CONFIG.trend,
+    pointRadius: 0,
+    fill: false,
+    datalabels: { display: false }
+  };
+}
+
+// Opciones base para scatter charts
+function scatterOptions(xLabel, onClick, showLabels = false) {
+  return {
+    responsive: true,
+    maintainAspectRatio: false,
+    onClick: onClick,
+    plugins: {
+      legend: { display: false },
+      datalabels: showLabels ? {
+        display: ctx => ctx.datasetIndex === 0,
+        formatter: v => v.score,
+        anchor: 'center',
+        align: 'center',
+        ...CHART_CONFIG.datalabels
+      } : { display: false }
+    },
+    scales: {
+      x: {
+        title: { display: true, text: xLabel, font: { weight: 'bold' } },
+        grid: CHART_CONFIG.grid
+      },
+      y: {
+        title: { display: true, text: 'Precio (USD)', font: { weight: 'bold' } },
+        grid: CHART_CONFIG.grid,
+        ticks: { callback: v => '$' + (v / 1000) + 'k' }
+      }
+    }
+  };
+}
+
+// ============================================
+// RENDER CHARTS
+// ============================================
+
+function renderChart(properties) {
+  const ctx = document.getElementById('scatterChart');
+  if (!ctx) return;
+
+  Chart.register(ChartDataLabels);
+
+  const data = toChartData(properties);
+  const trend = linearRegression(data, 'x');
 
   if (chart) chart.destroy();
-
   chart = new Chart(ctx.getContext('2d'), {
     type: 'scatter',
     data: {
       datasets: [
-        {
-          label: 'Propiedades',
-          data: data,
-          backgroundColor: data.map(d => TIER_CONFIG[d.tier].chart.bg),
-          borderColor: data.map(d => TIER_CONFIG[d.tier].chart.border),
-          borderWidth: data.map(d => TIER_CONFIG[d.tier].borderWidth),
-          pointRadius: data.map(d => TIER_CONFIG[d.tier].pointRadius),
-          pointHoverRadius: 12,
-          pointStyle: data.map(d => TIER_CONFIG[d.tier].pointStyle),
-        },
-        {
-          label: 'Tendencia',
-          data: trendData,
-          type: 'line',
-          borderColor: 'rgba(100, 116, 139, 0.5)',
-          borderWidth: 2,
-          borderDash: [5, 5],
-          pointRadius: 0,
-          fill: false,
-        }
+        createPropertiesDataset(data),
+        createTrendDataset(trend)
       ]
     },
     options: {
-      responsive: true,
-      maintainAspectRatio: false,
+      ...scatterOptions('M² cubiertos', (e, el) => onPointClick(e, el, chart), true),
       plugins: {
-        legend: { display: false },
-        tooltip: {
-          callbacks: {
-            label: function(context) {
-              const d = context.raw;
-              const vsRef = d.vsRef !== null ? ` (${d.vsRef > 0 ? '+' : ''}${Math.round(d.vsRef * 100)}% vs barrio)` : '';
-              const tierCfg = TIER_CONFIG[d.tier];
-              return [
-                d.label,
-                d.barrio,
-                `$${d.y.toLocaleString()} · ${d.x}m²`,
-                `$${d.preciom2.toLocaleString()}/m²${vsRef}`,
-                `${tierCfg.label} ${tierCfg.name} · Score: ${d.score}`
-              ];
-            }
-          }
-        }
-      },
-      scales: {
-        x: {
-          title: { display: true, text: 'M² cubiertos', font: { weight: 'bold' } },
-          grid: { color: 'rgba(0,0,0,0.05)' }
-        },
-        y: {
-          title: { display: true, text: 'Precio (USD)', font: { weight: 'bold' } },
-          grid: { color: 'rgba(0,0,0,0.05)' },
-          ticks: {
-            callback: function(value) { return '$' + (value / 1000) + 'k'; }
-          }
-        }
+        ...scatterOptions('M² cubiertos', null, true).plugins,
+        tooltip: { callbacks: { label: ctx => chartTooltip(ctx.raw, true) } }
+      }
+    }
+  });
+}
+
+function renderScoreChart(properties) {
+  const ctx = document.getElementById('scoreChart');
+  if (!ctx) return;
+
+  // Reusar datos pero con X = score
+  const data = toChartData(properties).map(d => ({ ...d, x: d.score }));
+  const trend = linearRegression(data, 'x');
+
+  if (scoreChart) scoreChart.destroy();
+  scoreChart = new Chart(ctx.getContext('2d'), {
+    type: 'scatter',
+    data: {
+      datasets: [
+        createPropertiesDataset(data),
+        createTrendDataset(trend)
+      ]
+    },
+    options: {
+      ...scatterOptions('Score', (e, el) => onPointClick(e, el, scoreChart), false),
+      plugins: {
+        ...scatterOptions('Score', null, false).plugins,
+        tooltip: { callbacks: { label: ctx => chartTooltip(ctx.raw, false) } }
       }
     }
   });

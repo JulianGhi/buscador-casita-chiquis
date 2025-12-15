@@ -183,6 +183,26 @@ const TIER_CONFIG = {
 // ============================================
 // REGLAS DE SCORING (centralizada)
 // ============================================
+// ============================================
+// CONFIGURACIÓN DE CHARTS
+// ============================================
+const CHART_CONFIG = {
+  // Estilos comunes
+  trend: {
+    borderColor: 'rgba(100, 116, 139, 0.5)',
+    borderWidth: 2,
+    borderDash: [5, 5]
+  },
+  grid: { color: 'rgba(0,0,0,0.05)' },
+  // Datalabels
+  datalabels: {
+    color: '#fff',
+    font: { size: 9, weight: 'bold' },
+    textStrokeColor: 'rgba(0,0,0,0.5)',
+    textStrokeWidth: 2
+  }
+};
+
 const SCORING_RULES = {
   // Atributos booleanos: si/no/missing
   terraza:     { type: 'boolean', bonus: 10, penaltyMissing: 5 },
