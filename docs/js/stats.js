@@ -1,16 +1,7 @@
 // ============================================
 // STATS - LÓGICA ESPECÍFICA
 // ============================================
-
-function updateContentPadding() {
-  requestAnimationFrame(() => {
-    const header = document.querySelector('header');
-    const content = document.querySelector('.main-content');
-    if (header && content) {
-      content.style.paddingTop = (header.offsetHeight + 16) + 'px';
-    }
-  });
-}
+// Nota: updateContentPadding() está en utils.js (compartido)
 
 let chart = null;
 let allProperties = [];

@@ -2,6 +2,17 @@
 // UTILIDADES
 // ============================================
 
+// Ajusta el padding del contenido para compensar el header fijo
+function updateContentPadding() {
+  requestAnimationFrame(() => {
+    const header = document.querySelector('header');
+    const content = document.querySelector('.main-content');
+    if (header && content) {
+      content.style.paddingTop = (header.offsetHeight + 16) + 'px';
+    }
+  });
+}
+
 // ============================================
 // SISTEMA DE SCORING UNIFICADO
 // Usa SCORING_RULES de config.js
@@ -330,6 +341,23 @@ function diasHace(fecha) {
 // BADGES Y INDICADORES
 // ============================================
 
+// Función genérica para badges de si/no/?
+function booleanBadge(value, options = {}) {
+  const { noColor = 'text-red-600', size = 'text-lg' } = options;
+  if (!value) return '<span class="text-slate-300">?</span>';
+  const s = value.toLowerCase();
+  if (s === 'si' || s === 'sí') return `<span class="text-green-600 ${size}">✓</span>`;
+  if (s === 'no') return `<span class="${noColor} ${size}">✗</span>`;
+  return `<span class="text-yellow-600">${value}</span>`;
+}
+
+// Función para colorear variaciones porcentuales (positivo=rojo, negativo=verde)
+function variacionColor(valor) {
+  const num = parseFloat(valor);
+  if (isNaN(num) || num === 0) return 'text-slate-400';
+  return num > 0 ? 'text-red-400' : 'text-green-400';
+}
+
 function evalIcon(vsRef) {
   if (vsRef === null || vsRef === undefined) return '<span class="text-slate-300 text-xs italic">s/d</span>';
   const pct = Math.round(vsRef * 100);
@@ -346,19 +374,11 @@ function okPill(ok) {
 }
 
 function activoBadge(activo) {
-  if (!activo) return '<span class="text-slate-300">?</span>';
-  const s = activo.toLowerCase();
-  if (s === 'si') return '<span class="text-green-600 text-lg">✓</span>';
-  if (s === 'no') return '<span class="text-red-600 text-lg">✗</span>';
-  return `<span class="text-yellow-600">${activo}</span>`;
+  return booleanBadge(activo, { noColor: 'text-red-600' });
 }
 
 function aptoCreditoBadge(apto) {
-  if (!apto) return '<span class="text-slate-300">?</span>';
-  const s = apto.toLowerCase();
-  if (s === 'si') return '<span class="text-green-600 text-lg">✓</span>';
-  if (s === 'no') return '<span class="text-amber-600 text-lg">✗</span>';
-  return `<span class="text-yellow-600">${apto}</span>`;
+  return booleanBadge(apto, { noColor: 'text-amber-600' });
 }
 
 function statusBadge(status) {

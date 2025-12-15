@@ -1,20 +1,7 @@
 // ============================================
-// PADDING DINÁMICO DEL HEADER
-// ============================================
-
-function updateContentPadding() {
-  requestAnimationFrame(() => {
-    const header = document.querySelector('header');
-    const content = document.querySelector('.main-content');
-    if (header && content) {
-      content.style.paddingTop = (header.offsetHeight + 16) + 'px';
-    }
-  });
-}
-
-// ============================================
 // EVENT HANDLERS
 // ============================================
+// Nota: updateContentPadding() está en utils.js (compartido)
 
 function showDetail(idx) {
   state.selectedProperty = idx;

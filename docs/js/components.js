@@ -27,6 +27,8 @@ function renderStatusBar(stats) {
 }
 
 function renderDolarBar() {
+  const formatVariacion = (v) => (parseFloat(v) > 0 ? '+' : '') + (v || '0') + '%';
+
   return `
     <div class="bg-slate-700 text-white">
       <div class="max-w-7xl mx-auto px-4 py-1 flex items-center justify-between">
@@ -36,17 +38,11 @@ function renderDolarBar() {
             <span class="font-bold text-emerald-400">$${state.dolarBNA.venta}</span>
             <span class="text-slate-500">|</span>
             ${state.dolarBNA.variaciones ? `
-              <span class="text-xs ${parseFloat(state.dolarBNA.variaciones.dia) > 0 ? 'text-red-400' : parseFloat(state.dolarBNA.variaciones.dia) < 0 ? 'text-green-400' : 'text-slate-400'}">
-                1d: ${state.dolarBNA.variaciones.dia > 0 ? '+' : ''}${state.dolarBNA.variaciones.dia || '0'}%
-              </span>
+              <span class="text-xs ${variacionColor(state.dolarBNA.variaciones.dia)}">1d: ${formatVariacion(state.dolarBNA.variaciones.dia)}</span>
               <span class="text-slate-600">|</span>
-              <span class="text-xs ${parseFloat(state.dolarBNA.variaciones.semana) > 0 ? 'text-red-400' : parseFloat(state.dolarBNA.variaciones.semana) < 0 ? 'text-green-400' : 'text-slate-400'}">
-                7d: ${state.dolarBNA.variaciones.semana > 0 ? '+' : ''}${state.dolarBNA.variaciones.semana || '0'}%
-              </span>
+              <span class="text-xs ${variacionColor(state.dolarBNA.variaciones.semana)}">7d: ${formatVariacion(state.dolarBNA.variaciones.semana)}</span>
               <span class="text-slate-600">|</span>
-              <span class="text-xs ${parseFloat(state.dolarBNA.variaciones.mes) > 0 ? 'text-red-400' : parseFloat(state.dolarBNA.variaciones.mes) < 0 ? 'text-green-400' : 'text-slate-400'}">
-                30d: ${state.dolarBNA.variaciones.mes > 0 ? '+' : ''}${state.dolarBNA.variaciones.mes || '0'}%
-              </span>
+              <span class="text-xs ${variacionColor(state.dolarBNA.variaciones.mes)}">30d: ${formatVariacion(state.dolarBNA.variaciones.mes)}</span>
             ` : ''}
           ` : `
             <span class="text-slate-500 text-xs">Cargando...</span>
