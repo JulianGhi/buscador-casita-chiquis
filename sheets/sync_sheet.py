@@ -1321,6 +1321,124 @@ def cmd_view(check_links=False):
 
 
 # =============================================================================
+# COMANDO: PENDIENTES - Lista propiedades con datos faltantes
+# =============================================================================
+
+PRINTS_DIR = Path('data/prints')
+PENDIENTES_FILE = Path('data/prints/pendientes.json')
+
+# Campos importantes que afectan el score si faltan
+CAMPOS_IMPORTANTES = ['terraza', 'balcon', 'cocheras', 'luminosidad', 'disposicion',
+                      'ascensor', 'antiguedad', 'expensas', 'banos', 'apto_credito']
+
+
+def get_prints_existentes():
+    """Retorna set de filas que ya tienen print guardado."""
+    if not PRINTS_DIR.exists():
+        return set()
+
+    filas = set()
+    for f in PRINTS_DIR.iterdir():
+        # Buscar archivos tipo fila_XX.png o fila_XX.pdf
+        match = re.match(r'fila_(\d+)\.(png|pdf|jpg|jpeg)$', f.name, re.IGNORECASE)
+        if match:
+            filas.add(int(match.group(1)))
+        # También buscar por título del aviso (nombre del PDF)
+        # Los PDFs guardados como "Titulo del aviso.pdf" se asocian por link
+    return filas
+
+
+def cmd_pendientes(solo_sin_print=False):
+    """Genera lista de propiedades con datos faltantes."""
+    if not LOCAL_FILE.exists():
+        print("❌ Primero ejecutá: python sync_sheet.py pull")
+        return
+
+    with open(LOCAL_FILE, 'r', encoding='utf-8') as f:
+        data = json.load(f)
+
+    rows = data['rows']
+    prints_existentes = get_prints_existentes()
+
+    # Filtrar propiedades activas con link
+    pendientes = []
+    for row in rows:
+        fila = row.get('_row', 0)
+        if fila < 2:
+            continue
+
+        # Solo activas
+        activo = (row.get('activo') or '').lower()
+        if activo == 'no':
+            continue
+
+        # Solo con link
+        link = row.get('link', '')
+        if not link.startswith('http'):
+            continue
+
+        # Detectar campos faltantes
+        missing = []
+        for campo in CAMPOS_IMPORTANTES:
+            valor = (row.get(campo) or '').strip().lower()
+            if not valor or valor == '?':
+                missing.append(campo)
+
+        # Si tiene todos los datos, skip
+        if not missing:
+            continue
+
+        tiene_print = fila in prints_existentes
+
+        # Si solo queremos los que no tienen print
+        if solo_sin_print and tiene_print:
+            continue
+
+        pendientes.append({
+            'fila': fila,
+            'direccion': row.get('direccion', ''),
+            'barrio': row.get('barrio', ''),
+            'link': link,
+            'missing': missing,
+            'tiene_print': tiene_print
+        })
+
+    # Ordenar por cantidad de datos faltantes (más incompletos primero)
+    pendientes.sort(key=lambda x: -len(x['missing']))
+
+    # Guardar JSON
+    PRINTS_DIR.mkdir(parents=True, exist_ok=True)
+    output = {
+        'total': len(pendientes),
+        'con_print': sum(1 for p in pendientes if p['tiene_print']),
+        'sin_print': sum(1 for p in pendientes if not p['tiene_print']),
+        'instrucciones': 'Guardá los screenshots en data/prints/ con el nombre: fila_XX.png (ej: fila_22.png)',
+        'propiedades': pendientes
+    }
+
+    with open(PENDIENTES_FILE, 'w', encoding='utf-8') as f:
+        json.dump(output, f, ensure_ascii=False, indent=2)
+
+    # Mostrar resumen
+    print(f"\n📋 PROPIEDADES CON DATOS FALTANTES")
+    print(f"{'='*60}")
+    print(f"   Total: {len(pendientes)}")
+    print(f"   Con print: {output['con_print']} ✅")
+    print(f"   Sin print: {output['sin_print']} ⚠️")
+    print(f"{'='*60}\n")
+
+    for p in pendientes:
+        print_icon = '✅' if p['tiene_print'] else '⚠️'
+        missing_str = ', '.join(p['missing'][:5])
+        if len(p['missing']) > 5:
+            missing_str += f' +{len(p["missing"])-5}'
+        print(f"   {print_icon} Fila {p['fila']:2d}: {p['direccion'][:30]:<30} | Faltan: {missing_str}")
+
+    print(f"\n💾 Guardado en: {PENDIENTES_FILE}")
+    print(f"📸 Para agregar print: guardá como data/prints/fila_XX.png")
+
+
+# =============================================================================
 # MAIN
 # =============================================================================
 
@@ -1336,10 +1454,11 @@ Flujo de trabajo:
     python sync_sheet.py diff          # 3. Ver cambios en terminal
     python sync_sheet.py push          # 4. Subir cambios (merge)
     python sync_sheet.py push --force  # 4. Subir sobrescribiendo todo
+    python sync_sheet.py pendientes    # 5. Ver props con datos faltantes
         """
     )
 
-    parser.add_argument('command', choices=['pull', 'scrape', 'view', 'diff', 'push'],
+    parser.add_argument('command', choices=['pull', 'scrape', 'view', 'diff', 'push', 'pendientes'],
                        help='Comando a ejecutar')
     parser.add_argument('--force', action='store_true',
                        help='[push] Sobrescribe todo el sheet')
@@ -1353,6 +1472,8 @@ Flujo de trabajo:
                        help='[scrape] Ignora el cache y re-scrapea todo')
     parser.add_argument('--update', action='store_true',
                        help='[scrape] Sobrescribe valores existentes (no solo llena vacíos)')
+    parser.add_argument('--sin-print', action='store_true',
+                       help='[pendientes] Solo muestra los que no tienen screenshot')
 
     args = parser.parse_args()
 
@@ -1366,6 +1487,8 @@ Flujo de trabajo:
         cmd_diff()
     elif args.command == 'push':
         cmd_push(force=args.force, dry_run=args.dry_run)
+    elif args.command == 'pendientes':
+        cmd_pendientes(solo_sin_print=args.sin_print)
 
 
 if __name__ == '__main__':

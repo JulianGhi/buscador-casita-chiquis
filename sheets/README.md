@@ -179,11 +179,28 @@ python sheets/sync_sheet.py scrape --all   # Re-verifica activo en todos
 python sheets/sync_sheet.py push --force   # Sobrescribe incluyendo activo
 ```
 
+### 6. Ver propiedades con datos faltantes
+
+```bash
+python sheets/sync_sheet.py pendientes           # Lista todas con datos faltantes
+python sheets/sync_sheet.py pendientes --sin-print  # Solo las sin screenshot guardado
+```
+
+Genera `data/prints/pendientes.json` con las propiedades que tienen campos importantes vacíos:
+- `terraza`, `balcon`, `cocheras`, `luminosidad`, `disposicion`
+- `ascensor`, `antiguedad`, `expensas`, `banos`, `apto_credito`
+
+**Sistema de prints:**
+
+Para respaldar propiedades interesantes, guardá screenshots en `data/prints/`:
+- Nombrar como `fila_XX.png` o `fila_XX.pdf` (ej: `fila_27.png`)
+- El comando `pendientes` detecta cuáles ya tienen print guardado (✅ vs ⚠️)
+
 ## Archivos
 
 | Archivo | Descripción |
 |---------|-------------|
-| `sync_sheet.py` | Script principal con pull/scrape/view/diff/push |
+| `sync_sheet.py` | Script principal con pull/scrape/view/diff/push/pendientes |
 | `complete_excel.py` | Scrapea links del Excel local (legacy) |
 | `sheets.py` | Utilidades base para Google Sheets |
 | `update_sheet.py` | Sube Excel a Google Sheets (legacy) |
