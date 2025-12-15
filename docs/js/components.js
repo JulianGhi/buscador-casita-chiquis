@@ -207,7 +207,7 @@ function renderTable(filtered) {
                 <td class="px-2 py-2.5 text-center text-xs text-slate-600">${p.tipo ? escapeHtml(p.tipo.toUpperCase()) : '<span class="text-slate-300">-</span>'}</td>
                 <td class="px-3 py-2.5 text-right font-mono text-slate-800">${p._precio > 0 ? '$' + p._precio.toLocaleString() : '<span class="text-slate-300">-</span>'}</td>
                 <td class="px-2 py-2.5 text-right text-slate-600">${p._m2 ? p._m2 : '<span class="text-slate-300">-</span>'}</td>
-                <td class="px-2 py-2.5 text-right text-slate-500 text-xs">${p.m2_terr && p.m2_terr !== '0' ? p.m2_terr : '<span class="text-slate-300">-</span>'}</td>
+                <td class="px-2 py-2.5 text-right text-slate-600">${p.m2_terr && p.m2_terr !== '0' ? p.m2_terr : '<span class="text-slate-300">-</span>'}</td>
                 <td class="px-3 py-2.5 text-right font-mono text-slate-600">${p._preciom2 > 0 ? '$' + p._preciom2.toLocaleString() : '<span class="text-slate-300">-</span>'}</td>
                 <td class="px-2 py-2.5 text-center">${evalIcon(p._vsRef)}</td>
                 <td class="px-3 py-2.5 text-right font-mono text-slate-800">${p._precio > 0 ? '$' + p._total.toLocaleString() : '<span class="text-slate-300">-</span>'}</td>
