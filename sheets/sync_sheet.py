@@ -79,6 +79,10 @@ def clear_warnings():
     global scrape_warnings
     scrape_warnings = []
 
+def get_warnings():
+    """Retorna la lista de warnings (para tests)."""
+    return scrape_warnings
+
 def print_warnings_summary():
     """Imprime resumen de warnings al final del scrape."""
     if not scrape_warnings:
@@ -242,6 +246,13 @@ ATTR_PATTERNS = {
 }
 
 
+def quitar_tildes(texto):
+    """Quita tildes/acentos de un texto pero mantiene espacios y puntuación."""
+    import unicodedata
+    texto = unicodedata.normalize('NFD', texto)
+    return ''.join(c for c in texto if unicodedata.category(c) != 'Mn')
+
+
 def detectar_atributo(texto, atributo, contexto=None):
     """
     Detecta si un atributo está presente o ausente basado en patrones.
@@ -261,7 +272,8 @@ def detectar_atributo(texto, atributo, contexto=None):
         return None
 
     patterns = ATTR_PATTERNS[atributo]
-    texto_lower = texto.lower()
+    # Normalizar: minúsculas y sin tildes (balcón → balcon, crédito → credito)
+    texto_lower = quitar_tildes(texto.lower())
 
     # Primero verificar patrones de negación
     for patron in patterns['no']:
@@ -279,20 +291,13 @@ def detectar_atributo(texto, atributo, contexto=None):
         return 'si'
 
     # Si el atributo está mencionado pero no matcheó ningún patrón → incierto
-    # Normalizar variantes (balcón/balcon, etc.)
-    variantes = [atributo]
-    if atributo == 'balcon':
-        variantes.append('balcón')
-    elif atributo == 'terraza':
-        variantes.append('terraz')  # terraza, terrazas
-
-    for variante in variantes:
-        if variante in texto_lower:
-            # Encontró mención pero no pudo clasificar
-            msg = f"'{texto[:60]}...'"
-            print(f"      ⚠️  {atributo.upper()} incierto: {msg}")
-            add_warning('atributo_incierto', f"{atributo}=? en: {msg}", contexto)
-            return '?'
+    # (ya normalizamos tildes, así que balcón = balcon)
+    if atributo in texto_lower:
+        # Encontró mención pero no pudo clasificar
+        msg = f"'{texto[:60]}...'"
+        print(f"      ⚠️  {atributo.upper()} incierto: {msg}")
+        add_warning('atributo_incierto', f"{atributo}=? en: {msg}", contexto)
+        return '?'
 
     return None
 
