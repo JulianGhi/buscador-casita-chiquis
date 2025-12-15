@@ -90,6 +90,26 @@ def detectar_barrio(texto):
             return barrio
     return None
 
+
+def extraer_numero(texto, quitar_miles=False):
+    """Extrae el primer número de un texto, o None si no hay.
+
+    Args:
+        texto: Texto del que extraer el número
+        quitar_miles: Si True, quita puntos de miles antes de buscar (ej: "150.000" → "150000")
+
+    Returns:
+        String con el número encontrado, o None si no hay
+    """
+    if not texto:
+        return None
+    texto = str(texto)
+    if quitar_miles:
+        texto = texto.replace('.', '')
+    match = re.search(r'(\d+)', texto)
+    return match.group(1) if match else None
+
+
 # =============================================================================
 # SISTEMA DE VALIDACIONES Y WARNINGS
 # =============================================================================
@@ -491,25 +511,25 @@ def scrape_argenprop(url):
         for li in soup.select('.property-features li, .property-features-item'):
             txt = li.text.strip().lower()
             if 'm² cub' in txt or 'm2 cub' in txt or 'sup. cubierta' in txt:
-                match = re.search(r'(\d+)', txt)
-                if match:
-                    data['m2_cub'] = match.group(1)
+                num = extraer_numero(txt)
+                if num:
+                    data['m2_cub'] = num
             elif 'm² tot' in txt or 'm2 tot' in txt or 'sup. total' in txt:
-                match = re.search(r'(\d+)', txt)
-                if match:
-                    data['m2_tot'] = match.group(1)
+                num = extraer_numero(txt)
+                if num:
+                    data['m2_tot'] = num
             elif 'descubierta' in txt or 'm² desc' in txt or 'terraza' in txt and 'm²' in txt:
-                match = re.search(r'(\d+)', txt)
-                if match:
-                    data['m2_terr'] = match.group(1)
+                num = extraer_numero(txt)
+                if num:
+                    data['m2_terr'] = num
             elif 'ambiente' in txt and 'cant' in txt:
-                match = re.search(r'(\d+)', txt)
-                if match:
-                    data['amb'] = match.group(1)
+                num = extraer_numero(txt)
+                if num:
+                    data['amb'] = num
             elif 'antigüedad' in txt or 'antiguedad' in txt:
-                match = re.search(r'(\d+)', txt)
-                if match:
-                    data['antiguedad'] = match.group(1)
+                num = extraer_numero(txt)
+                if num:
+                    data['antiguedad'] = num
             elif 'terraza' in txt:
                 result = detectar_atributo(txt, 'terraza')
                 if result:
@@ -523,16 +543,15 @@ def scrape_argenprop(url):
                 if result == 'no':
                     data['cocheras'] = '0'
                 elif result == 'si':
-                    match = re.search(r'(\d+)', txt)
-                    data['cocheras'] = match.group(1) if match else '1'
+                    data['cocheras'] = extraer_numero(txt) or '1'
             elif 'baño' in txt:
-                match = re.search(r'(\d+)', txt)
-                if match:
-                    data['banos'] = match.group(1)
+                num = extraer_numero(txt)
+                if num:
+                    data['banos'] = num
             elif 'expensas' in txt:
-                match = re.search(r'(\d+)', txt.replace('.', ''))
-                if match:
-                    data['expensas'] = match.group(1)
+                num = extraer_numero(txt, quitar_miles=True)
+                if num:
+                    data['expensas'] = num
 
         # Inmobiliaria
         inmob = soup.select_one('.property-contact__title, .property-sidebar h3, [class*="contact"] h3')
@@ -663,37 +682,37 @@ def scrape_mercadolibre(url):
                 h = header.text.strip().lower()
                 v = value.text.strip()
                 if 'superficie cubierta' in h:
-                    match = re.search(r'(\d+)', v)
-                    if match:
-                        data['m2_cub'] = match.group(1)
+                    num = extraer_numero(v)
+                    if num:
+                        data['m2_cub'] = num
                 elif 'superficie total' in h:
-                    match = re.search(r'(\d+)', v)
-                    if match:
-                        data['m2_tot'] = match.group(1)
+                    num = extraer_numero(v)
+                    if num:
+                        data['m2_tot'] = num
                 elif 'superficie descubierta' in h or 'sup. descubierta' in h:
-                    match = re.search(r'(\d+)', v)
-                    if match:
-                        data['m2_terr'] = match.group(1)
+                    num = extraer_numero(v)
+                    if num:
+                        data['m2_terr'] = num
                 elif 'ambientes' in h:
-                    match = re.search(r'(\d+)', v)
-                    if match:
-                        data['amb'] = match.group(1)
+                    num = extraer_numero(v)
+                    if num:
+                        data['amb'] = num
                 elif 'dormitorio' in h:
-                    match = re.search(r'(\d+)', v)
-                    if match:
-                        data['dormitorios'] = match.group(1)
+                    num = extraer_numero(v)
+                    if num:
+                        data['dormitorios'] = num
                 elif 'baño' in h:
-                    match = re.search(r'(\d+)', v)
-                    if match:
-                        data['banos'] = match.group(1)
+                    num = extraer_numero(v)
+                    if num:
+                        data['banos'] = num
                 elif 'antigüedad' in h or 'antiguedad' in h:
-                    match = re.search(r'(\d+)', v)
-                    if match:
-                        data['antiguedad'] = match.group(1)
+                    num = extraer_numero(v)
+                    if num:
+                        data['antiguedad'] = num
                 elif 'expensas' in h:
-                    match = re.search(r'(\d+)', v)
-                    if match:
-                        data['expensas'] = match.group(1)
+                    num = extraer_numero(v)
+                    if num:
+                        data['expensas'] = num
                 elif 'apto cr' in h or 'apto_cr' in h:
                     # "Apto crédito: Sí/No"
                     data['apto_credito'] = 'si' if 'sí' in v.lower() or 'si' in v.lower() else 'no'
@@ -701,15 +720,15 @@ def scrape_mercadolibre(url):
                     # "Tipo de departamento", "Tipo de casa", etc.
                     data['tipo'] = v.lower()
                 elif 'cochera' in h:
-                    match = re.search(r'(\d+)', v)
-                    if match:
-                        data['cocheras'] = match.group(1)
+                    num = extraer_numero(v)
+                    if num:
+                        data['cocheras'] = num
                 elif 'disposición' in h or 'disposicion' in h:
                     data['disposicion'] = v.lower()
                 elif 'número de piso' in h or 'piso de la unidad' in h:
-                    match = re.search(r'(\d+)', v)
-                    if match:
-                        data['piso'] = match.group(1)
+                    num = extraer_numero(v)
+                    if num:
+                        data['piso'] = num
                 elif 'ascensor' in h:
                     result = detectar_atributo(f"{h}: {v}", 'ascensor')
                     if result:

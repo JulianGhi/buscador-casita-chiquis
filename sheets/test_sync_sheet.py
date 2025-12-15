@@ -13,6 +13,7 @@ from sync_sheet import (
     validar_propiedad,
     detectar_atributo,
     detectar_barrio,
+    extraer_numero,
     extraer_id_propiedad,
     ATTR_PATTERNS,
     BARRIOS_CABA,
@@ -424,6 +425,62 @@ class TestDetectarAtributo:
 # =============================================================================
 # TESTS: detectar_barrio()
 # =============================================================================
+
+# =============================================================================
+# TESTS: extraer_numero()
+# =============================================================================
+
+class TestExtraerNumero:
+    """Tests para la función extraer_numero"""
+
+    def test_extrae_numero_simple(self):
+        """Extrae número de texto simple"""
+        assert extraer_numero('50 m²') == '50'
+        assert extraer_numero('3 ambientes') == '3'
+        assert extraer_numero('Antigüedad: 15 años') == '15'
+
+    def test_extrae_primer_numero(self):
+        """Extrae solo el primer número cuando hay varios"""
+        assert extraer_numero('3 amb, 2 baños') == '3'
+        assert extraer_numero('2do piso, 4 amb') == '2'
+
+    def test_extrae_numeros_grandes(self):
+        """Extrae números de varios dígitos"""
+        assert extraer_numero('150 m² cubiertos') == '150'
+        assert extraer_numero('Precio: 95000 USD') == '95000'
+
+    def test_retorna_none_sin_numero(self):
+        """Retorna None si no hay números"""
+        assert extraer_numero('sin número') is None
+        assert extraer_numero('texto') is None
+
+    def test_retorna_none_para_vacio(self):
+        """Retorna None para texto vacío o None"""
+        assert extraer_numero('') is None
+        assert extraer_numero(None) is None
+
+    def test_convierte_a_string(self):
+        """Convierte entrada a string antes de buscar"""
+        assert extraer_numero(123) == '123'
+        assert extraer_numero(45.67) == '45'
+
+    # --- Tests con quitar_miles ---
+
+    def test_quitar_miles_simple(self):
+        """Con quitar_miles=True, remueve puntos de miles"""
+        assert extraer_numero('150.000', quitar_miles=True) == '150000'
+        assert extraer_numero('$1.500.000', quitar_miles=True) == '1500000'
+
+    def test_sin_quitar_miles(self):
+        """Sin quitar_miles, el punto detiene la búsqueda"""
+        assert extraer_numero('150.000', quitar_miles=False) == '150'
+        assert extraer_numero('$1.500.000') == '1'  # default es False
+
+    def test_quitar_miles_sin_puntos(self):
+        """quitar_miles no afecta si no hay puntos"""
+        assert extraer_numero('150000', quitar_miles=True) == '150000'
+        assert extraer_numero('150000', quitar_miles=False) == '150000'
+
 
 class TestDetectarBarrio:
     """Tests para la función detectar_barrio"""
