@@ -12,8 +12,10 @@ from sync_sheet import (
     calcular_m2_faltantes,
     validar_propiedad,
     detectar_atributo,
+    detectar_barrio,
     extraer_id_propiedad,
     ATTR_PATTERNS,
+    BARRIOS_CABA,
     clear_warnings,
     get_warnings,
 )
@@ -417,6 +419,48 @@ class TestDetectarAtributo:
         # Negaciones con tildes
         assert detectar_atributo('Sin Balcón', 'balcon') == 'no'
         assert detectar_atributo('No acepta crédito', 'apto_credito') == 'no'
+
+
+# =============================================================================
+# TESTS: detectar_barrio()
+# =============================================================================
+
+class TestDetectarBarrio:
+    """Tests para la función detectar_barrio"""
+
+    def test_detecta_barrios_zona_oeste(self):
+        """Detecta barrios de zona oeste"""
+        assert detectar_barrio('Departamento en Floresta') == 'Floresta'
+        assert detectar_barrio('Flores, Capital Federal') == 'Flores'
+        assert detectar_barrio('venta caballito 3 amb') == 'Caballito'
+
+    def test_detecta_barrios_con_espacios(self):
+        """Detecta barrios con nombres compuestos"""
+        assert detectar_barrio('Villa del Parque, CABA') == 'Villa del Parque'
+        assert detectar_barrio('depto villa crespo') == 'Villa Crespo'
+        assert detectar_barrio('Parque Avellaneda') == 'Parque Avellaneda'
+
+    def test_case_insensitive(self):
+        """La detección es case insensitive"""
+        assert detectar_barrio('FLORESTA') == 'Floresta'
+        assert detectar_barrio('flores') == 'Flores'
+        assert detectar_barrio('VilLa CreSpo') == 'Villa Crespo'
+
+    def test_retorna_none_sin_barrio(self):
+        """Retorna None si no encuentra barrio"""
+        assert detectar_barrio('Departamento 3 ambientes') is None
+        assert detectar_barrio('Capital Federal') is None
+
+    def test_retorna_none_para_vacio(self):
+        """Retorna None para texto vacío o None"""
+        assert detectar_barrio('') is None
+        assert detectar_barrio(None) is None
+
+    def test_barrios_caba_tiene_zona_oeste(self):
+        """BARRIOS_CABA incluye barrios de zona oeste"""
+        zona_oeste = ['Floresta', 'Flores', 'Caballito', 'Villa Luro', 'Liniers']
+        for barrio in zona_oeste:
+            assert barrio in BARRIOS_CABA, f"Falta {barrio} en BARRIOS_CABA"
 
 
 # =============================================================================

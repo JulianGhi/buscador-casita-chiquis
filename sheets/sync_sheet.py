@@ -17,7 +17,9 @@ import argparse
 import json
 import os
 import re
+import subprocess
 import time
+import unicodedata
 from datetime import datetime, timedelta
 from pathlib import Path
 
@@ -58,6 +60,35 @@ SCRAPEABLE_COLS = ['precio', 'm2_cub', 'm2_tot', 'm2_desc', 'm2_terr', 'amb', 'b
                    'expensas', 'terraza', 'antiguedad', 'apto_credito', 'tipo', 'activo',
                    'cocheras', 'disposicion', 'piso', 'ascensor', 'balcon', 'luminosidad',
                    'fecha_publicado', 'banos', 'inmobiliaria', 'dormitorios', 'fecha_print']
+
+# Barrios conocidos de CABA (unificado para evitar duplicación)
+BARRIOS_CABA = [
+    # Zona Oeste (principal área de búsqueda)
+    'Floresta', 'Flores', 'Caballito', 'Parque Chacabuco', 'Parque Avellaneda',
+    'Villa Luro', 'Liniers', 'Mataderos', 'Villa Real', 'Versalles',
+    'Vélez Sársfield', 'Velez Sarsfield',  # con y sin tilde
+    'Monte Castro', 'Villa del Parque', 'Villa Devoto', 'Villa Santa Rita',
+    'Paternal', 'Villa General Mitre', 'Agronomía',
+    # Zona Norte
+    'Villa Crespo', 'Almagro', 'Villa Ortúzar', 'Chacarita', 'Colegiales',
+    'Belgrano', 'Núñez', 'Saavedra', 'Villa Urquiza', 'Villa Pueyrredón', 'Coghlan',
+    'Palermo', 'Recoleta',
+    # Zona Centro/Sur
+    'Retiro', 'San Nicolás', 'Monserrat', 'San Telmo', 'Constitución',
+    'Barracas', 'La Boca', 'Boedo', 'San Cristóbal', 'Balvanera',
+    'Once', 'Abasto',
+]
+
+
+def detectar_barrio(texto):
+    """Detecta barrio de CABA en un texto. Retorna el nombre o None."""
+    if not texto:
+        return None
+    texto_lower = texto.lower()
+    for barrio in BARRIOS_CABA:
+        if barrio.lower() in texto_lower:
+            return barrio
+    return None
 
 # =============================================================================
 # SISTEMA DE VALIDACIONES Y WARNINGS
@@ -112,6 +143,32 @@ def print_warnings_summary():
     print(f"\n{'='*60}")
 
 
+def extraer_m2(data):
+    """Extrae m2_cub, m2_tot, m2_desc de un dict como ints."""
+    return (
+        int(data.get('m2_cub') or 0),
+        int(data.get('m2_tot') or 0),
+        int(data.get('m2_desc') or 0),
+    )
+
+
+def get_active_rows(rows):
+    """Filtra filas activas con links válidos.
+
+    Returns:
+        Lista de rows que cumplen:
+        - _row >= 2 (no es header)
+        - activo != 'no'
+        - link empieza con 'http'
+    """
+    return [
+        row for row in rows
+        if row.get('_row', 0) >= 2
+        and (row.get('activo') or '').lower() != 'no'
+        and row.get('link', '').startswith('http')
+    ]
+
+
 def calcular_m2_faltantes(data):
     """
     Calcula m² faltantes si tenemos 2 de los 3 valores.
@@ -122,10 +179,7 @@ def calcular_m2_faltantes(data):
         dict con campos calculados (vacío si no se pudo calcular nada)
     """
     calculados = {}
-
-    m2_cub = int(data.get('m2_cub') or 0)
-    m2_tot = int(data.get('m2_tot') or 0)
-    m2_desc = int(data.get('m2_desc') or 0)
+    m2_cub, m2_tot, m2_desc = extraer_m2(data)
 
     # Si tenemos tot y cub pero no desc → calcular desc
     if m2_tot > 0 and m2_cub > 0 and m2_desc == 0:
@@ -157,9 +211,7 @@ def validar_propiedad(data, contexto=None):
     ctx = contexto or data.get('direccion', data.get('link', '?'))[:50]
 
     # Validar m² (cub + desc = tot)
-    m2_cub = int(data.get('m2_cub') or 0)
-    m2_tot = int(data.get('m2_tot') or 0)
-    m2_desc = int(data.get('m2_desc') or 0)
+    m2_cub, m2_tot, m2_desc = extraer_m2(data)
 
     if m2_cub > 0 and m2_tot > 0:
         if m2_cub > m2_tot:
@@ -248,7 +300,6 @@ ATTR_PATTERNS = {
 
 def quitar_tildes(texto):
     """Quita tildes/acentos de un texto pero mantiene espacios y puntuación."""
-    import unicodedata
     texto = unicodedata.normalize('NFD', texto)
     return ''.join(c for c in texto if unicodedata.category(c) != 'Mn')
 
@@ -491,16 +542,9 @@ def scrape_argenprop(url):
         # Barrio (del breadcrumb o container)
         location = soup.select_one('.property-container')
         if location:
-            txt = location.text
-            # Buscar barrio en texto como "Capital Federal, Parque Avellaneda"
-            barrios_conocidos = ['Floresta', 'Flores', 'Caballito', 'Parque Chacabuco', 'Parque Avellaneda',
-                                 'Villa Luro', 'Liniers', 'Mataderos', 'Villa Crespo', 'Paternal',
-                                 'Villa del Parque', 'Villa Devoto', 'Monte Castro', 'Velez Sarsfield',
-                                 'Vélez Sarsfield', 'Boedo', 'Almagro', 'Palermo', 'Belgrano']
-            for barrio in barrios_conocidos:
-                if barrio.lower() in txt.lower():
-                    data['barrio'] = barrio
-                    break
+            barrio = detectar_barrio(location.text)
+            if barrio:
+                data['barrio'] = barrio
 
         return data
     except Exception as e:
@@ -592,10 +636,10 @@ def scrape_mercadolibre(url):
                 direccion_raw = re.sub(r'^\d+\s*(Amb|Ambientes?)\s*', '', direccion_raw, flags=re.IGNORECASE).strip()
 
                 # Remover barrios que quedaron pegados al inicio
-                barrios_limpiar = ['Floresta', 'Flores', 'Caballito', 'Almagro', 'Villa Crespo', 'Paternal']
-                for b in barrios_limpiar:
+                for b in BARRIOS_CABA:
                     if direccion_raw.lower().startswith(b.lower()):
                         direccion_raw = direccion_raw[len(b):].strip(' -')
+                        break
 
                 data['direccion'] = direccion_raw
             if len(parts) >= 2:
@@ -694,37 +738,22 @@ def scrape_mercadolibre(url):
         # Combinar título y URL para buscar tipo
         search_text = title_lower + ' ' + url_lower
 
-        # Barrios conocidos de CABA
-        barrios_conocidos = [
-            'Floresta', 'Flores', 'Caballito', 'Almagro', 'Villa Crespo',
-            'Paternal', 'Monte Castro', 'Parque Chacabuco', 'Parque Avellaneda',
-            'Villa del Parque', 'Villa Devoto', 'Villa Santa Rita', 'Vélez Sársfield',
-            'Villa Luro', 'Liniers', 'Mataderos', 'Villa Real', 'Versalles',
-            'Villa Pueyrredón', 'Agronomía', 'Villa Ortúzar', 'Chacarita',
-            'Colegiales', 'Belgrano', 'Núñez', 'Saavedra', 'Villa Urquiza',
-            'Coghlan', 'Palermo', 'Recoleta', 'Retiro', 'San Nicolás',
-            'Monserrat', 'San Telmo', 'Constitución', 'Barracas', 'La Boca',
-            'Boedo', 'San Cristóbal', 'Balvanera', 'Once', 'Abasto'
-        ]
-
         # Extraer barrio de múltiples fuentes
         barrio_fuentes = {}
 
         # 1. Del título (alta prioridad - el vendedor lo puso explícitamente)
-        for barrio in barrios_conocidos:
-            if barrio.lower() in title_lower:
-                barrio_fuentes['titulo'] = barrio
-                break
+        barrio_titulo = detectar_barrio(title_text)
+        if barrio_titulo:
+            barrio_fuentes['titulo'] = barrio_titulo
 
         # 2. De la ubicación (ya extraído antes, si existe)
         if 'barrio' in data:
             barrio_fuentes['ubicacion'] = data['barrio']
 
-        # 3. De la URL (algunos tienen el barrio)
-        for barrio in barrios_conocidos:
-            if barrio.lower().replace(' ', '-') in url_lower:
-                barrio_fuentes['url'] = barrio
-                break
+        # 3. De la URL (algunos tienen el barrio con guiones)
+        barrio_url = detectar_barrio(url.replace('-', ' '))
+        if barrio_url:
+            barrio_fuentes['url'] = barrio_url
 
         # Decidir el barrio final (prioridad: titulo > ubicacion > url)
         if 'titulo' in barrio_fuentes:
@@ -1416,7 +1445,6 @@ def cmd_view(check_links=False):
     print(f"✅ Preview generado: {html_path}")
 
     # Abrir en browser
-    import subprocess
     subprocess.run(['xdg-open', str(html_path)])
 
 
@@ -1458,7 +1486,6 @@ def normalizar_texto(texto):
     """Normaliza texto para comparación (minúsculas, sin acentos, sin espacios extras)."""
     if not texto:
         return ''
-    import unicodedata
     texto = unicodedata.normalize('NFD', texto.lower())
     texto = ''.join(c for c in texto if unicodedata.category(c) != 'Mn')
     texto = re.sub(r'[^a-z0-9]', '', texto)
@@ -1581,7 +1608,6 @@ def get_prints_index(rows):
 
 def cmd_prints_open(limit=None):
     """Abre en el browser todas las propiedades sin print."""
-    import subprocess
     import webbrowser
 
     data = load_local_data()
@@ -1635,7 +1661,6 @@ def cmd_prints_open(limit=None):
 
 def cmd_prints_scan():
     """Analiza PDFs nuevos en la carpeta 'nuevos/', extrae IDs y los mueve a prints/."""
-    import subprocess
 
     data = load_local_data()
     if not data:
@@ -1782,19 +1807,11 @@ def cmd_prints():
     rows = data['rows']
     prints_index = get_prints_index(rows)
 
-    # Clasificar propiedades
+    # Clasificar propiedades activas
     activas = []
-    for row in rows:
+    for row in get_active_rows(rows):
         fila = row.get('_row', 0)
-        if fila < 2:
-            continue
-        activo = (row.get('activo') or '').lower()
-        if activo == 'no':
-            continue
         link = row.get('link', '')
-        if not link.startswith('http'):
-            continue
-
         prop_id = extraer_id_propiedad(link)
         print_info = prints_index.get(fila)
         activas.append({
