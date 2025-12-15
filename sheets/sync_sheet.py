@@ -77,6 +77,11 @@ from core import (
     PRINT_PATTERN_FILA,
     generar_nombre_print,
     get_prints_index,
+    # Templates
+    PREVIEW_SHOW_COLS,
+    PREVIEW_DIFF_COLS,
+    generate_preview_html,
+    build_preview_data,
 )
 
 # =============================================================================
@@ -562,7 +567,6 @@ def cmd_view(check_links=False):
         cloud_rows[i] = dict(zip(cloud_headers, row))
 
     local_rows = local_data['rows']
-    headers = local_data['headers']
 
     # Verificar links si se pidió
     link_status = {}
@@ -577,148 +581,12 @@ def cmd_view(check_links=False):
             print(f"   [{i+1}/{len(links_to_check)}] {icon} {status} - {url[:50]}...")
             time.sleep(0.3)
 
-    # Columnas a mostrar
-    SHOW_COLS = ['direccion', 'barrio', 'precio', 'm2_cub', 'm2_tot', 'amb', 'expensas', 'terraza', 'apto_credito', 'status', 'activo', 'notas']
-    DIFF_COLS = ['precio', 'm2_cub', 'm2_tot', 'amb']
-
-    # Generar HTML
-    html = """<!DOCTYPE html>
-<html lang="es">
-<head>
-    <meta charset="UTF-8">
-    <title>Preview - Sync Sheet</title>
-    <style>
-        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; margin: 20px; background: #f5f5f5; }
-        h1 { color: #333; }
-        .legend { margin-bottom: 20px; }
-        .legend span { padding: 4px 12px; border-radius: 4px; margin-right: 10px; font-size: 14px; }
-        .new { background: #d4edda; color: #155724; }
-        .modified { background: #fff3cd; color: #856404; }
-        .offline { background: #f8d7da; color: #721c24; }
-        table { border-collapse: collapse; width: 100%; background: white; box-shadow: 0 1px 3px rgba(0,0,0,0.1); font-size: 13px; }
-        th { background: #333; color: white; padding: 10px 6px; text-align: left; position: sticky; top: 0; white-space: nowrap; }
-        td { padding: 6px; border-bottom: 1px solid #eee; max-width: 200px; overflow: hidden; text-overflow: ellipsis; }
-        tr:hover { background: #f9f9f9; }
-        .new-cell { background: #d4edda; }
-        .modified-cell { background: #fff3cd; }
-        .offline-row { background: #fff5f5; }
-        .empty-cell { color: #ccc; }
-        .online { color: #28a745; }
-        .offline { color: #dc3545; }
-        .unknown { color: #6c757d; }
-        a { color: #0066cc; text-decoration: none; }
-        a:hover { text-decoration: underline; }
-        .notes { max-width: 300px; font-size: 11px; color: #666; }
-        .summary { margin-top: 20px; padding: 15px; background: white; border-radius: 8px; }
-        .badge { padding: 2px 6px; border-radius: 3px; font-size: 11px; }
-        .badge-yes { background: #d4edda; color: #155724; }
-        .badge-no { background: #f8d7da; color: #721c24; }
-    </style>
-</head>
-<body>
-    <h1>📊 Preview: Local vs Google Sheets</h1>
-    <div class="legend">
-        <span class="new">Verde = Nuevo</span>
-        <span class="modified">Amarillo = Modificado</span>
-        <span class="offline">Rojo = Offline (404/410)</span>
-    </div>
-    <table>
-        <thead>
-            <tr>
-                <th>Fila</th>
-                <th>Link</th>
-"""
-    for col in SHOW_COLS:
-        label = col.replace('_', ' ').replace('m2', 'm²').title()
-        html += f"                <th>{label}</th>\n"
-    html += """            </tr>
-        </thead>
-        <tbody>
-"""
-
-    added_cells = 0
-    modified_cells = 0
-    offline_count = 0
-
-    for row in local_rows:
-        fila = row.get('_row', 0)
-        if fila < 2:
-            continue
-
-        cloud = cloud_rows.get(fila, {})
-
-        # Solo mostrar filas con algún dato
-        has_data = any(row.get(c) for c in SHOW_COLS if c not in ['notas'])
-        if not has_data:
-            continue
-
-        # Verificar estado del link
-        link_url = row.get('link', '')
-        status = link_status.get(fila)
-        is_offline = status in [404, 410, 0] if status is not None else False
-        if is_offline:
-            offline_count += 1
-
-        row_class = 'offline-row' if is_offline else ''
-        html += f"            <tr class=\"{row_class}\">\n                <td>{fila}</td>\n"
-
-        # Columna de link con estado
-        if link_url:
-            if status is not None:
-                if status == 200:
-                    link_icon = '<span class="online">✓</span>'
-                elif status in [404, 410]:
-                    link_icon = f'<span class="offline">✗ {status}</span>'
-                else:
-                    link_icon = f'<span class="unknown">? {status}</span>'
-            else:
-                link_icon = ''
-            html += f'                <td><a href="{link_url}" target="_blank">🔗</a> {link_icon}</td>\n'
-        else:
-            html += '                <td class="empty-cell">-</td>\n'
-
-        for col in SHOW_COLS:
-            local_val = str(row.get(col, '') or '').strip()
-            cloud_val = str(cloud.get(col, '') or '').strip()
-
-            css_class = ''
-            if col in DIFF_COLS:
-                if local_val and not cloud_val:
-                    css_class = 'new-cell'
-                    added_cells += 1
-                elif local_val and cloud_val and local_val != cloud_val:
-                    css_class = 'modified-cell'
-                    modified_cells += 1
-
-            # Formatear valores especiales
-            if col == 'notas':
-                css_class += ' notes'
-                local_val = local_val[:100] + '...' if len(local_val) > 100 else local_val
-            elif col in ['terraza', 'apto_credito', 'activo']:
-                if local_val.lower() == 'si':
-                    local_val = '<span class="badge badge-yes">Sí</span>'
-                elif local_val.lower() == 'no':
-                    local_val = '<span class="badge badge-no">No</span>'
-
-            if not local_val:
-                css_class = 'empty-cell'
-                local_val = '-'
-
-            html += f"                <td class=\"{css_class}\">{local_val}</td>\n"
-
-        html += "            </tr>\n"
-
-    html += f"""        </tbody>
-    </table>
-    <div class="summary">
-        <strong>Resumen:</strong>
-        <span class="new">+{added_cells} celdas nuevas</span>
-        <span class="modified">~{modified_cells} celdas modificadas</span>
-        {'<span class="offline">⚠️ ' + str(offline_count) + ' links offline</span>' if offline_count else ''}
-    </div>
-</body>
-</html>
-"""
+    # Generar datos y HTML usando templates
+    rows_data, stats = build_preview_data(
+        local_rows, cloud_rows, link_status,
+        columns=PREVIEW_SHOW_COLS, diff_cols=PREVIEW_DIFF_COLS
+    )
+    html = generate_preview_html(rows_data, stats, columns=PREVIEW_SHOW_COLS)
 
     # Guardar HTML
     html_path = LOCAL_FILE.parent / 'preview.html'

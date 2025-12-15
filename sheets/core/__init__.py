@@ -77,3 +77,16 @@ from .prints import (
     get_prints_index,
     clasificar_prints,
 )
+
+from .templates import (
+    # Constantes
+    PREVIEW_CSS,
+    PREVIEW_SHOW_COLS,
+    PREVIEW_DIFF_COLS,
+    # Funciones
+    format_column_label,
+    format_cell_value,
+    generate_link_cell,
+    generate_preview_html,
+    build_preview_data,
+)
