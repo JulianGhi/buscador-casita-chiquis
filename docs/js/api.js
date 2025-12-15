@@ -2,37 +2,50 @@
 // API CALLS
 // ============================================
 
+// Helper genérico para fetch JSON con manejo de errores
+async function fetchJSON(url, options = {}) {
+  const { errorMessage = 'API error' } = options;
+  const response = await fetch(url);
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    throw new Error(errorData.error?.message || `${errorMessage}: HTTP ${response.status}`);
+  }
+  return response.json();
+}
+
+// Calcula variación porcentual
+function calcVariacion(actual, anterior) {
+  if (!anterior) return null;
+  return ((actual - anterior) / anterior * 100).toFixed(2);
+}
+
 async function fetchDolarBNA() {
   try {
-    const response = await fetch('https://api.bluelytics.com.ar/v2/evolution.json');
-    if (!response.ok) throw new Error('API error');
-    const allData = await response.json();
-
+    const allData = await fetchJSON('https://api.bluelytics.com.ar/v2/evolution.json');
     const oficial = allData.filter(d => d.source === 'Oficial');
     if (oficial.length === 0) throw new Error('No data');
 
     const hoy = oficial[0];
-    const hace1Dia = oficial.find((d, i) => i > 0 && d.date !== hoy.date);
-    const hace7Dias = oficial.slice(0, 14).find(d => {
+
+    // Buscar valores históricos para variaciones
+    const findByDaysAgo = (minDays, maxDays) => oficial.find(d => {
       const diff = (new Date(hoy.date) - new Date(d.date)) / (1000 * 60 * 60 * 24);
-      return diff >= 6 && diff <= 8;
-    });
-    const hace30Dias = oficial.find(d => {
-      const diff = (new Date(hoy.date) - new Date(d.date)) / (1000 * 60 * 60 * 24);
-      return diff >= 28 && diff <= 32;
+      return diff >= minDays && diff <= maxDays;
     });
 
-    const variaciones = {
-      dia: hace1Dia ? ((hoy.value_sell - hace1Dia.value_sell) / hace1Dia.value_sell * 100).toFixed(2) : null,
-      semana: hace7Dias ? ((hoy.value_sell - hace7Dias.value_sell) / hace7Dias.value_sell * 100).toFixed(2) : null,
-      mes: hace30Dias ? ((hoy.value_sell - hace30Dias.value_sell) / hace30Dias.value_sell * 100).toFixed(2) : null
-    };
+    const hace1Dia = oficial.find((d, i) => i > 0 && d.date !== hoy.date);
+    const hace7Dias = findByDaysAgo(6, 8);
+    const hace30Dias = findByDaysAgo(28, 32);
 
     return {
       venta: hoy.value_sell,
       compra: hoy.value_buy,
       fecha: hoy.date,
-      variaciones
+      variaciones: {
+        dia: calcVariacion(hoy.value_sell, hace1Dia?.value_sell),
+        semana: calcVariacion(hoy.value_sell, hace7Dias?.value_sell),
+        mes: calcVariacion(hoy.value_sell, hace30Dias?.value_sell)
+      }
     };
   } catch (err) {
     console.error('Error fetching dolar:', err);
@@ -40,67 +53,43 @@ async function fetchDolarBNA() {
   }
 }
 
-async function fetchData() {
-  console.group('🔄 fetchData()');
-  console.log('Timestamp:', new Date().toISOString());
+// Convierte array de arrays a CSV
+function arrayToCSV(rows) {
+  return rows.map(row =>
+    row.map(cell => {
+      const val = (cell || '').toString();
+      return (val.includes(',') || val.includes('"'))
+        ? '"' + val.replace(/"/g, '""') + '"'
+        : val;
+    }).join(',')
+  ).join('\n');
+}
 
+async function fetchData() {
   state.loading = true;
   state.error = null;
   render();
 
   const API_URL = `https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}/values/A:AH?key=${API_KEY}`;
-  console.log('Using Sheets API');
 
   try {
-    console.log('Fetching...');
-    const response = await fetch(API_URL);
-
-    console.log('Response status:', response.status);
-
-    if (!response.ok) {
-      const errorData = await response.json();
-      throw new Error(errorData.error?.message || `HTTP ${response.status}`);
-    }
-
-    const data = await response.json();
-    console.log('Rows received:', data.values?.length || 0);
+    const data = await fetchJSON(API_URL, { errorMessage: 'Sheets API' });
 
     if (!data.values || data.values.length < 2) {
       throw new Error('No hay datos');
     }
 
-    const csvLines = data.values.map(row =>
-      row.map(cell => {
-        const val = (cell || '').toString();
-        if (val.includes(',') || val.includes('"')) {
-          return '"' + val.replace(/"/g, '""') + '"';
-        }
-        return val;
-      }).join(',')
-    );
-    const csvText = csvLines.join('\n');
-
-    const headers = data.values[0];
-    const validRows = data.values.slice(1).filter(row => row[0] || row[1] || row[2]);
-
-    console.log('Valid rows:', validRows.length);
-    const direcciones = validRows.map(row => row[0] || '(vacío)');
-    console.log('Direcciones:', direcciones.join(' | '));
-
-    state.rawData = csvText;
+    state.rawData = arrayToCSV(data.values);
     state.lastUpdate = new Date();
     state.error = null;
 
-    console.log('✅ Data loaded successfully via API');
-
   } catch (err) {
-    console.error('❌ Error:', err.message);
+    console.error('fetchData error:', err.message);
     state.error = 'Error: ' + err.message;
     if (!state.rawData) state.rawData = SAMPLE_CSV;
   }
 
   state.loading = false;
-  console.groupEnd();
   render();
 }
 
