@@ -43,6 +43,16 @@ WORKSHEET_NAME = 'Propiedades'
 LOCAL_FILE = Path('data/sheet_data.json')
 CACHE_FILE = Path('data/scrape_cache.json')
 
+# Sistema de prints
+PRINTS_DIR = Path('data/prints')
+PRINTS_INDEX = Path('data/prints/index.json')
+PENDIENTES_FILE = Path('data/prints/pendientes.json')
+PRINT_DIAS_VENCIMIENTO = 30
+
+# Campos importantes que afectan el score si faltan
+CAMPOS_IMPORTANTES = ['terraza', 'balcon', 'cocheras', 'luminosidad', 'disposicion',
+                      'ascensor', 'antiguedad', 'expensas', 'banos', 'apto_credito']
+
 # Columnas que el scraper puede llenar
 SCRAPEABLE_COLS = ['precio', 'm2_cub', 'm2_tot', 'm2_terr', 'amb', 'barrio', 'direccion',
                    'expensas', 'terraza', 'antiguedad', 'apto_credito', 'tipo', 'activo',
@@ -245,6 +255,24 @@ def get_client():
     """Get authenticated gspread client"""
     creds = Credentials.from_service_account_file('credentials.json', scopes=SCOPES)
     return gspread.authorize(creds)
+
+
+# =============================================================================
+# HELPERS - Funciones de carga/guardado de archivos
+# =============================================================================
+
+def load_local_data():
+    """Carga datos del archivo JSON local. Retorna None si no existe."""
+    if not LOCAL_FILE.exists():
+        return None
+    with open(LOCAL_FILE, 'r', encoding='utf-8') as f:
+        return json.load(f)
+
+def save_local_data(data):
+    """Guarda datos al archivo JSON local."""
+    LOCAL_FILE.parent.mkdir(exist_ok=True)
+    with open(LOCAL_FILE, 'w', encoding='utf-8') as f:
+        json.dump(data, f, ensure_ascii=False, indent=2)
 
 
 # =============================================================================
@@ -1337,17 +1365,6 @@ def cmd_view(check_links=False):
 # =============================================================================
 # SISTEMA DE PRINTS - Backup de publicaciones
 # =============================================================================
-
-PRINTS_DIR = Path('data/prints')
-PRINTS_INDEX = Path('data/prints/index.json')
-PENDIENTES_FILE = Path('data/prints/pendientes.json')
-
-# Campos importantes que afectan el score si faltan
-CAMPOS_IMPORTANTES = ['terraza', 'balcon', 'cocheras', 'luminosidad', 'disposicion',
-                      'ascensor', 'antiguedad', 'expensas', 'banos', 'apto_credito']
-
-# Días después de los cuales un print se considera desactualizado
-PRINT_DIAS_VENCIMIENTO = 30
 
 # Formato estándar: {ID}_{YYYY-MM-DD}.ext donde ID es MLA123456 o AP123456
 # Ejemplos: MLA1513702911_2025-12-15.pdf, AP17094976_2025-12-15.png

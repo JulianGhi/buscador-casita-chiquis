@@ -190,11 +190,44 @@ Genera `data/prints/pendientes.json` con las propiedades que tienen campos impor
 - `terraza`, `balcon`, `cocheras`, `luminosidad`, `disposicion`
 - `ascensor`, `antiguedad`, `expensas`, `banos`, `apto_credito`
 
-**Sistema de prints:**
+### 7. Sistema de Prints (Backups PDF)
 
-Para respaldar propiedades interesantes, guardá screenshots en `data/prints/`:
-- Nombrar como `fila_XX.png` o `fila_XX.pdf` (ej: `fila_27.png`)
-- El comando `pendientes` detecta cuáles ya tienen print guardado (✅ vs ⚠️)
+Guardar PDFs de los avisos para tener respaldo en caso de que bajen la publicación.
+
+```bash
+python sheets/sync_sheet.py prints      # Ver estado de prints
+python sheets/sync_sheet.py push        # Sincroniza fecha_print al Sheet
+```
+
+**Nomenclatura de archivos:**
+
+| Formato | Ejemplo | Descripción |
+|---------|---------|-------------|
+| `{ID}_{FECHA}.pdf` | `MLA123456_2025-12-15.pdf` | ✅ Recomendado |
+| `{ID}.pdf` | `AP17094976.pdf` | Válido, sin fecha |
+
+Los IDs se extraen automáticamente del link:
+- MercadoLibre: `MLA-123456789` → `MLA123456789`
+- Argenprop: `...--17094976` → `AP17094976`
+- Zonaprop: `...--12345678.html` → `ZP12345678`
+
+**Pipeline de prints:**
+1. Abrir el link de la propiedad en el navegador
+2. Ctrl+P → Guardar como PDF
+3. Nombrar el archivo con el formato `{ID}_{FECHA}.pdf`
+4. Guardar en `data/prints/`
+5. Ejecutar `prints` para verificar
+6. Ejecutar `push` para sincronizar fecha_print al Sheet
+
+**Detección automática:**
+- Por ID en nombre del archivo
+- Por contenido del PDF (extrae URLs/IDs)
+- Por matching de dirección
+
+**Estados en el dashboard:**
+- 📄 (verde): Print actualizado (<30 días)
+- 📄 (ámbar): Print desactualizado (>30 días)
+- ○ (gris): Sin print
 
 ## Archivos
 
