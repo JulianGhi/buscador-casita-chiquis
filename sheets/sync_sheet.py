@@ -84,6 +84,10 @@ from core import (
     generar_nombre_print,
     get_prints_index,
     sync_print_dates,
+    build_property_index,
+    extract_id_from_pdf,
+    get_pending_print_files,
+    process_print_file,
     # Templates
     PREVIEW_SHOW_COLS,
     PREVIEW_DIFF_COLS,
@@ -576,120 +580,44 @@ def cmd_prints_open(limit=None):
 
 def cmd_prints_scan():
     """Analiza PDFs nuevos en la carpeta 'nuevos/', extrae IDs y los mueve a prints/."""
-
     data = load_local_data()
     if not data:
         print("❌ Primero ejecutá: python sync_sheet.py pull")
         return
 
-    rows = data['rows']
+    # Construir índices y listar archivos
+    id_to_fila, fila_to_info = build_property_index(data['rows'])
 
-    # Construir mapa de ID -> fila para matching
-    id_to_fila = {}
-    fila_to_info = {}
-    for row in rows:
-        fila = row.get('_row', 0)
-        link = row.get('link', '')
-        if fila >= 2 and link.startswith('http'):
-            prop_id = extraer_id_propiedad(link)
-            if prop_id:
-                id_to_fila[prop_id] = fila
-                fila_to_info[fila] = {
-                    'direccion': row.get('direccion', ''),
-                    'barrio': row.get('barrio', ''),
-                    'link': link,
-                    'prop_id': prop_id,
-                }
-
-    # Carpeta buffer para PDFs nuevos
     NUEVOS_DIR = PRINTS_DIR / 'nuevos'
     NUEVOS_DIR.mkdir(parents=True, exist_ok=True)
     PRINTS_DIR.mkdir(parents=True, exist_ok=True)
 
-    archivos_nuevos = []
-    for f in NUEVOS_DIR.iterdir():
-        if not f.is_file():
-            continue
-        if f.suffix.lower() not in ['.pdf', '.png', '.jpg', '.jpeg']:
-            continue
-        if f.name.startswith('.'):
-            continue
-        archivos_nuevos.append(f)
-
-    if not archivos_nuevos:
+    archivos = get_pending_print_files(NUEVOS_DIR)
+    if not archivos:
         print("✅ No hay archivos nuevos para procesar")
         print(f"   (Guardá los PDFs en: {NUEVOS_DIR.absolute()})")
         return
 
-    print(f"\n🔍 Analizando {len(archivos_nuevos)} archivos...")
+    print(f"\n🔍 Analizando {len(archivos)} archivos...")
 
     procesados = []
     sin_match = []
 
-    for archivo in archivos_nuevos:
+    for archivo in archivos:
         print(f"\n   📄 {archivo.name[:50]}...")
 
-        # Intentar extraer ID del contenido del PDF
-        prop_id = None
-        fila = None
-
-        if archivo.suffix.lower() == '.pdf':
-            try:
-                # Usar pdftotext para extraer texto
-                result = subprocess.run(
-                    ['pdftotext', '-l', '2', str(archivo), '-'],
-                    capture_output=True, text=True, timeout=10
-                )
-                contenido = result.stdout
-
-                # Buscar IDs en el contenido
-                # MercadoLibre: MLA-123456789 o MLA123456789
-                meli_match = re.search(r'MLA-?(\d{8,12})', contenido, re.IGNORECASE)
-                if meli_match:
-                    prop_id = f"MLA{meli_match.group(1)}"
-
-                # Argenprop: URLs con --123456
-                if not prop_id:
-                    argenprop_match = re.search(r'argenprop\.com[^\s]*--(\d+)', contenido)
-                    if argenprop_match:
-                        prop_id = f"AP{argenprop_match.group(1)}"
-
-                # Buscar por URL directa
-                if not prop_id:
-                    url_match = re.search(r'(https?://[^\s]+(?:mercadolibre|argenprop)[^\s]+)', contenido)
-                    if url_match:
-                        prop_id = extraer_id_propiedad(url_match.group(1))
-
-            except (subprocess.TimeoutExpired, FileNotFoundError) as e:
-                print(f"      ⚠️  No se pudo leer PDF: {e}")
-
-        # Si encontramos ID, buscar fila correspondiente
-        if prop_id and prop_id in id_to_fila:
-            fila = id_to_fila[prop_id]
-            info = fila_to_info[fila]
-
-            # Generar nuevo nombre
-            fecha_hoy = datetime.now().strftime('%Y-%m-%d')
-            nuevo_nombre = f"{prop_id}_{fecha_hoy}{archivo.suffix.lower()}"
-            nuevo_path = PRINTS_DIR / nuevo_nombre
-
-            # Renombrar
-            archivo.rename(nuevo_path)
-
-            print(f"      ✅ Match: Fila {fila} - {info['direccion'][:30]}")
-            print(f"      → Renombrado a: {nuevo_nombre}")
-
-            procesados.append({
-                'archivo_original': archivo.name,
-                'archivo_nuevo': nuevo_nombre,
-                'fila': fila,
-                'prop_id': prop_id,
-                'direccion': info['direccion'],
-            })
+        result = process_print_file(archivo, id_to_fila, fila_to_info)
+        if result:
+            print(f"      ✅ Match: Fila {result['fila']} - {result['direccion'][:30]}")
+            print(f"      → Renombrado a: {result['archivo_nuevo']}")
+            procesados.append(result)
         else:
             print(f"      ❌ No se encontró match")
-            if prop_id:
-                print(f"         ID detectado: {prop_id} (no está en el sheet)")
+            # Intentar mostrar ID detectado
+            if archivo.suffix.lower() == '.pdf':
+                prop_id = extract_id_from_pdf(archivo)
+                if prop_id:
+                    print(f"         ID detectado: {prop_id} (no está en el sheet)")
             sin_match.append(archivo.name)
 
     # Resumen

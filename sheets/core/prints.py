@@ -5,6 +5,7 @@ Funciones para gestionar screenshots/PDFs de avisos inmobiliarios.
 """
 
 import re
+import subprocess
 import unicodedata
 from datetime import datetime
 from pathlib import Path
@@ -278,3 +279,154 @@ def sync_print_dates(rows, prints_dir=None):
                 updated += 1
 
     return updated
+
+
+# =============================================================================
+# FUNCIONES PARA SCAN DE PRINTS
+# =============================================================================
+
+def build_property_index(rows):
+    """
+    Construye indices de propiedades por ID y por fila.
+
+    Args:
+        rows: Lista de filas del sheet
+
+    Returns:
+        tuple: (id_to_fila, fila_to_info)
+            - id_to_fila: {prop_id: fila}
+            - fila_to_info: {fila: {direccion, barrio, link, prop_id}}
+    """
+    id_to_fila = {}
+    fila_to_info = {}
+
+    for row in rows:
+        fila = row.get('_row', 0)
+        link = row.get('link', '')
+        if fila >= 2 and link.startswith('http'):
+            prop_id = extraer_id_propiedad(link)
+            if prop_id:
+                id_to_fila[prop_id] = fila
+                fila_to_info[fila] = {
+                    'direccion': row.get('direccion', ''),
+                    'barrio': row.get('barrio', ''),
+                    'link': link,
+                    'prop_id': prop_id,
+                }
+
+    return id_to_fila, fila_to_info
+
+
+def extract_id_from_pdf(filepath):
+    """
+    Extrae ID de propiedad del contenido de un PDF.
+
+    Usa pdftotext para extraer texto y busca patrones de MercadoLibre y Argenprop.
+
+    Args:
+        filepath: Path al archivo PDF
+
+    Returns:
+        str o None: ID extraido (MLA123 o AP123) o None si no se encontro
+    """
+    try:
+        result = subprocess.run(
+            ['pdftotext', '-l', '2', str(filepath), '-'],
+            capture_output=True, text=True, timeout=10
+        )
+        contenido = result.stdout
+
+        # MercadoLibre: MLA-123456789 o MLA123456789
+        meli_match = re.search(r'MLA-?(\d{8,12})', contenido, re.IGNORECASE)
+        if meli_match:
+            return f"MLA{meli_match.group(1)}"
+
+        # Argenprop: URLs con --123456
+        argenprop_match = re.search(r'argenprop\.com[^\s]*--(\d+)', contenido)
+        if argenprop_match:
+            return f"AP{argenprop_match.group(1)}"
+
+        # Buscar por URL directa
+        url_match = re.search(r'(https?://[^\s]+(?:mercadolibre|argenprop)[^\s]+)', contenido)
+        if url_match:
+            return extraer_id_propiedad(url_match.group(1))
+
+        return None
+
+    except (subprocess.TimeoutExpired, FileNotFoundError):
+        return None
+
+
+def get_pending_print_files(nuevos_dir):
+    """
+    Lista archivos de print pendientes de procesar.
+
+    Args:
+        nuevos_dir: Path al directorio de archivos nuevos
+
+    Returns:
+        list: Lista de Paths a archivos validos
+    """
+    if not nuevos_dir.exists():
+        return []
+
+    archivos = []
+    for f in nuevos_dir.iterdir():
+        if not f.is_file():
+            continue
+        if f.suffix.lower() not in PRINT_EXTENSIONS:
+            continue
+        if f.name.startswith('.'):
+            continue
+        archivos.append(f)
+
+    return archivos
+
+
+def process_print_file(archivo, id_to_fila, fila_to_info, prints_dir=None):
+    """
+    Procesa un archivo de print: extrae ID, busca match y renombra.
+
+    Args:
+        archivo: Path al archivo a procesar
+        id_to_fila: Dict {prop_id: fila}
+        fila_to_info: Dict {fila: info}
+        prints_dir: Directorio destino (default: PRINTS_DIR)
+
+    Returns:
+        dict o None: Info del archivo procesado o None si no hubo match
+            - archivo_original: nombre original
+            - archivo_nuevo: nombre nuevo
+            - fila: numero de fila
+            - prop_id: ID de propiedad
+            - direccion: direccion de la propiedad
+    """
+    if prints_dir is None:
+        prints_dir = PRINTS_DIR
+
+    prop_id = None
+
+    # Extraer ID del PDF
+    if archivo.suffix.lower() == '.pdf':
+        prop_id = extract_id_from_pdf(archivo)
+
+    # Buscar fila correspondiente
+    if prop_id and prop_id in id_to_fila:
+        fila = id_to_fila[prop_id]
+        info = fila_to_info[fila]
+
+        # Generar nuevo nombre y mover
+        fecha_hoy = datetime.now().strftime('%Y-%m-%d')
+        nuevo_nombre = f"{prop_id}_{fecha_hoy}{archivo.suffix.lower()}"
+        nuevo_path = prints_dir / nuevo_nombre
+        archivo.rename(nuevo_path)
+
+        return {
+            'archivo_original': archivo.name,
+            'archivo_nuevo': nuevo_nombre,
+            'fila': fila,
+            'prop_id': prop_id,
+            'direccion': info['direccion'],
+        }
+
+    return None

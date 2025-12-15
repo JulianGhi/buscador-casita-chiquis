@@ -85,6 +85,11 @@ from .prints import (
     get_prints_index,
     clasificar_prints,
     sync_print_dates,
+    # Funciones de scan
+    build_property_index,
+    extract_id_from_pdf,
+    get_pending_print_files,
+    process_print_file,
 )
 
 from .templates import (
