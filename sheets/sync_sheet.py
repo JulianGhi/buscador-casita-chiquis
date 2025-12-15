@@ -47,7 +47,7 @@ CACHE_FILE = Path('data/scrape_cache.json')
 SCRAPEABLE_COLS = ['precio', 'm2_cub', 'm2_tot', 'm2_terr', 'amb', 'barrio', 'direccion',
                    'expensas', 'terraza', 'antiguedad', 'apto_credito', 'tipo', 'activo',
                    'cocheras', 'disposicion', 'piso', 'ascensor', 'balcon', 'luminosidad',
-                   'fecha_publicado', 'banos', 'inmobiliaria', 'dormitorios']
+                   'fecha_publicado', 'banos', 'inmobiliaria', 'dormitorios', 'fecha_print']
 
 # =============================================================================
 # SISTEMA DE VALIDACIONES Y WARNINGS
@@ -927,9 +927,22 @@ def cmd_push(force=False, dry_run=False):
     headers = data['headers']
     rows = data['rows']
 
+    # Sincronizar fechas de prints antes de push
+    prints_index = get_prints_index(rows)
+    prints_updated = 0
+    for row in rows:
+        fila = row.get('_row', 0)
+        if fila in prints_index:
+            fecha_print = prints_index[fila].get('fecha', '')
+            if fecha_print and row.get('fecha_print', '') != fecha_print:
+                row['fecha_print'] = fecha_print
+                prints_updated += 1
+
     mode = "FORCE (sobrescribe todo)" if force else "MERGE (solo celdas vacías)"
     print(f"📤 {'[DRY RUN] ' if dry_run else ''}Push en modo {mode}...")
     print(f"   {len(rows)} filas a procesar")
+    if prints_updated:
+        print(f"   📸 {prints_updated} fechas de print sincronizadas")
 
     if dry_run:
         print("\n   Esto es un dry-run, no se aplicarán cambios.")

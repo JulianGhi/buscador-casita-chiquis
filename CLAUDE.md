@@ -184,6 +184,66 @@ correctamente valores como "terraza: no" (antes se marcaba como "si" incorrectam
 
 Ver `sheets/README.md` para documentación completa del sync.
 
+### Sistema de Prints (Backups PDF)
+
+Sistema para guardar backups PDF de los avisos y trackear su estado.
+
+#### Pipeline de prints
+
+```bash
+source .venv/bin/activate
+python sheets/sync_sheet.py prints     # Ver estado de prints
+# Guardar PDF manualmente (Ctrl+P en navegador)
+# Nombrar: {ID}_{FECHA}.pdf (ej: MLA123456_2025-12-15.pdf)
+python sheets/sync_sheet.py push       # Sincroniza fecha_print al Sheet
+```
+
+#### Nomenclatura de archivos
+
+| Formato | Ejemplo | Descripción |
+|---------|---------|-------------|
+| `{ID}_{FECHA}.pdf` | `MLA123456_2025-12-15.pdf` | ✅ Recomendado |
+| `{ID}.pdf` | `AP17094976.pdf` | Válido, sin fecha |
+| Título del aviso | `Depto 3 amb Caballito.pdf` | Se matchea por contenido |
+
+Los IDs se extraen automáticamente del link:
+- MercadoLibre: `MLA-123456789` → `MLA123456789`
+- Argenprop: `...--17094976` → `AP17094976`
+- Zonaprop: `...--12345678.html` → `ZP12345678`
+
+#### Comandos
+
+```bash
+python sheets/sync_sheet.py prints           # Estado general
+python sheets/sync_sheet.py pendientes       # Datos faltantes + sin print
+python sheets/sync_sheet.py pendientes --sin-print  # Solo sin print
+```
+
+#### Detección automática
+
+El sistema detecta prints por:
+1. **ID en nombre del archivo** - Busca MLA/AP/ZP en el nombre
+2. **Contenido del PDF** - Lee el PDF y extrae URLs/IDs
+3. **Matching por dirección** - Compara direcciones del archivo con el sheet
+
+#### Estados en el dashboard
+
+| Icono | Significado |
+|-------|-------------|
+| 📄 (verde) | Print actualizado (< 30 días) |
+| 📄 (ámbar) | Print desactualizado (> 30 días) |
+| ○ (gris) | Sin print |
+
+#### Archivos
+
+```
+data/prints/
+├── index.json           # Índice de prints (generado automáticamente)
+├── MLA123456_2025-12-15.pdf
+├── AP17094976_2025-12-15.png
+└── ...
+```
+
 ### Sistema de valoración (Tiers + Score)
 
 El ordenamiento "Mejor candidato" usa un sistema de **tiers** (niveles de prioridad) combinado con un **score** (puntuación dentro de cada tier).
@@ -335,3 +395,23 @@ ce20b67 Penalizar datos faltantes en score y permitir toggle de pesos
 ### Issue resuelto
 
 - **Dashboard no mostraba baños**: El campo `banos` estaba en `SCRAPEABLE_COLS` y el scraper lo extraía, pero la columna no existía en el Google Sheet, por lo que nunca se guardaba.
+
+### Sistema de Prints implementado
+
+1. **Naming basado en IDs de portal**
+   - Nuevo formato: `{ID}_{FECHA}.pdf` (ej: `MLA123456_2025-12-15.pdf`)
+   - Extrae ID automáticamente del link de cada portal
+   - Detecta prints por ID, por nombre de archivo, o por contenido del PDF
+
+2. **Columna `fecha_print` agregada**
+   - Se sincroniza automáticamente con `push`
+   - El dashboard muestra indicador (📄 verde/ámbar, ○ si falta)
+
+3. **Comandos mejorados**
+   - `prints`: Muestra estado completo, sugiere nombres de archivo
+   - `pendientes --sin-print`: Filtra solo propiedades sin backup
+
+4. **Matching automático de PDFs**
+   - Lee contenido del PDF para extraer URLs/IDs
+   - Matchea por dirección si el nombre es genérico
+   - Movidos 4 PDFs de `sin_asociar/` a prints activos

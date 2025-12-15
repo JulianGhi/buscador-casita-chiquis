@@ -174,6 +174,7 @@ function renderTable(filtered) {
           <thead class="bg-slate-50 border-b border-slate-200">
             <tr>
               <th class="px-2 py-2.5 text-center font-medium text-slate-600" title="Tier + Score">⭐</th>
+              <th class="px-2 py-2.5 text-center font-medium text-slate-600" title="Backup PDF">📄</th>
               <th class="px-2 py-2.5 text-center font-medium text-slate-600">Activo</th>
               <th class="px-2 py-2.5 text-center font-medium text-slate-600" title="Apto Crédito">Apto</th>
               <th class="px-2 py-2.5 text-center font-medium text-slate-600">Status</th>
@@ -199,6 +200,7 @@ function renderTable(filtered) {
               return `
               <tr class="hover:bg-slate-100 transition-colors cursor-pointer ${rowBg}" onclick="showDetail(${p._idx})">
                 <td class="px-2 py-2.5 text-center"><span class="inline-flex items-center gap-1">${tierBadge(p._tier)}<span class="text-xs font-mono ${p._score > 50 ? 'text-green-600 font-bold' : p._score > 0 ? 'text-green-500' : 'text-slate-400'}">${p._score}</span></span></td>
+                <td class="px-2 py-2.5 text-center">${printBadge(p.fecha_print)}</td>
                 <td class="px-2 py-2.5 text-center">${activoBadge(p.activo)}</td>
                 <td class="px-2 py-2.5 text-center">${aptoCreditoBadge(p.apto_credito)}</td>
                 <td class="px-2 py-2.5 text-center">${statusBadge(p.status)}</td>

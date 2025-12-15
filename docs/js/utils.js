@@ -450,6 +450,21 @@ function tierBadge(tier) {
   return `<span class="text-[10px] ${cfg.css} px-1 py-0.5 rounded font-medium" title="${cfg.title}">${cfg.label}</span>`;
 }
 
+function printBadge(fechaPrint) {
+  if (!fechaPrint) {
+    return `<span class="text-slate-300" title="Sin backup PDF">○</span>`;
+  }
+  // Calcular días desde el print
+  const printDate = new Date(fechaPrint);
+  const today = new Date();
+  const dias = Math.floor((today - printDate) / (1000 * 60 * 60 * 24));
+
+  if (dias > 30) {
+    return `<span class="text-amber-500" title="Print desactualizado (${dias}d)">📄</span>`;
+  }
+  return `<span class="text-green-600" title="Print OK (${fechaPrint})">📄</span>`;
+}
+
 function ratingStars(rating) {
   if (!rating) return '-';
   const n = parseInt(rating) || 0;
