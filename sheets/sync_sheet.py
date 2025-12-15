@@ -1521,14 +1521,208 @@ def get_prints_index(rows):
     return prints_index
 
 
-def cmd_prints():
-    """Muestra estado de prints: cuáles existen, cuáles faltan, cuáles están vencidos."""
-    if not LOCAL_FILE.exists():
+def cmd_prints_open(limit=None):
+    """Abre en el browser todas las propiedades sin print."""
+    import subprocess
+    import webbrowser
+
+    data = load_local_data()
+    if not data:
         print("❌ Primero ejecutá: python sync_sheet.py pull")
         return
 
-    with open(LOCAL_FILE, 'r', encoding='utf-8') as f:
-        data = json.load(f)
+    rows = data['rows']
+    prints_index = get_prints_index(rows)
+
+    # Encontrar propiedades activas sin print
+    sin_print = []
+    for row in rows:
+        fila = row.get('_row', 0)
+        if fila < 2:
+            continue
+        activo = (row.get('activo') or '').lower()
+        if activo == 'no':
+            continue
+        link = row.get('link', '')
+        if not link.startswith('http'):
+            continue
+        if fila in prints_index:
+            continue  # Ya tiene print
+
+        sin_print.append({
+            'fila': fila,
+            'link': link,
+            'direccion': row.get('direccion', ''),
+            'barrio': row.get('barrio', ''),
+        })
+
+    if not sin_print:
+        print("✅ Todas las propiedades activas tienen print!")
+        return
+
+    # Limitar cantidad si se especifica
+    to_open = sin_print[:limit] if limit else sin_print
+
+    print(f"\n🌐 Abriendo {len(to_open)} pestañas...")
+    print(f"   (Guardá cada PDF con Ctrl+P, el nombre que quieras)")
+    print(f"   (Después ejecutá: python sync_sheet.py prints scan)\n")
+
+    for p in to_open:
+        print(f"   → {p['direccion'][:40]} ({p['barrio']})")
+        webbrowser.open(p['link'])
+        time.sleep(0.3)  # Pequeña pausa entre tabs
+
+    print(f"\n📁 Guardá los PDFs en: {PRINTS_DIR.absolute()}")
+
+
+def cmd_prints_scan():
+    """Analiza PDFs nuevos en el directorio, extrae IDs y los renombra."""
+    import subprocess
+
+    data = load_local_data()
+    if not data:
+        print("❌ Primero ejecutá: python sync_sheet.py pull")
+        return
+
+    rows = data['rows']
+
+    # Construir mapa de ID -> fila para matching
+    id_to_fila = {}
+    fila_to_info = {}
+    for row in rows:
+        fila = row.get('_row', 0)
+        link = row.get('link', '')
+        if fila >= 2 and link.startswith('http'):
+            prop_id = extraer_id_propiedad(link)
+            if prop_id:
+                id_to_fila[prop_id] = fila
+                fila_to_info[fila] = {
+                    'direccion': row.get('direccion', ''),
+                    'barrio': row.get('barrio', ''),
+                    'link': link,
+                    'prop_id': prop_id,
+                }
+
+    # Buscar archivos sin procesar (que no tengan formato {ID}_{FECHA})
+    PRINTS_DIR.mkdir(parents=True, exist_ok=True)
+    archivos_nuevos = []
+
+    for f in PRINTS_DIR.iterdir():
+        if not f.is_file():
+            continue
+        if f.suffix.lower() not in ['.pdf', '.png', '.jpg', '.jpeg']:
+            continue
+        if f.name.startswith('.'):
+            continue
+        # Si ya tiene formato ID_FECHA, ignorar
+        if PRINT_PATTERN_ID.match(f.name):
+            continue
+        if PRINT_PATTERN_FILA.match(f.name):
+            continue
+        archivos_nuevos.append(f)
+
+    if not archivos_nuevos:
+        print("✅ No hay archivos nuevos para procesar")
+        print(f"   (Los PDFs deben estar en {PRINTS_DIR})")
+        return
+
+    print(f"\n🔍 Analizando {len(archivos_nuevos)} archivos...")
+
+    procesados = []
+    sin_match = []
+
+    for archivo in archivos_nuevos:
+        print(f"\n   📄 {archivo.name[:50]}...")
+
+        # Intentar extraer ID del contenido del PDF
+        prop_id = None
+        fila = None
+
+        if archivo.suffix.lower() == '.pdf':
+            try:
+                # Usar pdftotext para extraer texto
+                result = subprocess.run(
+                    ['pdftotext', '-l', '2', str(archivo), '-'],
+                    capture_output=True, text=True, timeout=10
+                )
+                contenido = result.stdout
+
+                # Buscar IDs en el contenido
+                # MercadoLibre: MLA-123456789 o MLA123456789
+                meli_match = re.search(r'MLA-?(\d{8,12})', contenido, re.IGNORECASE)
+                if meli_match:
+                    prop_id = f"MLA{meli_match.group(1)}"
+
+                # Argenprop: URLs con --123456
+                if not prop_id:
+                    argenprop_match = re.search(r'argenprop\.com[^\s]*--(\d+)', contenido)
+                    if argenprop_match:
+                        prop_id = f"AP{argenprop_match.group(1)}"
+
+                # Buscar por URL directa
+                if not prop_id:
+                    url_match = re.search(r'(https?://[^\s]+(?:mercadolibre|argenprop)[^\s]+)', contenido)
+                    if url_match:
+                        prop_id = extraer_id_propiedad(url_match.group(1))
+
+            except (subprocess.TimeoutExpired, FileNotFoundError) as e:
+                print(f"      ⚠️  No se pudo leer PDF: {e}")
+
+        # Si encontramos ID, buscar fila correspondiente
+        if prop_id and prop_id in id_to_fila:
+            fila = id_to_fila[prop_id]
+            info = fila_to_info[fila]
+
+            # Generar nuevo nombre
+            fecha_hoy = datetime.now().strftime('%Y-%m-%d')
+            nuevo_nombre = f"{prop_id}_{fecha_hoy}{archivo.suffix.lower()}"
+            nuevo_path = PRINTS_DIR / nuevo_nombre
+
+            # Renombrar
+            archivo.rename(nuevo_path)
+
+            print(f"      ✅ Match: Fila {fila} - {info['direccion'][:30]}")
+            print(f"      → Renombrado a: {nuevo_nombre}")
+
+            procesados.append({
+                'archivo_original': archivo.name,
+                'archivo_nuevo': nuevo_nombre,
+                'fila': fila,
+                'prop_id': prop_id,
+                'direccion': info['direccion'],
+            })
+        else:
+            print(f"      ❌ No se encontró match")
+            if prop_id:
+                print(f"         ID detectado: {prop_id} (no está en el sheet)")
+            sin_match.append(archivo.name)
+
+    # Resumen
+    print(f"\n{'='*60}")
+    print(f"📊 RESUMEN")
+    print(f"{'='*60}")
+    print(f"   Procesados: {len(procesados)} ✅")
+    print(f"   Sin match: {len(sin_match)} ❌")
+
+    if procesados:
+        print(f"\n✅ RENOMBRADOS:")
+        for p in procesados:
+            print(f"   Fila {p['fila']:2d}: {p['direccion'][:35]} → {p['archivo_nuevo']}")
+
+    if sin_match:
+        print(f"\n❌ SIN MATCH (revisar manualmente):")
+        for s in sin_match:
+            print(f"   {s}")
+        print(f"\n   Tip: Verificá que las propiedades estén en el sheet")
+        print(f"        o renombrá manualmente con formato: MLA123456_2025-12-15.pdf")
+
+
+def cmd_prints():
+    """Muestra estado de prints: cuáles existen, cuáles faltan, cuáles están vencidos."""
+    data = load_local_data()
+    if not data:
+        print("❌ Primero ejecutá: python sync_sheet.py pull")
+        return
 
     rows = data['rows']
     prints_index = get_prints_index(rows)
@@ -1760,6 +1954,8 @@ Flujo de trabajo:
 
     parser.add_argument('command', choices=['pull', 'scrape', 'view', 'diff', 'push', 'prints', 'pendientes'],
                        help='Comando a ejecutar')
+    parser.add_argument('subcommand', nargs='?', default=None,
+                       help='[prints] Subcomando: open, scan')
     parser.add_argument('--force', action='store_true',
                        help='[push] Sobrescribe todo el sheet')
     parser.add_argument('--dry-run', action='store_true',
@@ -1774,6 +1970,8 @@ Flujo de trabajo:
                        help='[scrape] Sobrescribe valores existentes (no solo llena vacíos)')
     parser.add_argument('--sin-print', action='store_true',
                        help='[pendientes] Solo muestra los que no tienen screenshot')
+    parser.add_argument('--limit', type=int, default=None,
+                       help='[prints open] Limita cantidad de tabs a abrir')
 
     args = parser.parse_args()
 
@@ -1788,7 +1986,12 @@ Flujo de trabajo:
     elif args.command == 'push':
         cmd_push(force=args.force, dry_run=args.dry_run)
     elif args.command == 'prints':
-        cmd_prints()
+        if args.subcommand == 'open':
+            cmd_prints_open(limit=args.limit)
+        elif args.subcommand == 'scan':
+            cmd_prints_scan()
+        else:
+            cmd_prints()
     elif args.command == 'pendientes':
         cmd_pendientes(solo_sin_print=args.sin_print)
 
