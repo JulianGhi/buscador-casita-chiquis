@@ -344,6 +344,23 @@ function diasHace(fecha) {
   return diff;
 }
 
+// Formatea días en texto amigable ("hace 2 meses", "hace 5 días")
+function formatTiempoHace(dias) {
+  if (dias === null || dias === undefined) return null;
+  if (dias === 0) return 'hoy';
+  if (dias === 1) return 'ayer';
+  if (dias < 7) return `hace ${dias}d`;
+  if (dias < 30) return `hace ${Math.floor(dias / 7)}sem`;
+  if (dias < 365) return `hace ${Math.floor(dias / 30)}m`;
+  return `hace ${Math.floor(dias / 365)}a`;
+}
+
+// Formatea una fecha como tiempo relativo
+function fechaRelativa(fecha) {
+  const dias = diasHace(fecha);
+  return formatTiempoHace(dias);
+}
+
 // ============================================
 // BADGES Y INDICADORES
 // ============================================
@@ -440,7 +457,16 @@ function ratingStars(rating) {
 }
 
 function fechaIndicators(p) {
-  const pubDias = diasHace(p.fecha_publicado);
-  if (pubDias === null) return '';
-  return `<div class="text-[10px] text-slate-400 mt-0.5">📅${pubDias}d</div>`;
+  const items = [];
+
+  // Publicado (cuánto tiempo lleva el aviso online)
+  const pubRel = fechaRelativa(p.fecha_publicado);
+  if (pubRel) items.push(`${ICONS.calendar}${pubRel}`);
+
+  // Agregado (cuánto tiempo lo estás siguiendo)
+  const agrRel = fechaRelativa(p.fecha_agregado);
+  if (agrRel) items.push(`➕${agrRel}`);
+
+  if (items.length === 0) return '';
+  return `<div class="text-[10px] text-slate-400 mt-0.5">${items.join(' · ')}</div>`;
 }

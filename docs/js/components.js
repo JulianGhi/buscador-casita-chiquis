@@ -763,11 +763,18 @@ function renderModalFooter(p) {
     `);
   }
 
-  if (p.fecha_publicado || p.fecha_contacto || p.fecha_visita) {
+  if (p.fecha_publicado || p.fecha_agregado || p.fecha_contacto || p.fecha_visita) {
+    const fechaItem = (icon, label, fecha) => {
+      if (!fecha) return '';
+      const rel = fechaRelativa(fecha);
+      return `<span title="${fecha}">${icon} ${label}: ${rel || fecha}</span>`;
+    };
+
     const fechas = [
-      p.fecha_publicado ? `<span>${ICONS.calendar} Publicado: ${p.fecha_publicado}</span>` : '',
-      p.fecha_contacto ? `<span>${ICONS.phone} Contactado: ${p.fecha_contacto}</span>` : '',
-      p.fecha_visita ? `<span>${ICONS.house} Visitado: ${p.fecha_visita}</span>` : ''
+      fechaItem(ICONS.calendar, 'Publicado', p.fecha_publicado),
+      fechaItem('➕', 'Agregado', p.fecha_agregado),
+      fechaItem(ICONS.phone, 'Contactado', p.fecha_contacto),
+      fechaItem(ICONS.house, 'Visitado', p.fecha_visita)
     ].filter(Boolean).join('');
 
     sections.push(`<div class="flex flex-wrap gap-4 text-xs text-slate-400">${fechas}</div>`);

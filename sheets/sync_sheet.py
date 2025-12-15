@@ -697,20 +697,30 @@ def scrape_mercadolibre(url):
         elif '/departamento.' in url_lower or 'depto' in title_lower:
             data['tipo'] = 'depto'
 
-        # Fecha de publicación ("Publicado hace X días")
+        # Fecha de publicación ("Publicado hace X días/semanas/meses/años")
         from datetime import datetime, timedelta
-        pub_match = re.search(r'Publicado hace (\d+) día', resp.text)
+        fecha_pub = None
+
+        # Patrones: "Publicado hace 7 meses", "Publicado hace 2 semanas", etc.
+        pub_match = re.search(r'Publicado hace (\d+)\s*(día|semana|mes|año)', resp.text, re.IGNORECASE)
         if pub_match:
-            dias = int(pub_match.group(1))
-            fecha_pub = datetime.now() - timedelta(days=dias)
+            cantidad = int(pub_match.group(1))
+            unidad = pub_match.group(2).lower()
+            if 'día' in unidad:
+                fecha_pub = datetime.now() - timedelta(days=cantidad)
+            elif 'semana' in unidad:
+                fecha_pub = datetime.now() - timedelta(weeks=cantidad)
+            elif 'mes' in unidad:
+                fecha_pub = datetime.now() - timedelta(days=cantidad * 30)
+            elif 'año' in unidad:
+                fecha_pub = datetime.now() - timedelta(days=cantidad * 365)
+        elif 'Publicado ayer' in resp.text:
+            fecha_pub = datetime.now() - timedelta(days=1)
+        elif 'Publicado hoy' in resp.text:
+            fecha_pub = datetime.now()
+
+        if fecha_pub:
             data['fecha_publicado'] = fecha_pub.strftime('%Y-%m-%d')
-        else:
-            # Buscar "Publicado ayer" o "Publicado hoy"
-            if 'Publicado ayer' in resp.text:
-                fecha_pub = datetime.now() - timedelta(days=1)
-                data['fecha_publicado'] = fecha_pub.strftime('%Y-%m-%d')
-            elif 'Publicado hoy' in resp.text:
-                data['fecha_publicado'] = datetime.now().strftime('%Y-%m-%d')
 
         return data
     except Exception as e:
