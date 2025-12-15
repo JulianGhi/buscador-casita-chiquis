@@ -1336,6 +1336,35 @@ CAMPOS_IMPORTANTES = ['terraza', 'balcon', 'cocheras', 'luminosidad', 'disposici
 # Días después de los cuales un print se considera desactualizado
 PRINT_DIAS_VENCIMIENTO = 30
 
+# Formato estándar: {ID}_{YYYY-MM-DD}.ext donde ID es MLA123456 o AP123456
+# Ejemplos: MLA1513702911_2025-12-15.pdf, AP17094976_2025-12-15.png
+PRINT_PATTERN_ID = re.compile(r'^(MLA\d+|AP\d+)(?:_(\d{4}-\d{2}-\d{2}))?\.(?:pdf|png|jpg|jpeg)$', re.IGNORECASE)
+# Formato legacy: fila_XX_YYYY-MM-DD.ext (mantener compatibilidad)
+PRINT_PATTERN_FILA = re.compile(r'^fila_(\d+)(?:_(\d{4}-\d{2}-\d{2}))?\.(?:pdf|png|jpg|jpeg)$', re.IGNORECASE)
+
+
+def extraer_id_propiedad(link):
+    """Extrae ID único de la propiedad desde el link (MLA123 o AP123)."""
+    meli = re.search(r'MLA-?(\d+)', link, re.IGNORECASE)
+    if meli:
+        return f"MLA{meli.group(1)}"
+    argenprop = re.search(r'--(\d+)$', link)
+    if argenprop:
+        return f"AP{argenprop.group(1)}"
+    return None
+
+
+def generar_nombre_print(link_or_id, extension='pdf'):
+    """Genera nombre estándar para un print: {ID}_YYYY-MM-DD.ext"""
+    fecha = datetime.now().strftime('%Y-%m-%d')
+    if link_or_id.startswith('http'):
+        prop_id = extraer_id_propiedad(link_or_id)
+    else:
+        prop_id = link_or_id
+    if not prop_id:
+        return None
+    return f"{prop_id}_{fecha}.{extension}"
+
 
 def normalizar_texto(texto):
     """Normaliza texto para comparación (minúsculas, sin acentos, sin espacios extras)."""
@@ -1363,17 +1392,15 @@ def extraer_id_argenprop(url):
 def get_prints_index(rows):
     """
     Construye índice de prints asociando archivos con propiedades.
-    Detecta por: fila_XX, ID de MeLi/Argenprop, o título similar.
-    Retorna dict: {fila: {archivo, fecha_modificacion, dias_antiguedad, vencido}}
+    Detecta por: ID del portal (MLA/AP), fila_XX (legacy), o título similar.
+    Retorna dict: {fila: {archivo, fecha, dias, vencido, prop_id, historial}}
     """
     if not PRINTS_DIR.exists():
         return {}
 
-    # Construir lookup de propiedades
-    props_by_fila = {}
-    props_by_meli_id = {}
-    props_by_argenprop_id = {}
-    props_by_direccion = {}
+    # Construir lookup de propiedades por ID único
+    props_by_id = {}      # {MLA123: fila}
+    props_by_fila = {}    # {fila: row}
 
     for row in rows:
         fila = row.get('_row', 0)
@@ -1381,25 +1408,16 @@ def get_prints_index(rows):
             continue
 
         link = row.get('link', '')
-        direccion = row.get('direccion', '')
-
         props_by_fila[fila] = row
 
-        # Indexar por ID de portal
-        meli_id = extraer_id_meli(link)
-        if meli_id:
-            props_by_meli_id[meli_id] = fila
-
-        argenprop_id = extraer_id_argenprop(link)
-        if argenprop_id:
-            props_by_argenprop_id[argenprop_id] = fila
-
-        # Indexar por dirección normalizada
-        if direccion:
-            props_by_direccion[normalizar_texto(direccion)] = fila
+        # Indexar por ID único del portal
+        prop_id = extraer_id_propiedad(link)
+        if prop_id:
+            props_by_id[prop_id.upper()] = fila
 
     # Escanear archivos de prints
-    prints_index = {}
+    prints_index = {}      # {fila: info_del_print_mas_reciente}
+    prints_historial = {}  # {fila: [lista de todos los prints]}
 
     for f in PRINTS_DIR.iterdir():
         if not f.is_file():
@@ -1418,87 +1436,57 @@ def get_prints_index(rows):
             'archivo': f.name,
             'fecha': mtime.strftime('%Y-%m-%d'),
             'dias': dias_antiguedad,
-            'vencido': vencido
+            'vencido': vencido,
+            'prop_id': None
         }
 
         fila_asociada = None
 
-        # 1. Detectar por patrón fila_XX
-        match = re.match(r'fila_(\d+)\.(png|pdf|jpg|jpeg)$', f.name, re.IGNORECASE)
+        # 1. Detectar por patrón nuevo: {ID}_YYYY-MM-DD.ext (MLA123_2025-12-15.pdf)
+        match = PRINT_PATTERN_ID.match(f.name)
         if match:
-            fila_asociada = int(match.group(1))
+            prop_id = match.group(1).upper()
+            archivo_info['prop_id'] = prop_id
+            if match.group(2):
+                archivo_info['fecha_nombre'] = match.group(2)
+            if prop_id in props_by_id:
+                fila_asociada = props_by_id[prop_id]
 
-        # 2. Detectar por ID de MercadoLibre en nombre
+        # 2. Detectar por patrón legacy: fila_XX_YYYY-MM-DD.ext
         if not fila_asociada:
-            meli_id = extraer_id_meli(f.name)
-            if meli_id and meli_id in props_by_meli_id:
-                fila_asociada = props_by_meli_id[meli_id]
+            match = PRINT_PATTERN_FILA.match(f.name)
+            if match:
+                fila_asociada = int(match.group(1))
+                if match.group(2):
+                    archivo_info['fecha_nombre'] = match.group(2)
 
-        # 3. Detectar por ID de Argenprop en nombre
+        # 3. Detectar por ID en cualquier parte del nombre
         if not fila_asociada:
-            argenprop_id = extraer_id_argenprop(f.name)
-            if argenprop_id and argenprop_id in props_by_argenprop_id:
-                fila_asociada = props_by_argenprop_id[argenprop_id]
-
-        # 4. Detectar por similitud de título/dirección/barrio
-        if not fila_asociada:
-            nombre_norm = normalizar_texto(f.stem)
-
-            # Buscar coincidencias con direcciones y barrios
-            mejor_match = None
-            mejor_score = 0
-
-            for row in rows:
-                fila = row.get('_row', 0)
-                if fila < 2:
-                    continue
-
-                dir_norm = normalizar_texto(row.get('direccion', ''))
-                barrio_norm = normalizar_texto(row.get('barrio', ''))
-
-                # Bonus si la propiedad está activa
-                activo = (row.get('activo') or '').lower()
-                score = 10 if activo != 'no' else 0
-
-                # Extraer número de calle del archivo y de la propiedad
-                num_archivo = re.search(r'(\d{3,4})', nombre_norm)
-                num_dir = re.search(r'(\d{3,4})', dir_norm)
-
-                # Si coincide el número de calle, muy buen indicador
-                if num_archivo and num_dir and num_archivo.group(1) == num_dir.group(1):
-                    score += 50
-
-                # Si el nombre del archivo contiene el barrio
-                if barrio_norm and len(barrio_norm) > 4 and barrio_norm in nombre_norm:
-                    score += 30
-
-                # Si contiene parte de la dirección (calle)
-                if dir_norm:
-                    # Extraer nombre de calle (sin número)
-                    calle = re.sub(r'\d+', '', dir_norm).strip()
-                    if calle and len(calle) > 4 and calle in nombre_norm:
-                        score += 40
-
-                # Buscar palabras clave comunes
-                palabras_archivo = set(re.findall(r'[a-z]{4,}', nombre_norm))
-                palabras_dir = set(re.findall(r'[a-z]{4,}', dir_norm + barrio_norm))
-                comunes = palabras_archivo & palabras_dir
-                score += len(comunes) * 5
-
-                if score > mejor_score and score >= 30:
-                    mejor_score = score
-                    mejor_match = fila
-
-            if mejor_match:
-                fila_asociada = mejor_match
+            # Buscar MLA o AP seguido de números
+            for prop_id, fila in props_by_id.items():
+                if prop_id in f.name.upper():
+                    fila_asociada = fila
+                    archivo_info['prop_id'] = prop_id
+                    break
 
         if fila_asociada and fila_asociada in props_by_fila:
-            # Si ya hay un print para esta fila, quedarse con el más reciente
-            if fila_asociada in prints_index:
-                if prints_index[fila_asociada]['dias'] > dias_antiguedad:
-                    prints_index[fila_asociada] = archivo_info
-            else:
+            # Agregar al historial
+            if fila_asociada not in prints_historial:
+                prints_historial[fila_asociada] = []
+            prints_historial[fila_asociada].append(archivo_info)
+
+            # Guardar solo el más reciente en el índice principal
+            if fila_asociada not in prints_index:
                 prints_index[fila_asociada] = archivo_info
+            elif prints_index[fila_asociada]['dias'] > dias_antiguedad:
+                prints_index[fila_asociada] = archivo_info
+
+    # Agregar historial al índice
+    for fila, info in prints_index.items():
+        historial = prints_historial.get(fila, [])
+        if len(historial) > 1:
+            info['historial'] = sorted(historial, key=lambda x: x['fecha'], reverse=True)
+            info['versiones'] = len(historial)
 
     return prints_index
 
@@ -1528,13 +1516,17 @@ def cmd_prints():
         if not link.startswith('http'):
             continue
 
+        prop_id = extraer_id_propiedad(link)
         print_info = prints_index.get(fila)
         activas.append({
             'fila': fila,
+            'prop_id': prop_id,
             'direccion': row.get('direccion', ''),
             'barrio': row.get('barrio', ''),
             'precio': row.get('precio', ''),
-            'print': print_info
+            'link': link,
+            'print': print_info,
+            'nombre_sugerido': generar_nombre_print(link) if prop_id else None
         })
 
     # Estadísticas
@@ -1559,7 +1551,8 @@ def cmd_prints():
     if sin_print:
         print(f"\n❌ SIN PRINT (crear):")
         for p in sin_print[:15]:
-            print(f"   Fila {p['fila']:2d}: {p['direccion'][:35]:<35} | ${p['precio']}")
+            id_str = p['prop_id'] or 'SIN_ID'
+            print(f"   {id_str:<15} {p['direccion'][:30]:<30} → {p['nombre_sugerido'] or 'N/A'}")
         if len(sin_print) > 15:
             print(f"   ... y {len(sin_print) - 15} más")
 
@@ -1570,6 +1563,31 @@ def cmd_prints():
         if len(actualizados) > 10:
             print(f"   ... y {len(actualizados) - 10} más")
 
+    # Detectar prints huérfanos (de propiedades inactivas o sin asociar)
+    filas_activas = {p['fila'] for p in activas}
+    huerfanos = []
+    for f in PRINTS_DIR.iterdir():
+        if not f.is_file() or f.suffix.lower() not in ['.png', '.pdf', '.jpg', '.jpeg']:
+            continue
+        if f.name.startswith('.') or f.name in ['index.json', 'pendientes.json']:
+            continue
+        # Ver si está asociado a alguna fila activa
+        asociado = False
+        for fila, info in prints_index.items():
+            if info.get('archivo') == f.name and fila in filas_activas:
+                asociado = True
+                break
+        if not asociado:
+            huerfanos.append(f.name)
+
+    if huerfanos:
+        print(f"\n📦 PRINTS DE PROPIEDADES INACTIVAS ({len(huerfanos)}):")
+        for h in huerfanos[:8]:
+            print(f"   {h}")
+        if len(huerfanos) > 8:
+            print(f"   ... y {len(huerfanos) - 8} más")
+        print(f"   (pueden moverse a sin_asociar/ si ya no sirven)")
+
     # Guardar índice
     PRINTS_DIR.mkdir(parents=True, exist_ok=True)
     index_output = {
@@ -1578,6 +1596,7 @@ def cmd_prints():
         'con_print': len(con_print),
         'sin_print': len(sin_print),
         'vencidos': len(vencidos),
+        'huerfanos': len(huerfanos),
         'dias_vencimiento': PRINT_DIAS_VENCIMIENTO,
         'prints': {str(k): v for k, v in prints_index.items()}
     }
@@ -1587,12 +1606,13 @@ def cmd_prints():
     print(f"\n💾 Índice guardado en: {PRINTS_INDEX}")
 
     # Sugerencias
-    print(f"\n💡 SUGERENCIAS:")
-    if sin_print:
-        print(f"   → Crear prints para {len(sin_print)} propiedades sin respaldo")
-    if vencidos:
-        print(f"   → Actualizar {len(vencidos)} prints vencidos (pueden haber cambiado)")
-    print(f"   → Nomenclatura: fila_XX.pdf o guardar con el título del aviso")
+    if sin_print or vencidos:
+        print(f"\n💡 SUGERENCIAS:")
+        if sin_print:
+            print(f"   → Crear prints para {len(sin_print)} propiedades sin respaldo")
+        if vencidos:
+            print(f"   → Actualizar {len(vencidos)} prints vencidos (pueden haber cambiado)")
+        print(f"   → Nomenclatura: {{ID}}_{{FECHA}}.pdf (ej: MLA123456_2025-12-15.pdf)")
 
 
 def cmd_pendientes(solo_sin_print=False):
