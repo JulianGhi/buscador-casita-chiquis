@@ -47,6 +47,10 @@ from .sheets_api import (
     get_worksheet,
     sheet_to_dict,
     sheet_to_list,
+    # Funciones de push
+    get_cells_to_update,
+    build_sheet_data,
+    format_header_row,
 )
 
 from .storage import (
@@ -80,6 +84,7 @@ from .prints import (
     normalizar_texto,
     get_prints_index,
     clasificar_prints,
+    sync_print_dates,
 )
 
 from .templates import (

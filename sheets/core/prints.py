@@ -250,3 +250,31 @@ def clasificar_prints(rows, prints_dir=None):
         'actualizados': actualizados,
         'prints_index': prints_index
     }
+
+
+def sync_print_dates(rows, prints_dir=None):
+    """
+    Sincroniza fechas de prints en las filas.
+
+    Actualiza el campo 'fecha_print' de cada fila con la fecha
+    del print mas reciente asociado.
+
+    Args:
+        rows: Lista de filas (se modifican in-place)
+        prints_dir: Directorio de prints (opcional)
+
+    Returns:
+        int: Cantidad de filas actualizadas
+    """
+    prints_index = get_prints_index(rows, prints_dir)
+    updated = 0
+
+    for row in rows:
+        fila = row.get('_row', 0)
+        if fila in prints_index:
+            fecha_print = prints_index[fila].get('fecha', '')
+            if fecha_print and row.get('fecha_print', '') != fecha_print:
+                row['fecha_print'] = fecha_print
+                updated += 1
+
+    return updated

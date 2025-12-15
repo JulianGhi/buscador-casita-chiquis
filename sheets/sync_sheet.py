@@ -55,6 +55,9 @@ from core import (
     # Sheets API
     get_client,
     get_worksheet,
+    get_cells_to_update,
+    build_sheet_data,
+    format_header_row,
     # Storage
     load_local_data,
     save_local_data,
@@ -80,6 +83,7 @@ from core import (
     PRINT_PATTERN_FILA,
     generar_nombre_print,
     get_prints_index,
+    sync_print_dates,
     # Templates
     PREVIEW_SHOW_COLS,
     PREVIEW_DIFF_COLS,
@@ -289,15 +293,7 @@ def cmd_push(force=False, dry_run=False):
     rows = data['rows']
 
     # Sincronizar fechas de prints antes de push
-    prints_index = get_prints_index(rows)
-    prints_updated = 0
-    for row in rows:
-        fila = row.get('_row', 0)
-        if fila in prints_index:
-            fecha_print = prints_index[fila].get('fecha', '')
-            if fecha_print and row.get('fecha_print', '') != fecha_print:
-                row['fecha_print'] = fecha_print
-                prints_updated += 1
+    prints_updated = sync_print_dates(rows)
 
     mode = "FORCE (sobrescribe todo)" if force else "MERGE (solo celdas vacías)"
     print(f"📤 {'[DRY RUN] ' if dry_run else ''}Push en modo {mode}...")
@@ -311,7 +307,6 @@ def cmd_push(force=False, dry_run=False):
 
     client = get_client()
     spreadsheet = client.open_by_key(SHEET_ID)
-
     try:
         worksheet = spreadsheet.worksheet(WORKSHEET_NAME)
     except gspread.WorksheetNotFound:
@@ -319,54 +314,19 @@ def cmd_push(force=False, dry_run=False):
 
     if force:
         # Force: sobrescribir todo
-        all_data = [headers]
-        for row in rows:
-            row_values = [row.get(h, '') for h in headers]
-            all_data.append(row_values)
-
+        all_data = build_sheet_data(headers, rows)
         worksheet.clear()
         worksheet.update(values=all_data, range_name='A1')
-
-        # Formatear headers
-        worksheet.format('A1:Z1', {
-            'textFormat': {'bold': True},
-            'backgroundColor': {'red': 0.9, 'green': 0.9, 'blue': 0.9}
-        })
-        worksheet.freeze(rows=1)
-
+        format_header_row(worksheet)
         print(f"✅ Sheet sobrescrito con {len(rows)} filas")
     else:
         # Merge: solo actualizar celdas que cambiaron
-        # Descargar datos actuales para comparar
         current_values = worksheet.get_all_values()
-        current_headers = [h.lower().strip() for h in current_values[0]] if current_values else []
+        cells = get_cells_to_update(rows, current_values, headers, SCRAPEABLE_COLS)
 
-        cells_to_update = []
-        for row in rows:
-            row_num = row.get('_row', 0)
-            if row_num < 2:
-                continue
-
-            for col_name in SCRAPEABLE_COLS:
-                if col_name not in headers:
-                    continue
-
-                col_idx = headers.index(col_name) + 1
-                new_val = row.get(col_name, '').strip()
-
-                # Obtener valor actual
-                if row_num <= len(current_values) and col_idx <= len(current_values[row_num - 1]):
-                    current_val = current_values[row_num - 1][col_idx - 1].strip()
-                else:
-                    current_val = ''
-
-                # Solo actualizar si hay valor nuevo y celda vacía (o valores diferentes)
-                if new_val and (not current_val or current_val != new_val):
-                    cells_to_update.append(gspread.Cell(row_num, col_idx, new_val))
-
-        if cells_to_update:
-            worksheet.update_cells(cells_to_update)
-            print(f"✅ {len(cells_to_update)} celdas actualizadas")
+        if cells:
+            worksheet.update_cells(cells)
+            print(f"✅ {len(cells)} celdas actualizadas")
         else:
             print("✅ No hay cambios para aplicar")
 
