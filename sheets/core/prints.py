@@ -430,3 +430,70 @@ def process_print_file(archivo, id_to_fila, fila_to_info, prints_dir=None):
         }
 
     return None
+
+
+def get_orphan_prints(prints_index, filas_activas, prints_dir=None):
+    """
+    Detecta prints huerfanos (de propiedades inactivas o sin asociar).
+
+    Args:
+        prints_index: Indice de prints {fila: info}
+        filas_activas: Set de filas activas
+        prints_dir: Directorio de prints
+
+    Returns:
+        list: Lista de nombres de archivos huerfanos
+    """
+    if prints_dir is None:
+        prints_dir = PRINTS_DIR
+
+    if not prints_dir.exists():
+        return []
+
+    huerfanos = []
+    for f in prints_dir.iterdir():
+        if not f.is_file() or f.suffix.lower() not in PRINT_EXTENSIONS:
+            continue
+        if f.name.startswith('.') or f.name in ['index.json', 'pendientes.json']:
+            continue
+
+        # Ver si esta asociado a alguna fila activa
+        asociado = False
+        for fila, info in prints_index.items():
+            if info.get('archivo') == f.name and fila in filas_activas:
+                asociado = True
+                break
+
+        if not asociado:
+            huerfanos.append(f.name)
+
+    return huerfanos
+
+
+def save_prints_index(clasificacion, prints_index, huerfanos, prints_index_path):
+    """
+    Guarda el indice de prints en formato JSON.
+
+    Args:
+        clasificacion: Dict de clasificar_prints()
+        prints_index: Indice de prints
+        huerfanos: Lista de prints huerfanos
+        prints_index_path: Path donde guardar el JSON
+    """
+    import json
+
+    prints_index_path.parent.mkdir(parents=True, exist_ok=True)
+
+    index_output = {
+        'generado': datetime.now().strftime('%Y-%m-%d %H:%M'),
+        'total_activas': len(clasificacion['activas']),
+        'con_print': len(clasificacion['con_print']),
+        'sin_print': len(clasificacion['sin_print']),
+        'vencidos': len(clasificacion['vencidos']),
+        'huerfanos': len(huerfanos),
+        'dias_vencimiento': PRINT_DIAS_VENCIMIENTO,
+        'prints': {str(k): v for k, v in prints_index.items()}
+    }
+
+    with open(prints_index_path, 'w', encoding='utf-8') as f:
+        json.dump(index_output, f, ensure_ascii=False, indent=2)

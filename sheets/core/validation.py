@@ -121,3 +121,85 @@ def validar_propiedad(data, contexto=None):
         if terraza == 'si':
             exterior.append('terraza')
         add_warning('m2_desc_inconsistente', f"Tiene {'+'.join(exterior)} pero m²_desc={m2_desc}", ctx)
+
+
+# =============================================================================
+# DETECCION DE DATOS FALTANTES
+# =============================================================================
+
+def get_missing_fields(row, campos_importantes):
+    """
+    Detecta campos importantes faltantes en una fila.
+
+    Args:
+        row: Dict con datos de la fila
+        campos_importantes: Lista de campos a verificar
+
+    Returns:
+        list: Lista de nombres de campos faltantes
+    """
+    missing = []
+    for campo in campos_importantes:
+        valor = (row.get(campo) or '').strip().lower()
+        if not valor or valor == '?':
+            missing.append(campo)
+    return missing
+
+
+def get_properties_with_missing_data(rows, campos_importantes, prints_index=None, solo_sin_print=False):
+    """
+    Filtra propiedades activas con datos faltantes.
+
+    Args:
+        rows: Lista de filas del sheet
+        campos_importantes: Lista de campos importantes a verificar
+        prints_index: Indice de prints (opcional)
+        solo_sin_print: Si True, solo incluye propiedades sin print
+
+    Returns:
+        list: Lista de dicts con info de propiedades pendientes, ordenada por cantidad de faltantes
+    """
+    if prints_index is None:
+        prints_index = {}
+
+    pendientes = []
+    for row in rows:
+        fila = row.get('_row', 0)
+        if fila < 2:
+            continue
+
+        # Solo activas
+        activo = (row.get('activo') or '').lower()
+        if activo == 'no':
+            continue
+
+        # Solo con link
+        link = row.get('link', '')
+        if not link.startswith('http'):
+            continue
+
+        # Detectar campos faltantes
+        missing = get_missing_fields(row, campos_importantes)
+        if not missing:
+            continue
+
+        print_info = prints_index.get(fila)
+        tiene_print = print_info is not None
+
+        # Filtrar por print si se pidio
+        if solo_sin_print and tiene_print:
+            continue
+
+        pendientes.append({
+            'fila': fila,
+            'direccion': row.get('direccion', ''),
+            'barrio': row.get('barrio', ''),
+            'link': link,
+            'missing': missing,
+            'tiene_print': tiene_print,
+            'print_info': print_info
+        })
+
+    # Ordenar por cantidad de datos faltantes (mas incompletos primero)
+    pendientes.sort(key=lambda x: -len(x['missing']))
+    return pendientes

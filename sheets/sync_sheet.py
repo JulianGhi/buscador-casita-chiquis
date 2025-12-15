@@ -77,6 +77,7 @@ from core import (
     get_warnings,
     print_warnings_summary,
     validar_propiedad,
+    get_properties_with_missing_data,
     # Prints
     PRINT_DIAS_VENCIMIENTO,
     PRINT_PATTERN_ID,
@@ -88,6 +89,9 @@ from core import (
     extract_id_from_pdf,
     get_pending_print_files,
     process_print_file,
+    get_orphan_prints,
+    save_prints_index,
+    clasificar_prints,
     # Templates
     PREVIEW_SHOW_COLS,
     PREVIEW_DIFF_COLS,
@@ -647,32 +651,10 @@ def cmd_prints():
         print("❌ Primero ejecutá: python sync_sheet.py pull")
         return
 
-    rows = data['rows']
-    prints_index = get_prints_index(rows)
-
-    # Clasificar propiedades activas
-    activas = []
-    for row in get_active_rows(rows):
-        fila = row.get('_row', 0)
-        link = row.get('link', '')
-        prop_id = extraer_id_propiedad(link)
-        print_info = prints_index.get(fila)
-        activas.append({
-            'fila': fila,
-            'prop_id': prop_id,
-            'direccion': row.get('direccion', ''),
-            'barrio': row.get('barrio', ''),
-            'precio': row.get('precio', ''),
-            'link': link,
-            'print': print_info,
-            'nombre_sugerido': generar_nombre_print(link) if prop_id else None
-        })
-
-    # Estadísticas
-    con_print = [p for p in activas if p['print']]
-    sin_print = [p for p in activas if not p['print']]
-    vencidos = [p for p in con_print if p['print']['vencido']]
-    actualizados = [p for p in con_print if not p['print']['vencido']]
+    # Clasificar usando función de core/
+    c = clasificar_prints(data['rows'])
+    activas, con_print, sin_print = c['activas'], c['con_print'], c['sin_print']
+    vencidos, actualizados = c['vencidos'], c['actualizados']
 
     print(f"\n📸 ESTADO DE PRINTS")
     print(f"{'='*70}")
@@ -702,22 +684,9 @@ def cmd_prints():
         if len(actualizados) > 10:
             print(f"   ... y {len(actualizados) - 10} más")
 
-    # Detectar prints huérfanos (de propiedades inactivas o sin asociar)
+    # Detectar huérfanos y guardar índice
     filas_activas = {p['fila'] for p in activas}
-    huerfanos = []
-    for f in PRINTS_DIR.iterdir():
-        if not f.is_file() or f.suffix.lower() not in ['.png', '.pdf', '.jpg', '.jpeg']:
-            continue
-        if f.name.startswith('.') or f.name in ['index.json', 'pendientes.json']:
-            continue
-        # Ver si está asociado a alguna fila activa
-        asociado = False
-        for fila, info in prints_index.items():
-            if info.get('archivo') == f.name and fila in filas_activas:
-                asociado = True
-                break
-        if not asociado:
-            huerfanos.append(f.name)
+    huerfanos = get_orphan_prints(c['prints_index'], filas_activas)
 
     if huerfanos:
         print(f"\n📦 PRINTS DE PROPIEDADES INACTIVAS ({len(huerfanos)}):")
@@ -727,24 +696,9 @@ def cmd_prints():
             print(f"   ... y {len(huerfanos) - 8} más")
         print(f"   (pueden moverse a sin_asociar/ si ya no sirven)")
 
-    # Guardar índice
-    PRINTS_DIR.mkdir(parents=True, exist_ok=True)
-    index_output = {
-        'generado': datetime.now().strftime('%Y-%m-%d %H:%M'),
-        'total_activas': len(activas),
-        'con_print': len(con_print),
-        'sin_print': len(sin_print),
-        'vencidos': len(vencidos),
-        'huerfanos': len(huerfanos),
-        'dias_vencimiento': PRINT_DIAS_VENCIMIENTO,
-        'prints': {str(k): v for k, v in prints_index.items()}
-    }
-    with open(PRINTS_INDEX, 'w', encoding='utf-8') as f:
-        json.dump(index_output, f, ensure_ascii=False, indent=2)
-
+    save_prints_index(c, c['prints_index'], huerfanos, PRINTS_INDEX)
     print(f"\n💾 Índice guardado en: {PRINTS_INDEX}")
 
-    # Sugerencias
     if sin_print or vencidos:
         print(f"\n💡 SUGERENCIAS:")
         if sin_print:
@@ -766,60 +720,20 @@ def cmd_pendientes(solo_sin_print=False):
     rows = data['rows']
     prints_index = get_prints_index(rows)
 
-    # Filtrar propiedades activas con link
-    pendientes = []
-    for row in rows:
-        fila = row.get('_row', 0)
-        if fila < 2:
-            continue
-
-        # Solo activas
-        activo = (row.get('activo') or '').lower()
-        if activo == 'no':
-            continue
-
-        # Solo con link
-        link = row.get('link', '')
-        if not link.startswith('http'):
-            continue
-
-        # Detectar campos faltantes
-        missing = []
-        for campo in CAMPOS_IMPORTANTES:
-            valor = (row.get(campo) or '').strip().lower()
-            if not valor or valor == '?':
-                missing.append(campo)
-
-        # Si tiene todos los datos, skip
-        if not missing:
-            continue
-
-        print_info = prints_index.get(fila)
-        tiene_print = print_info is not None
-
-        # Si solo queremos los que no tienen print
-        if solo_sin_print and tiene_print:
-            continue
-
-        pendientes.append({
-            'fila': fila,
-            'direccion': row.get('direccion', ''),
-            'barrio': row.get('barrio', ''),
-            'link': link,
-            'missing': missing,
-            'tiene_print': tiene_print,
-            'print_info': print_info
-        })
-
-    # Ordenar por cantidad de datos faltantes (más incompletos primero)
-    pendientes.sort(key=lambda x: -len(x['missing']))
+    # Obtener propiedades con datos faltantes
+    pendientes = get_properties_with_missing_data(
+        rows, CAMPOS_IMPORTANTES, prints_index, solo_sin_print
+    )
 
     # Guardar JSON
     PRINTS_DIR.mkdir(parents=True, exist_ok=True)
+    con_print = sum(1 for p in pendientes if p['tiene_print'])
+    sin_print = len(pendientes) - con_print
+
     output = {
         'total': len(pendientes),
-        'con_print': sum(1 for p in pendientes if p['tiene_print']),
-        'sin_print': sum(1 for p in pendientes if not p['tiene_print']),
+        'con_print': con_print,
+        'sin_print': sin_print,
         'instrucciones': 'Guardá los screenshots en data/prints/ con el nombre: fila_XX.pdf o el título del aviso',
         'propiedades': pendientes
     }
@@ -831,8 +745,8 @@ def cmd_pendientes(solo_sin_print=False):
     print(f"\n📋 PROPIEDADES CON DATOS FALTANTES")
     print(f"{'='*60}")
     print(f"   Total: {len(pendientes)}")
-    print(f"   Con print: {output['con_print']} ✅")
-    print(f"   Sin print: {output['sin_print']} ⚠️")
+    print(f"   Con print: {con_print} ✅")
+    print(f"   Sin print: {sin_print} ⚠️")
     print(f"{'='*60}\n")
 
     for p in pendientes:

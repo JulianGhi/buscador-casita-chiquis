@@ -71,6 +71,8 @@ from .validation import (
     get_warnings,
     print_warnings_summary,
     validar_propiedad,
+    get_missing_fields,
+    get_properties_with_missing_data,
 )
 
 from .prints import (
@@ -90,6 +92,8 @@ from .prints import (
     extract_id_from_pdf,
     get_pending_print_files,
     process_print_file,
+    get_orphan_prints,
+    save_prints_index,
 )
 
 from .templates import (
