@@ -44,6 +44,120 @@ const DEFAULT_WEIGHTS = {
   frente:        { label: '🪟 Al frente',    weight: 3,  enabled: true, desc: '↑ peso = prioriza disposición frente' },
 };
 
+// ============================================
+// CONFIGURACIÓN DE TIERS (centralizada)
+// ============================================
+const TIER_CONFIG = {
+  1: {
+    label: 'T1', name: 'Ideal',
+    title: 'Activo + Apto crédito + OK$',
+    css: 'bg-green-100 text-green-700',
+    chart: { bg: 'rgba(34, 197, 94, 0.7)', border: 'rgb(22, 163, 74)' },
+    pointStyle: 'circle', pointRadius: 10, borderWidth: 2
+  },
+  2: {
+    label: 'T2', name: 'Negociar',
+    title: 'Activo + Apto crédito + Caro',
+    css: 'bg-blue-100 text-blue-700',
+    chart: { bg: 'rgba(59, 130, 246, 0.7)', border: 'rgb(37, 99, 235)' },
+    pointStyle: 'circle', pointRadius: 8, borderWidth: 2
+  },
+  3: {
+    label: 'T3', name: 'Verificar',
+    title: 'Activo + Crédito?',
+    css: 'bg-yellow-100 text-yellow-700',
+    chart: { bg: 'rgba(234, 179, 8, 0.7)', border: 'rgb(202, 138, 4)' },
+    pointStyle: 'rectRot', pointRadius: 6, borderWidth: 1
+  },
+  4: {
+    label: 'T4', name: 'No apto',
+    title: 'Activo + No apto crédito',
+    css: 'bg-orange-100 text-orange-700',
+    chart: { bg: 'rgba(249, 115, 22, 0.7)', border: 'rgb(234, 88, 12)' },
+    pointStyle: 'triangle', pointRadius: 6, borderWidth: 1
+  },
+  5: {
+    label: 'T5', name: 'Inactivo',
+    title: 'Inactivo o sin link',
+    css: 'bg-red-100 text-red-700 opacity-60',
+    chart: { bg: 'rgba(248, 113, 113, 0.4)', border: 'rgb(239, 68, 68)' },
+    pointStyle: 'crossRot', pointRadius: 6, borderWidth: 1
+  }
+};
+
+// ============================================
+// REGLAS DE SCORING (centralizada)
+// ============================================
+const SCORING_RULES = {
+  // Atributos booleanos: si/no/missing
+  terraza:     { type: 'boolean', bonus: 10, penaltyMissing: 5 },
+  balcon:      { type: 'boolean', bonus: 10, penaltyMissing: 5 },
+  luminosidad: { type: 'boolean', bonus: 10, penaltyMissing: 5 },
+
+  // Atributos numéricos (cocheras)
+  cochera:     { type: 'numeric', bonus: 10, penaltyMissing: 5 },
+
+  // Disposición (frente/contrafrente)
+  frente:      { type: 'disposicion', bonus: 10, penaltyMissing: 5 },
+
+  // Atributos con umbrales
+  ambientes: {
+    type: 'threshold',
+    thresholds: [
+      { min: 4, score: 8 },  // 4+ ambientes = muy bien
+      { min: 3, score: 4 },  // 3 ambientes = bien
+    ],
+    penaltyMissing: 3
+  },
+  banos: {
+    type: 'threshold',
+    thresholds: [
+      { min: 2, score: 6 },  // 2+ baños = bonus
+    ],
+    penaltyMissing: 3
+  },
+  antiguedad: {
+    type: 'range',
+    ranges: [
+      { max: 0, score: 10 },   // A estrenar
+      { max: 15, score: 6 },   // <15 años
+      { max: 30, score: 3 },   // 15-30 años
+      { max: 50, score: 0 },   // 30-50 años
+      { min: 51, score: -3 },  // >50 años
+    ],
+    penaltyMissing: 3
+  },
+  expensas: {
+    type: 'range',
+    ranges: [
+      { max: 0, score: 8 },    // Sin expensas
+      { max: 80, score: 5 },   // Bajas
+      { max: 150, score: 2 },  // Medias
+      { max: 250, score: 0 },  // Altas
+      { min: 251, score: -4 }, // Muy altas
+    ],
+    penaltyMissing: 2
+  },
+  m2: {
+    type: 'threshold',
+    thresholds: [
+      { min: 70, score: 4 },  // Grande
+      { min: 50, score: 2 },  // Mediano
+      { min: 40, score: 1 },  // Chico pero OK
+    ],
+    penaltyMissing: 3
+  },
+  bajo_mercado: {
+    type: 'vsRef',
+    ranges: [
+      { max: -0.15, score: 15 }, // Muy bajo mercado
+      { max: -0.05, score: 8 },  // Bajo mercado
+      { max: 0, score: 3 },      // Levemente bajo
+      { min: 0.15, score: -5 },  // Sobre mercado
+    ]
+  }
+};
+
 const API_KEY = 'AIzaSyClZvK5NbmLEtxi9tqf1fcKxRIKEUqYnu0';
 const SHEET_ID = '16n92ghEe8Vr1tiLdqbccF3i97kiwhHin9OPWY-O50L4';
 

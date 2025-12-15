@@ -509,40 +509,21 @@ function renderDetailModal(p) {
   const creditoBase = getCreditoUSD();
   const creditoEstimado = getCreditoUSD(dolarActual);
   const diferenciaCredito = creditoBase - creditoEstimado;
+  const tieneInmob = p.inmobiliaria && p.inmobiliaria.trim() !== '';
 
-  const negPct = state.negotiationPct / 100;
-  const precioNeg = Math.round(p._precio * (1 - negPct));
-  const tu10Neg = Math.max(precioNeg - creditoEstimado, precioNeg * 0.1);
-  const escrNeg = Math.round(precioNeg * CONFIG.ESCRIBANO);
-  const sellNeg = precioNeg <= CONFIG.SELLOS_EXENTO ? 0 : Math.round(precioNeg * CONFIG.SELLOS);
-  const regNeg = Math.round(precioNeg * CONFIG.REGISTRALES);
-  const inmobNeg = p.inmobiliaria ? Math.round(precioNeg * CONFIG.INMOB) : 0;
-  const hipNeg = Math.round(precioNeg * CONFIG.HIPOTECA);
-  const totalNeg = tu10Neg + escrNeg + sellNeg + regNeg + inmobNeg + hipNeg + CONFIG.CERTIFICADOS;
-  const okNeg = totalNeg <= CONFIG.PRESUPUESTO;
-  const difNeg = CONFIG.PRESUPUESTO - totalNeg;
-  const ahorro = p._total - totalNeg;
+  // Usar calculateCosts() para cálculos con negociación
+  const costsNeg = calculateCosts(p._precio, {
+    tieneInmob,
+    dolar: dolarActual,
+    negociacionPct: state.negotiationPct
+  });
 
+  const ahorro = p._total - costsNeg.total;
   const hayAjuste = state.negotiationPct > 0 || (state.dolarEstimado && state.dolarEstimado !== CONFIG.DOLAR_BASE);
   const hayAjusteDolar = state.dolarEstimado && state.dolarEstimado !== CONFIG.DOLAR_BASE;
 
-  // Calcular quita necesaria para que entre en presupuesto
-  // Fórmula: encontrar precio donde total <= PRESUPUESTO
-  // total = tu10 + precio * (ESCR + SELL + REG + INMOB + HIP) + CERT
-  // Si precio > credito/0.9: tu10 = precio - credito
-  //   total = precio - credito + precio * costos + CERT = precio * (1 + costos) - credito + CERT
-  //   precio_target = (PRESUPUESTO + credito - CERT) / (1 + costos)
-  // Si precio <= credito/0.9: tu10 = precio * 0.1
-  //   total = precio * (0.1 + costos) + CERT
-  //   precio_target = (PRESUPUESTO - CERT) / (0.1 + costos)
-  const tieneInmob = p.inmobiliaria && p.inmobiliaria.trim() !== '';
-  const costosRate = CONFIG.ESCRIBANO + CONFIG.SELLOS + CONFIG.REGISTRALES + (tieneInmob ? CONFIG.INMOB : 0) + CONFIG.HIPOTECA;
-  const precioTarget1 = (CONFIG.PRESUPUESTO + creditoEstimado - CONFIG.CERTIFICADOS) / (1 + costosRate);
-  const precioTarget2 = (CONFIG.PRESUPUESTO - CONFIG.CERTIFICADOS) / (0.1 + costosRate);
-  const umbral = creditoEstimado / 0.9;
-  const precioTarget = precioTarget1 > umbral ? precioTarget1 : precioTarget2;
-  const quitaNecesaria = p._precio > 0 ? Math.max(0, ((p._precio - precioTarget) / p._precio) * 100) : 0;
-  const entraConQuita = quitaNecesaria > 0 && quitaNecesaria <= 20; // Realista hasta 20%
+  // Usar calculateQuitaNecesaria() para sugerencia
+  const quita = calculateQuitaNecesaria(p._precio, tieneInmob, dolarActual);
 
   // Características de la propiedad
   const caracteristicas = [
@@ -621,7 +602,7 @@ function renderDetailModal(p) {
             <div class="bg-slate-50 rounded-xl p-3 text-center">
               ${state.negotiationPct > 0 && p._precio > 0 ? `
                 <div class="text-xs line-through text-slate-400">$${p._precio.toLocaleString()}</div>
-                <div class="text-xl font-bold text-orange-600">$${precioNeg.toLocaleString()}</div>
+                <div class="text-xl font-bold text-orange-600">$${costsNeg.precio.toLocaleString()}</div>
               ` : `<div class="text-xl font-bold text-slate-800">$${p._precio > 0 ? p._precio.toLocaleString() : '-'}</div>`}
               <div class="text-xs text-slate-500">Precio</div>
             </div>
@@ -636,7 +617,7 @@ function renderDetailModal(p) {
             <div class="bg-slate-50 rounded-xl p-3 text-center">
               ${hayAjuste && p._precio > 0 ? `
                 <div class="text-xs line-through text-slate-400">$${p._total.toLocaleString()}</div>
-                <div class="text-xl font-bold ${okNeg ? 'text-green-600' : 'text-red-600'}">$${totalNeg.toLocaleString()}</div>
+                <div class="text-xl font-bold ${costsNeg.ok ? 'text-green-600' : 'text-red-600'}">$${costsNeg.total.toLocaleString()}</div>
               ` : `<div class="text-xl font-bold ${p._ok ? 'text-green-600' : 'text-red-600'}">$${p._precio > 0 ? p._total.toLocaleString() : '-'}</div>`}
               <div class="text-xs text-slate-500">A juntar</div>
             </div>
@@ -676,21 +657,21 @@ function renderDetailModal(p) {
           </div>
 
           <!-- Sugerencia de quita si no alcanza -->
-          ${!okNeg && quitaNecesaria > 0 ? `
-          <div class="bg-gradient-to-r ${entraConQuita ? 'from-purple-50 to-pink-50 border-purple-200' : 'from-red-50 to-orange-50 border-red-200'} rounded-xl p-4 border">
+          ${!costsNeg.ok && quita.quitaPct > 0 ? `
+          <div class="bg-gradient-to-r ${quita.esRealista ? 'from-purple-50 to-pink-50 border-purple-200' : 'from-red-50 to-orange-50 border-red-200'} rounded-xl p-4 border">
             <div class="flex items-center gap-2 mb-1">
-              <span class="text-lg">${entraConQuita ? '💡' : '⚠️'}</span>
-              <span class="font-medium ${entraConQuita ? 'text-purple-800' : 'text-red-800'}">
-                ${entraConQuita ? 'Para que entre en presupuesto:' : 'Muy cara para tu presupuesto'}
+              <span class="text-lg">${quita.esRealista ? '💡' : '⚠️'}</span>
+              <span class="font-medium ${quita.esRealista ? 'text-purple-800' : 'text-red-800'}">
+                ${quita.esRealista ? 'Para que entre en presupuesto:' : 'Muy cara para tu presupuesto'}
               </span>
             </div>
-            <div class="text-sm ${entraConQuita ? 'text-purple-700' : 'text-red-700'}">
-              ${entraConQuita
-                ? `Necesitás negociar <span class="font-bold">-${quitaNecesaria.toFixed(1)}%</span> (<span class="font-mono">-$${Math.round(p._precio - precioTarget).toLocaleString()}</span>) → precio objetivo: <span class="font-mono font-bold">$${Math.round(precioTarget).toLocaleString()}</span>`
-                : `Necesitarías <span class="font-bold">-${quitaNecesaria.toFixed(1)}%</span> (<span class="font-mono">-$${Math.round(p._precio - precioTarget).toLocaleString()}</span>), poco realista`
+            <div class="text-sm ${quita.esRealista ? 'text-purple-700' : 'text-red-700'}">
+              ${quita.esRealista
+                ? `Necesitás negociar <span class="font-bold">-${quita.quitaPct.toFixed(1)}%</span> (<span class="font-mono">-$${quita.quitaUSD.toLocaleString()}</span>) → precio objetivo: <span class="font-mono font-bold">$${quita.precioTarget.toLocaleString()}</span>`
+                : `Necesitarías <span class="font-bold">-${quita.quitaPct.toFixed(1)}%</span> (<span class="font-mono">-$${quita.quitaUSD.toLocaleString()}</span>), poco realista`
               }
             </div>
-            ${entraConQuita ? `<div class="text-xs text-purple-500 mt-1">Con dólar a $${dolarActual} y crédito de $${creditoEstimado.toLocaleString()}</div>` : ''}
+            ${quita.esRealista ? `<div class="text-xs text-purple-500 mt-1">Con dólar a $${dolarActual} y crédito de $${creditoEstimado.toLocaleString()}</div>` : ''}
           </div>
           ` : ''}
 
@@ -700,41 +681,41 @@ function renderDetailModal(p) {
             <div class="space-y-2 text-sm">
               <div class="flex justify-between">
                 <span class="text-slate-600">Tu 10% (o precio - crédito)</span>
-                <span class="font-mono font-medium ${hayAjuste ? 'text-orange-600' : ''}">$${(hayAjuste ? tu10Neg : p._tu10).toLocaleString()}</span>
+                <span class="font-mono font-medium ${hayAjuste ? 'text-orange-600' : ''}">$${(hayAjuste ? costsNeg.tu10 : p._tu10).toLocaleString()}</span>
               </div>
               <div class="flex justify-between">
                 <span class="text-slate-600">Escribano (${(CONFIG.ESCRIBANO * 100).toFixed(1)}%)</span>
-                <span class="font-mono">${hayAjuste ? '$' + escrNeg.toLocaleString() : '$' + p._escr.toLocaleString()}</span>
+                <span class="font-mono">$${(hayAjuste ? costsNeg.escr : p._escr).toLocaleString()}</span>
               </div>
               <div class="flex justify-between">
-                <span class="text-slate-600">Sellos ${(hayAjuste ? precioNeg : p._precio) <= CONFIG.SELLOS_EXENTO ? '<span class="text-green-600 text-xs">(exento)</span>' : `(${(CONFIG.SELLOS * 100).toFixed(2)}%)`}</span>
-                <span class="font-mono">${hayAjuste ? '$' + sellNeg.toLocaleString() : '$' + p._sell.toLocaleString()}</span>
+                <span class="text-slate-600">Sellos ${(hayAjuste ? costsNeg.precio : p._precio) <= CONFIG.SELLOS_EXENTO ? '<span class="text-green-600 text-xs">(exento)</span>' : `(${(CONFIG.SELLOS * 100).toFixed(2)}%)`}</span>
+                <span class="font-mono">$${(hayAjuste ? costsNeg.sell : p._sell).toLocaleString()}</span>
               </div>
               <div class="flex justify-between">
                 <span class="text-slate-600">Registrales (${(CONFIG.REGISTRALES * 100).toFixed(1)}%)</span>
-                <span class="font-mono">${hayAjuste ? '$' + regNeg.toLocaleString() : '$' + p._reg.toLocaleString()}</span>
+                <span class="font-mono">$${(hayAjuste ? costsNeg.reg : p._reg).toLocaleString()}</span>
               </div>
               ${p.inmobiliaria ? `
               <div class="flex justify-between">
                 <span class="text-slate-600">Inmobiliaria (${(CONFIG.INMOB * 100).toFixed(2)}%)</span>
-                <span class="font-mono">${hayAjuste ? '$' + inmobNeg.toLocaleString() : '$' + p._inmob.toLocaleString()}</span>
+                <span class="font-mono">$${(hayAjuste ? costsNeg.inmob : p._inmob).toLocaleString()}</span>
               </div>
               ` : ''}
               <div class="flex justify-between">
                 <span class="text-slate-600">Hipoteca (${(CONFIG.HIPOTECA * 100).toFixed(1)}%)</span>
-                <span class="font-mono">${hayAjuste ? '$' + hipNeg.toLocaleString() : '$' + p._hip.toLocaleString()}</span>
+                <span class="font-mono">$${(hayAjuste ? costsNeg.hip : p._hip).toLocaleString()}</span>
               </div>
               <div class="flex justify-between">
                 <span class="text-slate-600">Certificados</span>
-                <span class="font-mono">$${CONFIG.CERTIFICADOS.toLocaleString()}</span>
+                <span class="font-mono">$${costsNeg.cert.toLocaleString()}</span>
               </div>
               <div class="border-t pt-2 mt-2 flex justify-between font-medium">
                 <span>TOTAL A JUNTAR</span>
-                <span class="font-mono ${(hayAjuste ? okNeg : p._ok) ? 'text-green-600' : 'text-red-600'}">$${(hayAjuste ? totalNeg : p._total).toLocaleString()}</span>
+                <span class="font-mono ${(hayAjuste ? costsNeg.ok : p._ok) ? 'text-green-600' : 'text-red-600'}">$${(hayAjuste ? costsNeg.total : p._total).toLocaleString()}</span>
               </div>
               <div class="flex justify-between text-xs">
                 <span class="text-slate-500">Tengo: $${CONFIG.PRESUPUESTO.toLocaleString()}</span>
-                <span class="${(hayAjuste ? difNeg : p._dif) >= 0 ? 'text-green-600' : 'text-red-600'}">${(hayAjuste ? difNeg : p._dif) >= 0 ? 'Sobran' : 'Faltan'} $${Math.abs(hayAjuste ? difNeg : p._dif).toLocaleString()}</span>
+                <span class="${(hayAjuste ? costsNeg.dif : p._dif) >= 0 ? 'text-green-600' : 'text-red-600'}">${(hayAjuste ? costsNeg.dif : p._dif) >= 0 ? 'Sobran' : 'Faltan'} $${Math.abs(hayAjuste ? costsNeg.dif : p._dif).toLocaleString()}</span>
               </div>
               ${hayAjuste && ahorro > 0 ? `<div class="text-center text-green-600 text-xs mt-1">💡 Con estos ajustes ahorrás $${ahorro.toLocaleString()}</div>` : ''}
             </div>

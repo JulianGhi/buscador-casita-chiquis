@@ -152,14 +152,7 @@ function renderBarrioCheckboxes() {
   `).join('');
 }
 
-// Colores por tier
-const TIER_COLORS = {
-  1: { bg: 'rgba(34, 197, 94, 0.7)', border: 'rgb(22, 163, 74)' },   // Verde - T1 Ideal
-  2: { bg: 'rgba(59, 130, 246, 0.7)', border: 'rgb(37, 99, 235)' },  // Azul - T2 Negociar
-  3: { bg: 'rgba(234, 179, 8, 0.7)', border: 'rgb(202, 138, 4)' },   // Amarillo - T3 Verificar
-  4: { bg: 'rgba(249, 115, 22, 0.7)', border: 'rgb(234, 88, 12)' },  // Naranja - T4 No apto
-  5: { bg: 'rgba(248, 113, 113, 0.4)', border: 'rgb(239, 68, 68)' }, // Rojo claro - T5 Inactivo
-};
+// Usa TIER_CONFIG de config.js
 
 function renderChart(properties) {
   const ctx = document.getElementById('scatterChart');
@@ -212,17 +205,12 @@ function renderChart(properties) {
         {
           label: 'Propiedades',
           data: data,
-          backgroundColor: data.map(d => TIER_COLORS[d.tier].bg),
-          borderColor: data.map(d => TIER_COLORS[d.tier].border),
-          borderWidth: data.map(d => d.tier <= 2 ? 2 : 1),
-          pointRadius: data.map(d => d.tier === 1 ? 10 : d.tier === 2 ? 8 : 6),
+          backgroundColor: data.map(d => TIER_CONFIG[d.tier].chart.bg),
+          borderColor: data.map(d => TIER_CONFIG[d.tier].chart.border),
+          borderWidth: data.map(d => TIER_CONFIG[d.tier].borderWidth),
+          pointRadius: data.map(d => TIER_CONFIG[d.tier].pointRadius),
           pointHoverRadius: 12,
-          pointStyle: data.map(d => {
-            if (d.tier === 5) return 'crossRot';
-            if (d.tier === 4) return 'triangle';
-            if (d.tier === 3) return 'rectRot';
-            return 'circle';
-          }),
+          pointStyle: data.map(d => TIER_CONFIG[d.tier].pointStyle),
         },
         {
           label: 'Tendencia',
@@ -246,13 +234,13 @@ function renderChart(properties) {
             label: function(context) {
               const d = context.raw;
               const vsRef = d.vsRef !== null ? ` (${d.vsRef > 0 ? '+' : ''}${Math.round(d.vsRef * 100)}% vs barrio)` : '';
-              const tierNames = {1: 'Ideal', 2: 'Negociar', 3: 'Verificar', 4: 'No apto', 5: 'Inactivo'};
+              const tierCfg = TIER_CONFIG[d.tier];
               return [
                 d.label,
                 d.barrio,
                 `$${d.y.toLocaleString()} · ${d.x}m²`,
                 `$${d.preciom2.toLocaleString()}/m²${vsRef}`,
-                `T${d.tier} ${tierNames[d.tier]} · Score: ${d.score}`
+                `${tierCfg.label} ${tierCfg.name} · Score: ${d.score}`
               ];
             }
           }

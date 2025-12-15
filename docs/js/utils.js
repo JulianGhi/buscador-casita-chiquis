@@ -2,85 +2,75 @@
 // UTILIDADES
 // ============================================
 
-// Score de atributos: penaliza datos faltantes, premia datos verificados
-// "si" → +bonus, "no" → 0 (neutro, verificado), missing/"?"/"" → -penalidad
-function scoreAtributo(valor, peso, bonusSi = 10, penaltyMissing = 5) {
+// ============================================
+// SISTEMA DE SCORING UNIFICADO
+// Usa SCORING_RULES de config.js
+// ============================================
+
+function scoreAttribute(key, valor, peso) {
   if (peso <= 0) return { score: 0, status: 'disabled' };
+  const rule = SCORING_RULES[key];
+  if (!rule) return { score: 0, status: 'unknown' };
+
   const v = (valor || '').toLowerCase().trim();
-  if (v === 'si' || v === 'sí') return { score: bonusSi * peso, status: 'si' };
-  if (v === 'no') return { score: 0, status: 'no' }; // Verificado que no tiene
-  return { score: -penaltyMissing * peso, status: 'missing' }; // Desconocido
-}
-
-// Score de atributo numérico (cocheras)
-function scoreNumerico(valor, peso, bonusPositivo = 10, penaltyMissing = 5) {
-  if (peso <= 0) return { score: 0, status: 'disabled' };
   const num = parseInt(valor);
-  if (!isNaN(num)) {
-    if (num > 0) return { score: bonusPositivo * peso, status: 'si' };
-    return { score: 0, status: 'no' }; // cocheras=0 es verificado
+  const hasNum = !isNaN(num);
+
+  switch (rule.type) {
+    case 'boolean':
+      if (v === 'si' || v === 'sí') return { score: rule.bonus * peso, status: 'si' };
+      if (v === 'no') return { score: 0, status: 'no' };
+      return { score: -rule.penaltyMissing * peso, status: 'missing' };
+
+    case 'numeric':
+      if (hasNum) {
+        if (num > 0) return { score: rule.bonus * peso, status: 'si' };
+        return { score: 0, status: 'no' };
+      }
+      return { score: -rule.penaltyMissing * peso, status: 'missing' };
+
+    case 'disposicion':
+      if (v === 'frente') return { score: rule.bonus * peso, status: 'si' };
+      if (v === 'contrafrente' || v === 'interno' || v === 'lateral') return { score: 0, status: 'no' };
+      return { score: -rule.penaltyMissing * peso, status: 'missing' };
+
+    case 'threshold':
+      if (hasNum && num > 0) {
+        for (const t of rule.thresholds) {
+          if (num >= t.min) return { score: t.score * peso, status: t.score > 3 ? 'si' : 'ok' };
+        }
+        return { score: 0, status: 'no' };
+      }
+      return { score: -rule.penaltyMissing * peso, status: 'missing' };
+
+    case 'range':
+      if (hasNum) {
+        for (const r of rule.ranges) {
+          if (r.max !== undefined && num <= r.max) return { score: r.score * peso, status: r.score > 0 ? 'si' : 'no' };
+          if (r.min !== undefined && num >= r.min) return { score: r.score * peso, status: 'no' };
+        }
+        return { score: 0, status: 'ok' };
+      }
+      return { score: -rule.penaltyMissing * peso, status: 'missing' };
+
+    case 'vsRef':
+      // Handled separately in calculateProperty
+      return { score: 0, status: 'special' };
+
+    default:
+      return { score: 0, status: 'unknown' };
   }
-  return { score: -penaltyMissing * peso, status: 'missing' };
 }
 
-// Score de disposición (frente/contrafrente/interno)
-function scoreDisposicion(valor, peso, bonusFront = 10, penaltyMissing = 5) {
-  if (peso <= 0) return { score: 0, status: 'disabled' };
-  const v = (valor || '').toLowerCase().trim();
-  if (v === 'frente') return { score: bonusFront * peso, status: 'si' };
-  if (v === 'contrafrente' || v === 'interno' || v === 'lateral') return { score: 0, status: 'no' };
-  return { score: -penaltyMissing * peso, status: 'missing' };
-}
-
-// Score de ambientes: 4+ = muy bien, 3 = bien, <3 = neutro
-function scoreAmbientes(valor, peso, penaltyMissing = 3) {
-  if (peso <= 0) return { score: 0, status: 'disabled' };
-  const num = parseInt(valor);
-  if (!isNaN(num) && num > 0) {
-    if (num >= 4) return { score: 8 * peso, status: 'si' };
-    if (num >= 3) return { score: 4 * peso, status: 'ok' };
-    return { score: 0, status: 'no' }; // 2 o menos
+// Calcula score de precio vs referencia del barrio
+function scoreVsRef(vsRef, peso) {
+  if (peso <= 0 || vsRef === null) return 0;
+  const rule = SCORING_RULES.bajo_mercado;
+  for (const r of rule.ranges) {
+    if (r.max !== undefined && vsRef <= r.max) return r.score * peso;
+    if (r.min !== undefined && vsRef >= r.min) return r.score * peso;
   }
-  return { score: -penaltyMissing * peso, status: 'missing' };
-}
-
-// Score de baños: 2+ = bonus, 1 = neutro
-function scoreBanos(valor, peso, penaltyMissing = 3) {
-  if (peso <= 0) return { score: 0, status: 'disabled' };
-  const num = parseInt(valor);
-  if (!isNaN(num) && num > 0) {
-    if (num >= 2) return { score: 6 * peso, status: 'si' };
-    return { score: 0, status: 'no' }; // 1 baño
-  }
-  return { score: -penaltyMissing * peso, status: 'missing' };
-}
-
-// Score de antigüedad: nuevo = mejor, viejo = peor
-function scoreAntiguedad(valor, peso, penaltyMissing = 3) {
-  if (peso <= 0) return { score: 0, status: 'disabled' };
-  const num = parseInt(valor);
-  if (!isNaN(num)) {
-    if (num === 0) return { score: 10 * peso, status: 'si' }; // A estrenar
-    if (num <= 15) return { score: 6 * peso, status: 'si' };
-    if (num <= 30) return { score: 3 * peso, status: 'ok' };
-    if (num <= 50) return { score: 0, status: 'no' };
-    return { score: -3 * peso, status: 'no' }; // >50 años
-  }
-  return { score: -penaltyMissing * peso, status: 'missing' };
-}
-
-// Score de expensas: bajas = bonus, altas = penalty
-function scoreExpensas(valor, peso, penaltyMissing = 2) {
-  if (peso <= 0) return { score: 0, status: 'disabled' };
-  const num = parseInt(valor);
-  if (!isNaN(num)) {
-    if (num === 0) return { score: 8 * peso, status: 'si' }; // Sin expensas
-    if (num <= 80) return { score: 5 * peso, status: 'si' };
-    if (num <= 150) return { score: 2 * peso, status: 'ok' };
-    if (num <= 250) return { score: 0, status: 'no' };
-    return { score: -4 * peso, status: 'no' }; // >250 (muy altas)
-  }
-  return { score: -penaltyMissing * peso, status: 'missing' };
+  return 0;
 }
 
 function getCreditoUSD(dolar = null) {
@@ -94,6 +84,59 @@ function getPrecioRange(dolar = null) {
   const gastosRate = CONFIG.ESCRIBANO + CONFIG.SELLOS + CONFIG.REGISTRALES + CONFIG.INMOB + CONFIG.HIPOTECA;
   const precioMax = Math.round((CONFIG.PRESUPUESTO + credito) / (1 + gastosRate));
   return { min: precioMin, max: precioMax };
+}
+
+// ============================================
+// CÁLCULO DE COSTOS (reutilizable)
+// ============================================
+function calculateCosts(precio, options = {}) {
+  const {
+    tieneInmob = false,
+    dolar = null,
+    negociacionPct = 0
+  } = options;
+
+  const creditoUSD = getCreditoUSD(dolar);
+  const precioFinal = Math.round(precio * (1 - negociacionPct / 100));
+
+  const tu10 = Math.max(precioFinal - creditoUSD, precioFinal * 0.1);
+  const escr = Math.round(precioFinal * CONFIG.ESCRIBANO);
+  const sell = precioFinal <= CONFIG.SELLOS_EXENTO ? 0 : Math.round(precioFinal * CONFIG.SELLOS);
+  const reg = Math.round(precioFinal * CONFIG.REGISTRALES);
+  const inmob = tieneInmob ? Math.round(precioFinal * CONFIG.INMOB) : 0;
+  const hip = Math.round(precioFinal * CONFIG.HIPOTECA);
+  const cert = CONFIG.CERTIFICADOS;
+  const total = tu10 + escr + sell + reg + inmob + hip + cert;
+
+  return {
+    precio: precioFinal,
+    creditoUSD,
+    tu10, escr, sell, reg, inmob, hip, cert, total,
+    ok: total <= CONFIG.PRESUPUESTO,
+    dif: CONFIG.PRESUPUESTO - total
+  };
+}
+
+// Calcula quita necesaria para entrar en presupuesto
+function calculateQuitaNecesaria(precio, tieneInmob = false, dolar = null) {
+  const creditoUSD = getCreditoUSD(dolar);
+  const costosRate = CONFIG.ESCRIBANO + CONFIG.SELLOS + CONFIG.REGISTRALES +
+                     (tieneInmob ? CONFIG.INMOB : 0) + CONFIG.HIPOTECA;
+
+  const precioTarget1 = (CONFIG.PRESUPUESTO + creditoUSD - CONFIG.CERTIFICADOS) / (1 + costosRate);
+  const precioTarget2 = (CONFIG.PRESUPUESTO - CONFIG.CERTIFICADOS) / (0.1 + costosRate);
+  const umbral = creditoUSD / 0.9;
+  const precioTarget = precioTarget1 > umbral ? precioTarget1 : precioTarget2;
+
+  const quitaPct = precio > 0 ? Math.max(0, ((precio - precioTarget) / precio) * 100) : 0;
+  const quitaUSD = Math.round(precio - precioTarget);
+
+  return {
+    precioTarget: Math.round(precioTarget),
+    quitaPct,
+    quitaUSD,
+    esRealista: quitaPct > 0 && quitaPct <= 20
+  };
 }
 
 function parseCSV(text) {
@@ -123,31 +166,38 @@ function calculateProperty(p) {
   const m2 = parseFloat(p.m2_cub) || 0;
   const barrio = p.barrio;
   const tieneInmob = p.inmobiliaria && p.inmobiliaria.trim() !== '';
-  const creditoUSD = getCreditoUSD();
-  const calc = { ...p, _precio: precio, _m2: m2, _preciom2: m2 > 0 ? Math.round(precio / m2) : 0, _ref: REF_M2[barrio] || 0 };
-  calc._vsRef = (calc._preciom2 > 0 && calc._ref > 0) ? (calc._preciom2 - calc._ref) / calc._ref : null;
-  calc._tu10 = Math.max(precio - creditoUSD, precio * 0.1);
-  calc._escr = Math.round(precio * CONFIG.ESCRIBANO);
-  calc._sell = precio <= CONFIG.SELLOS_EXENTO ? 0 : Math.round(precio * CONFIG.SELLOS);
-  calc._reg = Math.round(precio * CONFIG.REGISTRALES);
-  calc._inmob = tieneInmob ? Math.round(precio * CONFIG.INMOB) : 0;
-  calc._hip = Math.round(precio * CONFIG.HIPOTECA);
-  calc._cert = CONFIG.CERTIFICADOS;
-  calc._total = calc._tu10 + calc._escr + calc._sell + calc._reg + calc._inmob + calc._hip + calc._cert;
-  calc._ok = calc._total <= CONFIG.PRESUPUESTO;
-  calc._dif = CONFIG.PRESUPUESTO - calc._total;
-  calc._completeness = [p.direccion, p.barrio, precio > 0, m2 > 0].filter(Boolean).length;
 
-  // Score de candidato con sistema de tiers
-  // Tier determina el orden principal, score es secundario dentro del tier
-  let score = 0;
-  let tier = 4; // Peor tier por defecto
+  // Usar calculateCosts para costos
+  const costs = calculateCosts(precio, { tieneInmob });
+
+  // Calcular datos básicos
+  const calc = {
+    ...p,
+    _precio: precio,
+    _m2: m2,
+    _preciom2: m2 > 0 ? Math.round(precio / m2) : 0,
+    _ref: REF_M2[barrio] || 0,
+    // Costos (de calculateCosts)
+    _tu10: costs.tu10,
+    _escr: costs.escr,
+    _sell: costs.sell,
+    _reg: costs.reg,
+    _inmob: costs.inmob,
+    _hip: costs.hip,
+    _cert: costs.cert,
+    _total: costs.total,
+    _ok: costs.ok,
+    _dif: costs.dif,
+    _completeness: [p.direccion, p.barrio, precio > 0, m2 > 0].filter(Boolean).length
+  };
+
+  calc._vsRef = (calc._preciom2 > 0 && calc._ref > 0) ? (calc._preciom2 - calc._ref) / calc._ref : null;
+
+  // === SISTEMA DE TIERS ===
   const activo = (p.activo || '').toLowerCase();
   const aptoCredito = (p.apto_credito || '').toLowerCase();
-  const W = WEIGHTS;
   const C = CONDITIONS;
 
-  // Evaluar condiciones
   const esActivo = activo === 'si';
   const esAptoCredito = aptoCredito === 'si';
   const noSabemosCredito = aptoCredito === '' || aptoCredito === '?';
@@ -155,119 +205,68 @@ function calculateProperty(p) {
   const dentroPresupuesto = calc._ok || precio === 0;
   const tieneLink = !!p.link;
 
-  // Sistema de Tiers (orden estricto de prioridad):
-  // Tier 1: activo + apto_credito=si + dentro presupuesto (los mejores)
-  // Tier 2: activo + apto_credito=si + fuera presupuesto (buenos pero caros)
-  // Tier 3: activo + apto_credito=? (hay que averiguar)
-  // Tier 4: activo + apto_credito=no (no aceptan crédito)
-  // Tier 5: no activo o sin link (descartados)
+  let tier = 4;
+  let score = 0;
 
+  // Determinar tier
   if (!tieneLink || !esActivo) {
-    tier = 5;
-    score = 0;
+    tier = 5; score = 0;
   } else if (esAptoCredito && dentroPresupuesto) {
-    tier = 1;
-    score = 100; // Base alta para tier 1
+    tier = 1; score = 100;
   } else if (esAptoCredito && !dentroPresupuesto) {
-    tier = 2;
-    score = 80; // Apto pero caro
+    tier = 2; score = 80;
   } else if (noSabemosCredito) {
-    tier = 3;
-    score = 50; // Hay que averiguar
+    tier = 3; score = 50;
   } else if (noAptoCredito) {
-    tier = 4;
-    score = 25; // No apto crédito
+    tier = 4; score = 25;
   }
 
-  // Si CONDITIONS.apto_credito está deshabilitado, ignorar apto_credito en tiers
+  // Ajustar tier si condiciones están deshabilitadas
   if (C.apto_credito && !C.apto_credito.enabled && tier >= 1 && tier <= 4) {
-    // Reagrupar: solo importa activo + presupuesto
-    if (dentroPresupuesto) {
-      tier = 1;
-      score = 100;
-    } else {
-      tier = 2;
-      score = 80;
-    }
+    tier = dentroPresupuesto ? 1 : 2;
+    score = dentroPresupuesto ? 100 : 80;
   }
-
-  // Si CONDITIONS.ok_presupuesto está deshabilitado, ignorar presupuesto en tiers
   if (C.ok_presupuesto && !C.ok_presupuesto.enabled && tier >= 1 && tier <= 4) {
-    // Reagrupar: solo importa activo + apto_credito
-    if (esAptoCredito) {
-      tier = 1;
-      score = 100;
-    } else if (noSabemosCredito) {
-      tier = 2;
-      score = 80;
-    } else {
-      tier = 3;
-      score = 50;
-    }
+    if (esAptoCredito) { tier = 1; score = 100; }
+    else if (noSabemosCredito) { tier = 2; score = 80; }
+    else { tier = 3; score = 50; }
   }
 
-  // Scoring de atributos con penalización por datos faltantes
-  // Guardamos detalles para debugging/transparencia
+  // === SCORING DE ATRIBUTOS ===
+  const getWeight = (key) => WEIGHTS[key]?.enabled ? WEIGHTS[key].weight : 0;
   const attrScores = {};
 
-  // Helper: peso efectivo (0 si deshabilitado)
-  const getWeight = (key) => W[key].enabled ? W[key].weight : 0;
+  // Bajo mercado (caso especial)
+  score += scoreVsRef(calc._vsRef, getWeight('bajo_mercado'));
 
-  // Bajo mercado: solo si tenemos datos para calcular
-  const wBajo = getWeight('bajo_mercado');
-  if (calc._vsRef !== null && wBajo > 0) {
-    if (calc._vsRef < -0.15) score += 15 * wBajo;
-    else if (calc._vsRef < -0.05) score += 8 * wBajo;
-    else if (calc._vsRef < 0) score += 3 * wBajo;
-    else if (calc._vsRef > 0.15) score -= 5 * wBajo;
+  // M2 (usa reglas de threshold)
+  const m2Score = scoreAttribute('m2', m2 > 0 ? m2.toString() : '', getWeight('m2'));
+  score += m2Score.score; attrScores.m2 = m2Score.status;
+
+  // Mapeo de campos a reglas de scoring
+  const attrMapping = {
+    ambientes: p.amb,
+    banos: p.banos,
+    antiguedad: p.antiguedad,
+    expensas: p.expensas,
+    terraza: p.terraza,
+    balcon: p.balcon,
+    cochera: p.cocheras,
+    luminosidad: p.luminosidad,
+    frente: p.disposicion
+  };
+
+  for (const [key, valor] of Object.entries(attrMapping)) {
+    const result = scoreAttribute(key, valor, getWeight(key));
+    score += result.score;
+    attrScores[key] = result.status;
   }
 
-  // M2: bonus por tamaño, penalidad si no sabemos
-  const wM2 = getWeight('m2');
-  if (wM2 > 0) {
-    if (m2 >= 70) { score += 4 * wM2; attrScores.m2 = 'si'; }
-    else if (m2 >= 50) { score += 2 * wM2; attrScores.m2 = 'si'; }
-    else if (m2 >= 40) { score += 1 * wM2; attrScores.m2 = 'ok'; }
-    else if (m2 > 0) { attrScores.m2 = 'no'; } // Verificado pero chico
-    else { score -= 3 * wM2; attrScores.m2 = 'missing'; } // Sin datos
-  }
-
-  // Atributos numéricos con escalas específicas
-  const ambientes = scoreAmbientes(p.amb, getWeight('ambientes'));
-  score += ambientes.score; attrScores.ambientes = ambientes.status;
-
-  const banos = scoreBanos(p.banos, getWeight('banos'));
-  score += banos.score; attrScores.banos = banos.status;
-
-  const antiguedad = scoreAntiguedad(p.antiguedad, getWeight('antiguedad'));
-  score += antiguedad.score; attrScores.antiguedad = antiguedad.status;
-
-  const expensas = scoreExpensas(p.expensas, getWeight('expensas'));
-  score += expensas.score; attrScores.expensas = expensas.status;
-
-  // Atributos booleanos: si/no/missing
-  const terraza = scoreAtributo(p.terraza, getWeight('terraza'));
-  score += terraza.score; attrScores.terraza = terraza.status;
-
-  const balcon = scoreAtributo(p.balcon, getWeight('balcon'));
-  score += balcon.score; attrScores.balcon = balcon.status;
-
-  const cochera = scoreNumerico(p.cocheras, getWeight('cochera'));
-  score += cochera.score; attrScores.cochera = cochera.status;
-
-  const luminosidad = scoreAtributo(p.luminosidad, getWeight('luminosidad'));
-  score += luminosidad.score; attrScores.luminosidad = luminosidad.status;
-
-  const frente = scoreDisposicion(p.disposicion, getWeight('frente'));
-  score += frente.score; attrScores.frente = frente.status;
-
-  // Contar datos faltantes para mostrar en UI
-  const missingCount = Object.values(attrScores).filter(s => s === 'missing').length;
   calc._attrScores = attrScores;
-  calc._missingCount = missingCount;
-
+  calc._missingCount = Object.values(attrScores).filter(s => s === 'missing').length;
   calc._score = score;
   calc._tier = tier;
+
   return calc;
 }
 
@@ -372,23 +371,8 @@ function statusBadge(status) {
 }
 
 function tierBadge(tier) {
-  const colors = {
-    1: 'bg-green-100 text-green-700',
-    2: 'bg-blue-100 text-blue-700',
-    3: 'bg-yellow-100 text-yellow-700',
-    4: 'bg-orange-100 text-orange-700',
-    5: 'bg-red-100 text-red-700 opacity-60'
-  };
-  const labels = { 1: 'T1', 2: 'T2', 3: 'T3', 4: 'T4', 5: 'T5' };
-  const titles = {
-    1: 'Activo + Apto crédito + OK$',
-    2: 'Activo + Apto crédito + Caro',
-    3: 'Activo + Crédito?',
-    4: 'Activo + No apto crédito',
-    5: 'Inactivo'
-  };
-  const color = colors[tier] || 'bg-slate-100 text-slate-500';
-  return `<span class="text-[10px] ${color} px-1 py-0.5 rounded font-medium" title="${titles[tier] || ''}">${labels[tier] || '?'}</span>`;
+  const cfg = TIER_CONFIG[tier] || { css: 'bg-slate-100 text-slate-500', label: '?', title: '' };
+  return `<span class="text-[10px] ${cfg.css} px-1 py-0.5 rounded font-medium" title="${cfg.title}">${cfg.label}</span>`;
 }
 
 function ratingStars(rating) {
