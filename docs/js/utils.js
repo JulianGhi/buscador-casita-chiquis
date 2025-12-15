@@ -172,11 +172,18 @@ function parseCSV(text) {
   });
 }
 
+// Detecta si es venta directa (sin comisión inmobiliaria)
+function esVentaDirecta(inmobiliaria) {
+  const text = (inmobiliaria || '').toLowerCase();
+  return text.includes('direct') || text.includes('dueño') || text.includes('particular');
+}
+
 function calculateProperty(p) {
   const precio = parseFloat(p.precio) || 0;
   const m2 = parseFloat(p.m2_cub) || 0;
   const barrio = p.barrio;
-  const tieneInmob = p.inmobiliaria && p.inmobiliaria.trim() !== '';
+  // Asumir siempre inmobiliaria EXCEPTO si explícitamente es venta directa
+  const tieneInmob = !esVentaDirecta(p.inmobiliaria);
 
   // Usar calculateCosts para costos
   const costs = calculateCosts(precio, { tieneInmob });

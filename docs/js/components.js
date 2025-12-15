@@ -796,7 +796,7 @@ function renderDetailModal(p) {
   const creditoBase = getCreditoUSD();
   const creditoEstimado = getCreditoUSD(dolarActual);
   const diferenciaCredito = creditoBase - creditoEstimado;
-  const tieneInmob = p.inmobiliaria && p.inmobiliaria.trim() !== '';
+  const tieneInmob = !esVentaDirecta(p.inmobiliaria);
 
   const costsNeg = calculateCosts(p._precio, {
     tieneInmob,
