@@ -898,8 +898,11 @@ class TestScrapersConCache:
 
     def test_scrape_link_usa_cache(self, cache_data):
         """scrape_link retorna datos del cache cuando está disponible"""
-        # Tomar la primera URL del cache
-        url = list(cache_data.keys())[0]
+        # Tomar la primera URL válida del cache (sin _error)
+        valid_urls = [url for url, data in cache_data.items() if '_error' not in data]
+        if not valid_urls:
+            pytest.skip("No hay URLs válidas en cache")
+        url = valid_urls[0]
         data, from_cache = scrape_link(url, use_cache=True, cache=cache_data)
         assert from_cache is True, "Debería haber usado el cache"
         assert data is not None
