@@ -7,8 +7,8 @@ import pytest
 import json
 from pathlib import Path
 
-# Importar funciones a testear
-from sync_sheet import (
+# Importar funciones a testear desde el nuevo módulo core
+from core import (
     calcular_m2_faltantes,
     validar_propiedad,
     detectar_atributo,

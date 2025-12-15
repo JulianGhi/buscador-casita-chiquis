@@ -1,0 +1,450 @@
+"""
+Scrapers para portales inmobiliarios argentinos.
+
+Incluye:
+- scrape_argenprop: Scraper para Argenprop
+- scrape_mercadolibre: Scraper para MercadoLibre
+- scrape_link: Dispatcher que elige el scraper correcto
+"""
+
+import re
+import time
+from datetime import datetime, timedelta
+
+import httpx
+from bs4 import BeautifulSoup
+
+from .helpers import (
+    BARRIOS_CABA,
+    detectar_barrio,
+    detectar_atributo,
+    extraer_numero,
+)
+
+
+# =============================================================================
+# HEADERS HTTP
+# =============================================================================
+
+HEADERS_SIMPLE = {
+    'User-Agent': 'Mozilla/5.0'
+}
+
+HEADERS_BROWSER = {
+    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36',
+    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
+    'Accept-Language': 'es-AR,es;q=0.9,en-US;q=0.8,en;q=0.7',
+    'Referer': 'https://www.google.com/',
+    'Sec-Ch-Ua': '"Not A(Brand";v="99", "Google Chrome";v="121", "Chromium";v="121"',
+    'Sec-Ch-Ua-Mobile': '?0',
+    'Sec-Ch-Ua-Platform': '"Windows"',
+    'Sec-Fetch-Dest': 'document',
+    'Sec-Fetch-Mode': 'navigate',
+    'Sec-Fetch-Site': 'cross-site',
+    'Sec-Fetch-User': '?1',
+    'Upgrade-Insecure-Requests': '1',
+}
+
+
+# =============================================================================
+# SCRAPER: ARGENPROP
+# =============================================================================
+
+def scrape_argenprop(url):
+    """Scrapea Argenprop"""
+    try:
+        resp = httpx.get(url, follow_redirects=True, headers=HEADERS_SIMPLE, timeout=10)
+        if resp.status_code != 200:
+            return {'_error': f'Status {resp.status_code}'}
+
+        soup = BeautifulSoup(resp.text, 'lxml')
+        data = {}
+
+        # Precio
+        precio = soup.select_one('.titlebar__price, .property-price')
+        if precio:
+            txt = precio.text.strip()
+            match = re.search(r'[\d.]+', txt.replace('.', ''))
+            if match:
+                data['precio'] = match.group()
+
+        # Dirección
+        ubicacion = soup.select_one('.titlebar__address, .property-main h1')
+        if ubicacion:
+            data['direccion'] = ubicacion.text.strip()
+
+        # Descripción principal (tipo, m2, dormitorios, antigüedad)
+        desc = soup.select_one('.property-description, .property-main-features')
+        if desc:
+            desc_text = desc.text.lower()
+            # Tipo
+            if 'ph' in desc_text.split():
+                data['tipo'] = 'ph'
+            elif 'departamento' in desc_text or 'depto' in desc_text:
+                data['tipo'] = 'depto'
+            elif 'casa' in desc_text:
+                data['tipo'] = 'casa'
+            elif 'local' in desc_text:
+                data['tipo'] = 'local'
+            # m2 cubiertos
+            m2_match = re.search(r'(\d+)\s*m[²2]\s*cub', desc_text)
+            if m2_match:
+                data['m2_cub'] = m2_match.group(1)
+            # Dormitorios -> ambientes aproximado
+            dorm_match = re.search(r'(\d+)\s*dormitorio', desc_text)
+            if dorm_match:
+                data['amb'] = str(int(dorm_match.group(1)) + 1)  # +1 por living
+            # Antigüedad
+            ant_match = re.search(r'(\d+)\s*años', desc_text)
+            if ant_match:
+                data['antiguedad'] = ant_match.group(1)
+
+        # Features detallados
+        for li in soup.select('.property-features li, .property-features-item'):
+            txt = li.text.strip().lower()
+            if 'm² cub' in txt or 'm2 cub' in txt or 'sup. cubierta' in txt:
+                num = extraer_numero(txt)
+                if num:
+                    data['m2_cub'] = num
+            elif 'm² tot' in txt or 'm2 tot' in txt or 'sup. total' in txt:
+                num = extraer_numero(txt)
+                if num:
+                    data['m2_tot'] = num
+            elif 'descubierta' in txt or 'm² desc' in txt or 'terraza' in txt and 'm²' in txt:
+                num = extraer_numero(txt)
+                if num:
+                    data['m2_terr'] = num
+            elif 'ambiente' in txt and 'cant' in txt:
+                num = extraer_numero(txt)
+                if num:
+                    data['amb'] = num
+            elif 'antigüedad' in txt or 'antiguedad' in txt:
+                num = extraer_numero(txt)
+                if num:
+                    data['antiguedad'] = num
+            elif 'terraza' in txt:
+                result = detectar_atributo(txt, 'terraza')
+                if result:
+                    data['terraza'] = result
+            elif 'balcón' in txt or 'balcon' in txt:
+                result = detectar_atributo(txt, 'balcon')
+                if result:
+                    data['balcon'] = result
+            elif 'cochera' in txt:
+                result = detectar_atributo(txt, 'cochera')
+                if result == 'no':
+                    data['cocheras'] = '0'
+                elif result == 'si':
+                    data['cocheras'] = extraer_numero(txt) or '1'
+            elif 'baño' in txt:
+                num = extraer_numero(txt)
+                if num:
+                    data['banos'] = num
+            elif 'expensas' in txt:
+                num = extraer_numero(txt, quitar_miles=True)
+                if num:
+                    data['expensas'] = num
+
+        # Inmobiliaria
+        inmob = soup.select_one('.property-contact__title, .property-sidebar h3, [class*="contact"] h3')
+        if inmob:
+            data['inmobiliaria'] = inmob.text.strip()
+
+        # Barrio (del breadcrumb o container)
+        location = soup.select_one('.property-container')
+        if location:
+            barrio = detectar_barrio(location.text)
+            if barrio:
+                data['barrio'] = barrio
+
+        return data
+    except Exception as e:
+        return {'_error': str(e)}
+
+
+# =============================================================================
+# SCRAPER: MERCADOLIBRE
+# =============================================================================
+
+def scrape_mercadolibre(url):
+    """Scrapea MercadoLibre"""
+    try:
+        resp = httpx.get(url, follow_redirects=True, headers=HEADERS_BROWSER, timeout=15)
+        if resp.status_code != 200:
+            return {'_error': f'Status {resp.status_code}'}
+
+        # Detectar si redirigió a página de búsqueda (publicación no disponible)
+        final_url = str(resp.url)
+        if 'redirectedFromVip' in final_url or ('MLA-' in url and 'MLA-' not in final_url):
+            return {'_error': 'Publicación no disponible (redirect)', '_offline': True}
+
+        soup = BeautifulSoup(resp.text, 'lxml')
+
+        # Detectar "Publicación finalizada"
+        warning_text = soup.select_one('.andes-message__text--orange')
+        if warning_text and 'finalizada' in warning_text.text.lower():
+            return {'_error': 'Publicación finalizada', '_offline': True}
+
+        if '"text":"Publicación finalizada"' in resp.text:
+            return {'_error': 'Publicación finalizada', '_offline': True}
+
+        # Verificar si tiene precio
+        precio = soup.select_one('.andes-money-amount__fraction')
+        if not precio:
+            warning = soup.select_one('.ui-pdp-message-warning, .ui-vip-error')
+            if warning:
+                return {'_error': 'Publicación no disponible', '_offline': True}
+            return {'_error': 'No se pudo extraer precio'}
+
+        data = {}
+
+        # Precio
+        data['precio'] = precio.text.strip().replace('.', '')
+
+        # Ubicación completa
+        location = soup.select_one('.ui-vip-location')
+        if location:
+            loc_text = location.text.strip()
+            for prefix in ['Ubicación', 'Ver mapa', 'e información de la zona']:
+                loc_text = loc_text.replace(prefix, '')
+            loc_text = loc_text.strip()
+
+            parts = [p.strip() for p in loc_text.split(',') if p.strip()]
+            if len(parts) >= 1 and any(c.isdigit() for c in parts[0]):
+                direccion_raw = parts[0]
+
+                # Limpiar direcciones mal formadas
+                if ' - ' in direccion_raw:
+                    partes = direccion_raw.split(' - ')
+                    for p in partes:
+                        if re.search(r'[A-Za-záéíóúÁÉÍÓÚñÑ\.\s]+\d+', p.strip()):
+                            direccion_raw = p.strip()
+                            break
+
+                # Remover prefijos como "4 Amb"
+                direccion_raw = re.sub(r'^\d+\s*(Amb|Ambientes?)\s*', '', direccion_raw, flags=re.IGNORECASE).strip()
+
+                # Remover barrios pegados al inicio
+                for b in BARRIOS_CABA:
+                    if direccion_raw.lower().startswith(b.lower()):
+                        direccion_raw = direccion_raw[len(b):].strip(' -')
+                        break
+
+                data['direccion'] = direccion_raw
+
+            if len(parts) >= 2:
+                for part in parts[1:]:
+                    if part not in ['Capital Federal', 'Buenos Aires', 'GBA Norte', 'GBA Sur', 'GBA Oeste']:
+                        data['barrio'] = part
+                        break
+
+        # Barrio del link alternativo
+        if 'barrio' not in data:
+            ubicacion = soup.select_one('.ui-vip-location a')
+            if ubicacion:
+                data['barrio'] = ubicacion.text.strip()
+
+        # Características de la tabla
+        for row in soup.select('tr.andes-table__row'):
+            header = row.select_one('th')
+            value = row.select_one('td')
+            if header and value:
+                h = header.text.strip().lower()
+                v = value.text.strip()
+                if 'superficie cubierta' in h:
+                    num = extraer_numero(v)
+                    if num:
+                        data['m2_cub'] = num
+                elif 'superficie total' in h:
+                    num = extraer_numero(v)
+                    if num:
+                        data['m2_tot'] = num
+                elif 'superficie descubierta' in h or 'sup. descubierta' in h:
+                    num = extraer_numero(v)
+                    if num:
+                        data['m2_terr'] = num
+                elif 'ambientes' in h:
+                    num = extraer_numero(v)
+                    if num:
+                        data['amb'] = num
+                elif 'dormitorio' in h:
+                    num = extraer_numero(v)
+                    if num:
+                        data['dormitorios'] = num
+                elif 'baño' in h:
+                    num = extraer_numero(v)
+                    if num:
+                        data['banos'] = num
+                elif 'antigüedad' in h or 'antiguedad' in h:
+                    num = extraer_numero(v)
+                    if num:
+                        data['antiguedad'] = num
+                elif 'expensas' in h:
+                    num = extraer_numero(v)
+                    if num:
+                        data['expensas'] = num
+                elif 'apto cr' in h or 'apto_cr' in h:
+                    data['apto_credito'] = 'si' if 'sí' in v.lower() or 'si' in v.lower() else 'no'
+                elif 'tipo de' in h:
+                    data['tipo'] = v.lower()
+                elif 'cochera' in h:
+                    num = extraer_numero(v)
+                    if num:
+                        data['cocheras'] = num
+                elif 'disposición' in h or 'disposicion' in h:
+                    data['disposicion'] = v.lower()
+                elif 'número de piso' in h or 'piso de la unidad' in h:
+                    num = extraer_numero(v)
+                    if num:
+                        data['piso'] = num
+                elif 'ascensor' in h:
+                    result = detectar_atributo(f"{h}: {v}", 'ascensor')
+                    if result:
+                        data['ascensor'] = result
+                    else:
+                        data['ascensor'] = 'si' if 'sí' in v.lower() or v.lower() == 'si' else 'no'
+                elif h == 'balcón' or h == 'balcon':
+                    result = detectar_atributo(f"{h}: {v}", 'balcon')
+                    if result:
+                        data['balcon'] = result
+                    else:
+                        data['balcon'] = 'si' if 'sí' in v.lower() or v.lower() == 'si' else 'no'
+                elif h == 'terraza':
+                    result = detectar_atributo(f"{h}: {v}", 'terraza')
+                    if result:
+                        data['terraza'] = result
+                    else:
+                        data['terraza'] = 'si' if 'sí' in v.lower() or v.lower() == 'si' else 'no'
+
+        # Info del título y URL
+        title = soup.select_one('h1.ui-pdp-title')
+        title_text = title.text if title else ''
+        title_lower = title_text.lower()
+        url_lower = url.lower()
+        search_text = title_lower + ' ' + url_lower
+
+        # Extraer barrio de múltiples fuentes
+        barrio_fuentes = {}
+
+        barrio_titulo = detectar_barrio(title_text)
+        if barrio_titulo:
+            barrio_fuentes['titulo'] = barrio_titulo
+
+        if 'barrio' in data:
+            barrio_fuentes['ubicacion'] = data['barrio']
+
+        barrio_url = detectar_barrio(url.replace('-', ' '))
+        if barrio_url:
+            barrio_fuentes['url'] = barrio_url
+
+        # Prioridad: titulo > ubicacion > url
+        if 'titulo' in barrio_fuentes:
+            data['barrio'] = barrio_fuentes['titulo']
+        elif 'ubicacion' in barrio_fuentes:
+            data['barrio'] = barrio_fuentes['ubicacion']
+        elif 'url' in barrio_fuentes:
+            data['barrio'] = barrio_fuentes['url']
+
+        if len(set(barrio_fuentes.values())) > 1:
+            data['_barrio_conflicto'] = str(barrio_fuentes)
+
+        # Descripción completa
+        desc_elem = soup.select_one('.ui-pdp-description__content')
+        desc_text = desc_elem.text.lower() if desc_elem else ''
+        full_text = title_lower + ' ' + desc_text
+
+        if title_lower:
+            result_terraza = detectar_atributo(title_lower, 'terraza')
+            if result_terraza == 'si':
+                data['terraza'] = 'si'
+            result_balcon = detectar_atributo(title_lower, 'balcon')
+            if result_balcon == 'si':
+                data['balcon'] = 'si'
+            if 'sin expensas' in title_lower or 'sin exp' in title_lower:
+                data['expensas'] = '0'
+
+        # Luminosidad
+        result_luz = detectar_atributo(full_text, 'luminosidad')
+        if result_luz == 'si':
+            data['luminosidad'] = 'si'
+
+        # Tipo de propiedad
+        if '-ph-' in search_text or ' ph ' in search_text or 'p.h' in search_text:
+            data['tipo'] = 'ph'
+        elif 'duplex' in search_text or 'dúplex' in search_text:
+            data['tipo'] = 'duplex'
+        elif 'triplex' in search_text:
+            data['tipo'] = 'triplex'
+        elif 'loft' in search_text:
+            data['tipo'] = 'loft'
+        elif '/casa.' in url_lower or '-casa-' in search_text:
+            data['tipo'] = 'casa'
+        elif 'piso' in search_text:
+            data['tipo'] = 'piso'
+        elif '/departamento.' in url_lower or 'depto' in title_lower:
+            data['tipo'] = 'depto'
+
+        # Fecha de publicación
+        fecha_pub = None
+        pub_match = re.search(r'Publicado hace (\d+)\s*(día|semana|mes|año)', resp.text, re.IGNORECASE)
+        if pub_match:
+            cantidad = int(pub_match.group(1))
+            unidad = pub_match.group(2).lower()
+            if 'día' in unidad:
+                fecha_pub = datetime.now() - timedelta(days=cantidad)
+            elif 'semana' in unidad:
+                fecha_pub = datetime.now() - timedelta(weeks=cantidad)
+            elif 'mes' in unidad:
+                fecha_pub = datetime.now() - timedelta(days=cantidad * 30)
+            elif 'año' in unidad:
+                fecha_pub = datetime.now() - timedelta(days=cantidad * 365)
+        elif 'Publicado ayer' in resp.text:
+            fecha_pub = datetime.now() - timedelta(days=1)
+        elif 'Publicado hoy' in resp.text:
+            fecha_pub = datetime.now()
+
+        if fecha_pub:
+            data['fecha_publicado'] = fecha_pub.strftime('%Y-%m-%d')
+
+        return data
+    except Exception as e:
+        return {'_error': str(e)}
+
+
+# =============================================================================
+# DISPATCHER
+# =============================================================================
+
+def scrape_link(url, use_cache=True, cache=None):
+    """Scrapea un link según su dominio. Usa cache si está disponible.
+
+    Args:
+        url: URL a scrapear
+        use_cache: Si usar cache
+        cache: Dict de cache (se modifica in-place)
+
+    Returns:
+        (data, from_cache): Tupla con datos y si vino del cache
+    """
+    if not url or not url.startswith('http'):
+        return None, False
+
+    # Verificar cache
+    if use_cache and cache and url in cache:
+        cached = cache[url]
+        if '_error' not in cached or cached.get('_offline'):
+            return cached, True
+
+    # Scrapear
+    data = None
+    if 'argenprop.com' in url:
+        data = scrape_argenprop(url)
+    elif 'mercadolibre' in url:
+        data = scrape_mercadolibre(url)
+
+    # Guardar en cache
+    if data and cache is not None:
+        data['_cached_at'] = time.strftime('%Y-%m-%d %H:%M:%S')
+        cache[url] = data
+
+    return data, False
