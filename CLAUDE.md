@@ -315,3 +315,23 @@ d6099a7 Aumentar límite del slider de dólar a $2000
 f1458eb Agregar más pesos y mejorar sistema de scoring
 ce20b67 Penalizar datos faltantes en score y permitir toggle de pesos
 ```
+
+## Notas de Sesión (2025-12-15)
+
+### Cambios realizados
+
+1. **Columna `banos` agregada al Google Sheet**
+   - Faltaba la columna en el Sheet, por eso el dashboard mostraba "-" en baños
+   - El scraper ya extraía el dato (`sync_sheet.py` líneas 397-400 y 561-564)
+   - Columna insertada después de `amb` en el Sheet
+   - Re-scrapeadas todas las propiedades para llenar los datos
+
+### Datos actualizados
+
+- 18 propiedades con baños scrapeados (1-3 baños según propiedad)
+- 9 links marcados como NO activos (publicaciones finalizadas)
+- MercadoLibre funcionando (rate limiting resuelto, no hubo 403)
+
+### Issue resuelto
+
+- **Dashboard no mostraba baños**: El campo `banos` estaba en `SCRAPEABLE_COLS` y el scraper lo extraía, pero la columna no existía en el Google Sheet, por lo que nunca se guardaba.
