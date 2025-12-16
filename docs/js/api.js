@@ -21,51 +21,53 @@ function calcVariacion(actual, anterior) {
 
 async function fetchDolarBNA() {
   try {
-    // Fetch datos históricos de Bluelytics para calcular variaciones
-    const historicos = await fetchJSON('https://api.bluelytics.com.ar/v2/evolution.json');
+    // DolarAPI para valor actual (más actualizado durante el día)
+    // Bluelytics para históricos (tiene serie temporal)
+    const [dolarActual, historicos] = await Promise.all([
+      fetchJSON('https://dolarapi.com/v1/dolares/oficial'),
+      fetchJSON('https://api.bluelytics.com.ar/v2/evolution.json')
+    ]);
+
+    const valorHoy = dolarActual.venta;
+    const fecha = dolarActual.fechaActualizacion?.split('T')[0] || new Date().toISOString().split('T')[0];
+
+    // Calcular variaciones con históricos de Bluelytics (Oficial)
     const oficial = historicos.filter(d => d.source === 'Oficial');
+    let variaciones = { dia: null, semana: null, mes: null };
 
-    if (oficial.length === 0) throw new Error('No hay datos históricos');
+    if (oficial.length > 0) {
+      const buscarValor = (diasAtras) => {
+        const fechaHoy = new Date();
+        const fechaObjetivo = new Date(fechaHoy);
+        fechaObjetivo.setDate(fechaObjetivo.getDate() - diasAtras);
 
-    const hoy = oficial[0];
-    const valorHoy = hoy.value_sell;
+        // Buscar fecha exacta o más cercana (hasta 3 días tolerancia por fines de semana)
+        for (let i = 0; i <= 3; i++) {
+          const fechaBuscar = new Date(fechaObjetivo);
+          fechaBuscar.setDate(fechaBuscar.getDate() - i);
+          const fechaStr = fechaBuscar.toISOString().split('T')[0];
+          const registro = oficial.find(d => d.date === fechaStr);
+          if (registro) return registro.value_sell;
+        }
+        return null;
+      };
 
-    // Buscar valores históricos por fecha
-    const fechaHoy = new Date(hoy.date);
-
-    // Helper para buscar valor en fecha específica (o la más cercana anterior)
-    const buscarValor = (diasAtras) => {
-      const fechaObjetivo = new Date(fechaHoy);
-      fechaObjetivo.setDate(fechaObjetivo.getDate() - diasAtras);
-
-      // Buscar la fecha exacta o la más cercana (hasta 3 días de tolerancia)
-      for (let i = 0; i <= 3; i++) {
-        const fechaBuscar = new Date(fechaObjetivo);
-        fechaBuscar.setDate(fechaBuscar.getDate() - i);
-        const fechaStr = fechaBuscar.toISOString().split('T')[0];
-        const registro = oficial.find(d => d.date === fechaStr);
-        if (registro) return registro.value_sell;
-      }
-      return null;
-    };
-
-    const valorAyer = buscarValor(1);
-    const valorSemana = buscarValor(7);
-    const valorMes = buscarValor(30);
+      variaciones = {
+        dia: calcVariacion(valorHoy, buscarValor(1)),
+        semana: calcVariacion(valorHoy, buscarValor(7)),
+        mes: calcVariacion(valorHoy, buscarValor(30))
+      };
+    }
 
     return {
       venta: valorHoy,
-      compra: hoy.value_buy,
-      fecha: hoy.date,
-      variaciones: {
-        dia: calcVariacion(valorHoy, valorAyer),
-        semana: calcVariacion(valorHoy, valorSemana),
-        mes: calcVariacion(valorHoy, valorMes)
-      }
+      compra: dolarActual.compra,
+      fecha,
+      variaciones
     };
   } catch (err) {
-    console.error('Error fetching dolar históricos:', err);
-    // Fallback a DolarAPI (sin históricos)
+    console.error('Error fetching dolar:', err);
+    // Fallback: intentar solo DolarAPI sin históricos
     try {
       const data = await fetchJSON('https://dolarapi.com/v1/dolares/oficial');
       return {
