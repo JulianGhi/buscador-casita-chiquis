@@ -159,11 +159,12 @@ function init() {
   // Iniciar auto-refresh
   startAutoRefresh();
 
-  // Cargar dólar
+  // Cargar dólar y actualizar CONFIG.DOLAR_BASE
   fetchDolarBNA().then(data => {
     if (data) {
       state.dolarBNA = data;
       state.dolarEstimado = Math.round(data.venta);
+      CONFIG.DOLAR_BASE = Math.round(data.venta);  // Pisar base con valor real
       render();
     }
   });

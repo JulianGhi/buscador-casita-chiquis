@@ -381,10 +381,11 @@ async function initStats() {
   state.loading = false;
   renderStatsPage();
 
-  // Cargar dólar
+  // Cargar dólar y actualizar CONFIG.DOLAR_BASE
   fetchDolarBNA().then(data => {
     if (data) {
       state.dolarBNA = data;
+      CONFIG.DOLAR_BASE = Math.round(data.venta);
       renderStatsPage();
     }
   });

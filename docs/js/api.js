@@ -135,6 +135,7 @@ async function cargarDolarHoy() {
   if (data) {
     state.dolarBNA = data;
     state.dolarEstimado = Math.round(data.venta);
+    CONFIG.DOLAR_BASE = Math.round(data.venta);  // Actualizar base
   }
   render();
 }
