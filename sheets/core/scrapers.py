@@ -154,6 +154,14 @@ def scrape_argenprop(url):
                 if num:
                     data['expensas'] = num
 
+        # Luminosidad (buscar en descripción completa)
+        desc_full = soup.select_one('.property-description-container, .property-description')
+        if desc_full:
+            full_text = desc_full.text.lower()
+            result_luz = detectar_atributo(full_text, 'luminosidad')
+            if result_luz == 'si':
+                data['luminosidad'] = 'si'
+
         # Inmobiliaria
         inmob = soup.select_one('.property-contact__title, .property-sidebar h3, [class*="contact"] h3')
         if inmob:
