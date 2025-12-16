@@ -696,8 +696,18 @@ function renderQuitaSugerencia(quita, dolarActual, creditoEstimado) {
 
 // Renderiza desglose de costos
 function renderCostsBreakdown(p, costsNeg, hayAjuste, ahorro) {
+  // Calcular label dinámico para anticipo
+  const precioActual = hayAjuste ? costsNeg.precio : p._precio;
+  const creditoActual = hayAjuste ? costsNeg.creditoUSD : getCreditoUSD();
+  const tu10Actual = hayAjuste ? costsNeg.tu10 : p._tu10;
+  const pctReal = ((tu10Actual / precioActual) * 100).toFixed(1);
+  const esMinimo10 = tu10Actual <= precioActual * 0.1 + 1; // +1 por redondeo
+  const anticipoLabel = esMinimo10
+    ? `Anticipo mínimo 10%`
+    : `Anticipo (${pctReal}% = precio - crédito)`;
+
   const costItems = [
-    { label: 'Tu 10% (o precio - crédito)', value: hayAjuste ? costsNeg.tu10 : p._tu10, highlight: hayAjuste },
+    { label: anticipoLabel, value: tu10Actual, highlight: hayAjuste },
     { label: `Escribano (${(CONFIG.ESCRIBANO * 100).toFixed(1)}%)`, value: hayAjuste ? costsNeg.escr : p._escr },
     {
       label: `Sellos ${(hayAjuste ? costsNeg.precio : p._precio) <= CONFIG.SELLOS_EXENTO
