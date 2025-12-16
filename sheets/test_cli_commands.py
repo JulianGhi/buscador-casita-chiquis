@@ -336,7 +336,7 @@ class TestCmdView:
 
         with patch('sync_sheet.LOCAL_FILE', local_file), \
              patch('sync_sheet.get_client', return_value=mock_client), \
-             patch('webbrowser.open'):
+             patch('subprocess.run'):  # cmd_view usa subprocess.run(['xdg-open', ...])
             cmd_view(check_links=False)
 
         captured = capsys.readouterr()
