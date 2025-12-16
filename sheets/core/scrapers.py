@@ -260,7 +260,7 @@ def scrape_mercadolibre(url):
                     num = extraer_numero(v)
                     if num:
                         data['m2_tot'] = num
-                elif 'superficie descubierta' in h or 'sup. descubierta' in h:
+                elif 'superficie descubierta' in h or 'sup. descubierta' in h or 'superficie de balc' in h:
                     num = extraer_numero(v)
                     if num:
                         data['m2_terr'] = num
@@ -406,6 +406,16 @@ def scrape_mercadolibre(url):
 
         if fecha_pub:
             data['fecha_publicado'] = fecha_pub.strftime('%Y-%m-%d')
+
+        # Fix: Si m2_tot es 0 o no existe pero tenemos m2_cub, calcular
+        m2_cub = int(data.get('m2_cub') or 0)
+        m2_tot = int(data.get('m2_tot') or 0)
+        m2_desc = int(data.get('m2_terr') or data.get('m2_desc') or 0)
+
+        if m2_tot == 0 and m2_cub > 0:
+            # Calcular total como cubiertos + descubiertos
+            data['m2_tot'] = m2_cub + m2_desc
+            data['_m2_tot_calculado'] = True
 
         return data
     except Exception as e:
