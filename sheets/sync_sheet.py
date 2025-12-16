@@ -92,6 +92,8 @@ from core import (
     get_orphan_prints,
     save_prints_index,
     clasificar_prints,
+    extraer_datos_pdf,
+    analizar_prints_vs_sheet,
     # Templates
     PREVIEW_SHOW_COLS,
     PREVIEW_DIFF_COLS,
@@ -302,6 +304,10 @@ def cmd_push(force=False, dry_run=False):
 
     # Sincronizar fechas de prints antes de push
     prints_updated = sync_print_dates(rows)
+
+    # Guardar JSON local con fechas actualizadas
+    if prints_updated:
+        save_local_data(data)
 
     mode = "FORCE (sobrescribe todo)" if force else "MERGE (solo celdas vacías)"
     print(f"📤 {'[DRY RUN] ' if dry_run else ''}Push en modo {mode}...")
@@ -708,6 +714,58 @@ def cmd_prints():
         print(f"   → Nomenclatura: {{ID}}_{{FECHA}}.pdf (ej: MLA123456_2025-12-15.pdf)")
 
 
+def cmd_prints_validate():
+    """Valida datos del sheet contra los PDFs guardados (sin scrapear online)."""
+    data = load_local_data()
+    if not data:
+        print("❌ Primero ejecutá: python sync_sheet.py pull")
+        return
+
+    rows = data['rows']
+
+    print(f"\n🔍 VALIDANDO PDFs vs SHEET")
+    print(f"{'='*70}")
+
+    # Analizar todos los PDFs
+    resultados = analizar_prints_vs_sheet(rows, PRINTS_DIR)
+
+    if not resultados:
+        print(f"✅ No se encontraron discrepancias entre PDFs y sheet")
+        print(f"   (Solo se analizan propiedades con PDF guardado)")
+        return
+
+    print(f"⚠️  Encontradas {len(resultados)} propiedades con diferencias:\n")
+
+    for r in resultados:
+        print(f"📄 Fila {r['fila']}: {r['direccion'][:40]}")
+        print(f"   Archivo: {r['archivo']}")
+
+        v = r['validacion']
+
+        if v['discrepancias']:
+            print(f"   ❌ DISCREPANCIAS:")
+            for d in v['discrepancias']:
+                if isinstance(d.get('diff'), str):
+                    print(f"      - {d['campo']}: PDF={d['pdf']} vs Sheet={d['sheet']} ({d['diff']})")
+                else:
+                    print(f"      - {d['campo']}: PDF={d['pdf']} vs Sheet={d['sheet']}")
+
+        if v['faltantes_sheet']:
+            print(f"   📝 DATOS EN PDF, FALTA EN SHEET:")
+            for campo in v['faltantes_sheet']:
+                valor_pdf = r['datos_pdf'].get(campo)
+                print(f"      - {campo}: {valor_pdf}")
+
+        if v['coincidencias']:
+            print(f"   ✅ Coinciden: {', '.join(v['coincidencias'][:5])}")
+
+        print()
+
+    print(f"{'='*70}")
+    print(f"💡 Tip: Los datos del PDF son una snapshot. Si hay discrepancias,")
+    print(f"        el aviso pudo haber cambiado o el scraper extrajo mal.")
+
+
 def cmd_pendientes(solo_sin_print=False):
     """Genera lista de propiedades con datos faltantes."""
     if not LOCAL_FILE.exists():
@@ -770,21 +828,22 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Flujo de trabajo:
-    python sync_sheet.py pull          # 1. Descargar de Google Sheets
-    python sync_sheet.py scrape        # 2. Scrapear links faltantes
-    python sync_sheet.py view          # 3. Ver preview en browser
-    python sync_sheet.py diff          # 3. Ver cambios en terminal
-    python sync_sheet.py push          # 4. Subir cambios (merge)
-    python sync_sheet.py push --force  # 4. Subir sobrescribiendo todo
-    python sync_sheet.py prints        # 5. Ver estado de prints/backups
-    python sync_sheet.py pendientes    # 6. Ver props con datos faltantes
+    python sync_sheet.py pull            # 1. Descargar de Google Sheets
+    python sync_sheet.py scrape          # 2. Scrapear links faltantes
+    python sync_sheet.py view            # 3. Ver preview en browser
+    python sync_sheet.py diff            # 3. Ver cambios en terminal
+    python sync_sheet.py push            # 4. Subir cambios (merge)
+    python sync_sheet.py push --force    # 4. Subir sobrescribiendo todo
+    python sync_sheet.py prints          # 5. Ver estado de prints/backups
+    python sync_sheet.py prints validate # 5. Validar PDFs vs sheet (offline)
+    python sync_sheet.py pendientes      # 6. Ver props con datos faltantes
         """
     )
 
     parser.add_argument('command', choices=['pull', 'scrape', 'view', 'diff', 'push', 'prints', 'pendientes'],
                        help='Comando a ejecutar')
     parser.add_argument('subcommand', nargs='?', default=None,
-                       help='[prints] Subcomando: open, scan')
+                       help='[prints] Subcomando: open, scan, validate')
     parser.add_argument('--force', action='store_true',
                        help='[push] Sobrescribe todo el sheet')
     parser.add_argument('--dry-run', action='store_true',
@@ -819,6 +878,8 @@ Flujo de trabajo:
             cmd_prints_open(limit=args.limit)
         elif args.subcommand == 'scan':
             cmd_prints_scan()
+        elif args.subcommand == 'validate':
+            cmd_prints_validate()
         else:
             cmd_prints()
     elif args.command == 'pendientes':

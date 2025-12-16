@@ -123,14 +123,21 @@ def scrape_argenprop(url):
                 num = extraer_numero(txt)
                 if num:
                     data['antiguedad'] = num
-            elif 'terraza' in txt:
-                result = detectar_atributo(txt, 'terraza')
-                if result:
-                    data['terraza'] = result
             elif 'balcón' in txt or 'balcon' in txt:
-                result = detectar_atributo(txt, 'balcon')
-                if result:
-                    data['balcon'] = result
+                # "tipo de balcón: terraza" o "balcón tipo terraza" = balcón, NO terraza
+                if 'tipo' in txt and 'terraza' in txt:
+                    data['balcon'] = 'si'
+                    # No marcar terraza=si, es engañoso
+                else:
+                    result = detectar_atributo(txt, 'balcon')
+                    if result:
+                        data['balcon'] = result
+            elif 'terraza' in txt:
+                # Solo si no es "tipo de balcón: terraza"
+                if 'balc' not in txt and 'tipo' not in txt:
+                    result = detectar_atributo(txt, 'terraza')
+                    if result:
+                        data['terraza'] = result
             elif 'cochera' in txt:
                 result = detectar_atributo(txt, 'cochera')
                 if result == 'no':
@@ -142,7 +149,8 @@ def scrape_argenprop(url):
                 if num:
                     data['banos'] = num
             elif 'expensas' in txt:
-                num = extraer_numero(txt, quitar_miles=True)
+                # Extraer sin quitar miles para mantener pesos completos
+                num = extraer_numero(txt)
                 if num:
                     data['expensas'] = num
 
@@ -157,6 +165,23 @@ def scrape_argenprop(url):
             barrio = detectar_barrio(location.text)
             if barrio:
                 data['barrio'] = barrio
+
+        # Validar consistencia de m²
+        m2_cub = int(data.get('m2_cub') or 0)
+        m2_tot = int(data.get('m2_tot') or 0)
+        m2_desc = int(data.get('m2_terr') or 0)
+
+        if m2_cub > 0 and m2_tot > 0 and m2_desc > 0:
+            esperado = m2_cub + m2_desc
+            if abs(esperado - m2_tot) > 1:  # Tolerancia de 1m² por redondeo
+                data['_inconsistencia'] = f'cub({m2_cub}) + desc({m2_desc}) = {esperado} ≠ tot({m2_tot})'
+
+        if m2_cub > 0 and m2_tot > 0 and m2_cub > m2_tot:
+            msg = f'm2_cub({m2_cub}) > m2_tot({m2_tot}) - probable inversión'
+            if '_inconsistencia' in data:
+                data['_inconsistencia'] += f'; {msg}'
+            else:
+                data['_inconsistencia'] = msg
 
         return data
     except Exception as e:
@@ -283,7 +308,11 @@ def scrape_mercadolibre(url):
                 elif 'expensas' in h:
                     num = extraer_numero(v)
                     if num:
-                        data['expensas'] = num
+                        # MeLi muestra expensas en miles (ej: 210 = $210.000)
+                        exp_val = int(num)
+                        if exp_val < 1000:
+                            exp_val = exp_val * 1000
+                        data['expensas'] = str(exp_val)
                 elif 'apto cr' in h or 'apto_cr' in h:
                     data['apto_credito'] = 'si' if 'sí' in v.lower() or 'si' in v.lower() else 'no'
                 elif 'tipo de' in h:

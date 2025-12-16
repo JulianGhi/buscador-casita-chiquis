@@ -223,9 +223,18 @@ Los IDs se extraen automáticamente del link:
 
 ```bash
 python sheets/sync_sheet.py prints           # Estado general
+python sheets/sync_sheet.py prints validate  # Validar datos PDFs vs sheet (offline)
 python sheets/sync_sheet.py pendientes       # Datos faltantes + sin print
 python sheets/sync_sheet.py pendientes --sin-print  # Solo sin print
 ```
+
+#### Validación offline con PDFs
+
+El comando `prints validate` extrae datos de los PDFs guardados y los compara con el sheet:
+- No hace requests a internet (evita rate limiting)
+- Detecta discrepancias (precio cambió, m² no coinciden)
+- Muestra datos que están en el PDF pero faltan en el sheet
+- Útil para verificar que el scraper extrajo bien los datos
 
 #### Detección automática
 
@@ -423,3 +432,87 @@ ce20b67 Penalizar datos faltantes en score y permitir toggle de pesos
    - Lee contenido del PDF para extraer URLs/IDs
    - Matchea por dirección si el nombre es genérico
    - Movidos 4 PDFs de `sin_asociar/` a prints activos
+
+## Notas de Sesión (2025-12-15 tarde) - Scraper de PDFs
+
+### Arquitectura de datos (IMPORTANTE para entender)
+
+```
+┌─────────────────┐     pull      ┌─────────────────┐
+│  Google Sheet   │ ───────────►  │  sheet_data.json│
+│  (fuente verdad)│               │  (copia local)  │
+└─────────────────┘               └─────────────────┘
+                                          │
+                                          ▼ scrape
+                                  ┌─────────────────┐
+                                  │  WEB SCRAPER    │
+                                  │  (MeLi/Argenprop│
+                                  │  via HTTP)      │
+                                  └─────────────────┘
+                                          │
+                                          ▼ push
+┌─────────────────┐     push      ┌─────────────────┐
+│  Google Sheet   │ ◄───────────  │  sheet_data.json│
+│  (actualizado)  │               │  (con datos)    │
+└─────────────────┘               └─────────────────┘
+
+┌─────────────────┐   validate    ┌─────────────────┐
+│  PDFs guardados │ ───────────►  │  PDF SCRAPER    │
+│  (backups)      │               │  (pdftotext)    │
+└─────────────────┘               └─────────────────┘
+                                          │
+                                          ▼ compara
+                                  ┌─────────────────┐
+                                  │  Discrepancias  │
+                                  │  sheet vs PDF   │
+                                  └─────────────────┘
+```
+
+**Hay DOS scrapers diferentes:**
+
+| Scraper | Archivo | Qué hace | Cuándo se usa |
+|---------|---------|----------|---------------|
+| **Web scraper** | `core/scrapers.py` | Fetch HTTP a MeLi/Argenprop | `sync_sheet.py scrape` |
+| **PDF scraper** | `core/prints.py` | Extrae texto de PDFs locales | `sync_sheet.py prints validate` |
+
+### Problema descubierto
+
+El **web scraper** NO extrae estos campos (están en el HTML pero no los parseamos):
+- `ambientes` → 17 propiedades sin dato
+- `cochera` → 13 propiedades sin dato
+- `luminoso` → 9 propiedades sin dato
+
+El **PDF scraper** SÍ los extrae (porque lee el texto completo del PDF).
+
+### Qué se hizo hoy
+
+1. **Creado `prints validate`** - Compara datos del PDF vs sheet SIN hacer requests web
+2. **Funciones nuevas en `core/prints.py`**:
+   - `extraer_datos_pdf()` - Extrae precio, m², baños, cochera, terraza, etc.
+   - `validar_datos_pdf_vs_sheet()` - Compara y reporta diferencias
+3. **Tests agregados** - 49 tests pasan
+
+### Pendientes para próxima sesión
+
+1. **Mejorar web scraper** (`core/scrapers.py`) para extraer:
+   - `ambientes` (buscar "3 ambientes" en el HTML)
+   - `cochera` (buscar "cochera", "garage")
+   - `luminoso` (buscar "luminoso")
+
+2. **O alternativamente**: Crear comando para importar datos del PDF al sheet
+   - `sync_sheet.py prints import` → Llena campos vacíos desde PDFs
+
+3. **Verificar discrepancia Fila 7 (Lavalleja)**:
+   - PDF dice `balcon=si`
+   - Sheet dice `balcon=no`
+   - Hay que mirar el aviso y decidir cuál es correcto
+
+### Archivos modificados (sin commitear)
+
+```
+modified:   CLAUDE.md
+modified:   sheets/core/__init__.py
+modified:   sheets/core/prints.py      ← Funciones de extracción PDF
+modified:   sheets/sync_sheet.py       ← Comando prints validate
+modified:   sheets/test_cli_commands.py ← Tests nuevos
+```

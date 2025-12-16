@@ -41,6 +41,7 @@ from sync_sheet import (
     cmd_pendientes,
     cmd_prints_scan,
     cmd_prints_open,
+    cmd_prints_validate,
     main,
     LOCAL_FILE,
     CACHE_FILE,
@@ -428,6 +429,38 @@ class TestCmdPrints:
 
 
 # =============================================================================
+# TESTS: cmd_prints_validate
+# =============================================================================
+
+class TestCmdPrintsValidate:
+    """Tests de cmd_prints_validate."""
+
+    def test_prints_validate_sin_archivo_local(self, capsys):
+        """Validate falla si no existe archivo local."""
+        with patch('sync_sheet.load_local_data', return_value=None):
+            cmd_prints_validate()
+
+        captured = capsys.readouterr()
+        assert 'Primero' in captured.out
+
+    def test_prints_validate_sin_discrepancias(self, mock_local_data, tmp_path, capsys):
+        """Validate muestra ok cuando no hay discrepancias."""
+        local_file = tmp_path / "sheet_data.json"
+        local_file.write_text(json.dumps(mock_local_data))
+        prints_dir = tmp_path / "prints"
+        prints_dir.mkdir()
+
+        # Sin PDFs = sin discrepancias
+        with patch('sync_sheet.load_local_data', return_value=mock_local_data), \
+             patch('sync_sheet.PRINTS_DIR', prints_dir):
+            cmd_prints_validate()
+
+        captured = capsys.readouterr()
+        assert 'VALIDANDO' in captured.out
+        assert 'No se encontraron discrepancias' in captured.out or 'diferencias' in captured.out
+
+
+# =============================================================================
 # TESTS: cmd_pendientes
 # =============================================================================
 
@@ -685,6 +718,13 @@ class TestMainArgumentParsing:
              patch('sync_sheet.cmd_prints_scan') as mock_scan:
             main()
             mock_scan.assert_called_once()
+
+    def test_main_prints_validate(self):
+        """main() ejecuta prints validate."""
+        with patch('sys.argv', ['sync_sheet.py', 'prints', 'validate']), \
+             patch('sync_sheet.cmd_prints_validate') as mock_validate:
+            main()
+            mock_validate.assert_called_once()
 
     def test_main_pendientes(self):
         """main() ejecuta pendientes."""

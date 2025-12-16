@@ -94,6 +94,11 @@ from .prints import (
     process_print_file,
     get_orphan_prints,
     save_prints_index,
+    # Funciones de extracción de datos de PDFs
+    extraer_texto_pdf,
+    extraer_datos_pdf,
+    validar_datos_pdf_vs_sheet,
+    analizar_prints_vs_sheet,
 )
 
 from .templates import (

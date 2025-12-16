@@ -497,3 +497,402 @@ def save_prints_index(clasificacion, prints_index, huerfanos, prints_index_path)
 
     with open(prints_index_path, 'w', encoding='utf-8') as f:
         json.dump(index_output, f, ensure_ascii=False, indent=2)
+
+
+# =============================================================================
+# EXTRACCIÓN DE DATOS DE PDFs
+# =============================================================================
+
+def extraer_texto_pdf(filepath, max_pages=3):
+    """
+    Extrae texto de un PDF usando pdftotext.
+
+    Args:
+        filepath: Path al archivo PDF
+        max_pages: Máximo de páginas a extraer (default: 3)
+
+    Returns:
+        str: Texto extraído o string vacío si falla
+    """
+    try:
+        result = subprocess.run(
+            ['pdftotext', '-l', str(max_pages), str(filepath), '-'],
+            capture_output=True, text=True, timeout=15
+        )
+        return result.stdout
+    except (subprocess.TimeoutExpired, FileNotFoundError):
+        return ''
+
+
+def extraer_numero(texto):
+    """
+    Extrae número de un texto (maneja puntos y comas como separadores).
+
+    Args:
+        texto: String con número (ej: "1.500.000", "75,5", "USD 180000")
+
+    Returns:
+        float o None
+    """
+    if not texto:
+        return None
+    # Quitar todo excepto dígitos, puntos, comas
+    limpio = re.sub(r'[^\d.,]', '', texto)
+    if not limpio:
+        return None
+
+    # Si tiene coma decimal (ej: 75,5)
+    if ',' in limpio and '.' not in limpio:
+        limpio = limpio.replace(',', '.')
+    # Si tiene puntos como separador de miles (ej: 1.500.000)
+    elif '.' in limpio:
+        partes = limpio.split('.')
+        if len(partes) > 2 or (len(partes) == 2 and len(partes[-1]) == 3):
+            limpio = limpio.replace('.', '')
+
+    try:
+        return float(limpio)
+    except ValueError:
+        return None
+
+
+def extraer_datos_pdf(filepath):
+    """
+    Extrae datos de propiedad de un PDF de aviso inmobiliario.
+
+    Busca patrones comunes de MercadoLibre, Argenprop y Zonaprop.
+
+    Args:
+        filepath: Path al archivo PDF
+
+    Returns:
+        dict: Datos extraídos {precio, moneda, m2_tot, m2_cub, m2_desc,
+              expensas, ambientes, banos, terraza, balcon, cochera, ...}
+    """
+    texto = extraer_texto_pdf(filepath)
+    if not texto:
+        return {}
+
+    data = {}
+    texto_lower = texto.lower()
+
+    # =========================================================================
+    # PRECIO
+    # =========================================================================
+    # USD 180.000 / U$S 180000 / US$ 180.000
+    precio_usd = re.search(
+        r'(?:u[s$]+|usd)\s*[\$]?\s*([\d.,]+)',
+        texto_lower
+    )
+    if precio_usd:
+        data['precio'] = extraer_numero(precio_usd.group(1))
+        data['moneda'] = 'USD'
+    else:
+        # $ 180.000.000 (pesos)
+        precio_ars = re.search(r'\$\s*([\d.,]+)', texto)
+        if precio_ars:
+            num = extraer_numero(precio_ars.group(1))
+            if num and num > 50000:  # Probablemente pesos
+                data['precio'] = num
+                data['moneda'] = 'ARS'
+
+    # =========================================================================
+    # METROS CUADRADOS
+    # =========================================================================
+    # Sup. Cubierta: 58 m2 / Superficie cubierta: 58m²
+    m2_cub_match = re.search(
+        r'(?:sup(?:\.|erficie)?\.?\s*)?cubierta[:\s]*([\d.,]+)\s*m',
+        texto_lower
+    )
+    if m2_cub_match:
+        data['m2_cub'] = extraer_numero(m2_cub_match.group(1))
+
+    # Sup. Descubierta: 4,50 m2
+    m2_desc_match = re.search(
+        r'(?:sup(?:\.|erficie)?\.?\s*)?descubierta[:\s]*([\d.,]+)\s*m',
+        texto_lower
+    )
+    if m2_desc_match:
+        data['m2_desc'] = extraer_numero(m2_desc_match.group(1))
+
+    # Sup. Total: 59,50 m2 / Superficie total: 62m²
+    m2_tot_match = re.search(
+        r'(?:sup(?:\.|erficie)?\.?\s*)?total[:\s]*([\d.,]+)\s*m',
+        texto_lower
+    )
+    if m2_tot_match:
+        data['m2_tot'] = extraer_numero(m2_tot_match.group(1))
+
+    # Fallback: "XX m²" genérico si no encontramos específicos
+    if 'm2_tot' not in data and 'm2_cub' not in data:
+        m2_generico = re.search(r'(\d+)\s*m[²2]', texto_lower)
+        if m2_generico:
+            data['m2_tot'] = float(m2_generico.group(1))
+
+    # =========================================================================
+    # EXPENSAS
+    # =========================================================================
+    # Expensas: $ 107.000 / Expensas $107000
+    exp_match = re.search(
+        r'expensas[:\s]*\$?\s*([\d.,]+)',
+        texto_lower
+    )
+    if exp_match:
+        exp_val = extraer_numero(exp_match.group(1))
+        if exp_val:
+            # Normalizar a pesos completos
+            if exp_val < 1000:
+                exp_val = exp_val * 1000
+            data['expensas'] = int(exp_val)
+
+    # =========================================================================
+    # AMBIENTES / HABITACIONES
+    # =========================================================================
+    # 3 ambientes / 3 amb / Ambientes: 3
+    amb_match = re.search(r'(\d+)\s*amb', texto_lower)
+    if amb_match:
+        data['ambientes'] = int(amb_match.group(1))
+
+    # Dormitorios / Habitaciones
+    dorm_match = re.search(
+        r'(?:dormitorios?|habitaciones?)[:\s]*(\d+)',
+        texto_lower
+    )
+    if dorm_match:
+        data['dormitorios'] = int(dorm_match.group(1))
+
+    # =========================================================================
+    # BAÑOS
+    # =========================================================================
+    # Patrón más específico: "baños: 2" o "2 baños" (evita capturar m²)
+    banos_match = re.search(r'baños?\s*[:\s]\s*(\d+)', texto_lower)
+    if not banos_match:
+        banos_match = re.search(r'(\d+)\s*baños?', texto_lower)
+    if banos_match:
+        num_banos = int(banos_match.group(1))
+        # Sanity check: máximo 10 baños (evita capturar m²)
+        if num_banos <= 10:
+            data['banos'] = num_banos
+
+    # =========================================================================
+    # COCHERA
+    # =========================================================================
+    if re.search(r'cochera|garage|estacionamiento', texto_lower):
+        # Verificar que no sea "sin cochera"
+        if not re.search(r'sin\s+cochera|no\s+(?:tiene\s+)?cochera', texto_lower):
+            data['cochera'] = 'si'
+            # Cantidad de cocheras
+            coch_num = re.search(r'cocheras?[:\s]*(\d+)', texto_lower)
+            if coch_num:
+                data['cocheras'] = int(coch_num.group(1))
+        else:
+            data['cochera'] = 'no'
+
+    # =========================================================================
+    # TERRAZA / BALCÓN
+    # =========================================================================
+    # Tipo de balcón: Terraza → es balcón, no terraza
+    if re.search(r'tipo\s+de\s+balc[oó]n[:\s]*terraza', texto_lower):
+        data['balcon'] = 'si'
+        # No marcar terraza
+    else:
+        # Terraza real
+        if re.search(r'terraza', texto_lower):
+            if not re.search(r'sin\s+terraza|terraza[:\s]*no', texto_lower):
+                data['terraza'] = 'si'
+            else:
+                data['terraza'] = 'no'
+
+        # Balcón
+        if re.search(r'balc[oó]n', texto_lower):
+            if not re.search(r'sin\s+balc[oó]n|balc[oó]n[:\s]*no', texto_lower):
+                data['balcon'] = 'si'
+            else:
+                data['balcon'] = 'no'
+
+    # =========================================================================
+    # ANTIGÜEDAD
+    # =========================================================================
+    # Buscar antigüedad explícita primero
+    antig_match = re.search(r'antig[üu]edad[:\s]*(\d+)', texto_lower)
+    if antig_match:
+        data['antiguedad'] = int(antig_match.group(1))
+    # Solo si dice explícitamente "a estrenar" como atributo, no en descripciones
+    elif re.search(r'(?:^|\n)\s*a\s+estrenar\s*(?:\n|$)|antig[üu]edad[:\s]*(?:a\s+estrenar|0)', texto_lower):
+        data['antiguedad'] = 0
+
+    # =========================================================================
+    # DISPOSICIÓN
+    # =========================================================================
+    if re.search(r'disposici[oó]n[:\s]*frente|orientaci[oó]n[:\s]*frente', texto_lower):
+        data['disposicion'] = 'frente'
+    elif re.search(r'disposici[oó]n[:\s]*contrafrente', texto_lower):
+        data['disposicion'] = 'contrafrente'
+
+    # =========================================================================
+    # LUMINOSIDAD
+    # =========================================================================
+    if re.search(r'luminoso|mucha\s+luz|muy\s+luminoso', texto_lower):
+        data['luminoso'] = 'si'
+
+    # =========================================================================
+    # ID DE PROPIEDAD (para verificación)
+    # =========================================================================
+    # MercadoLibre
+    meli_match = re.search(r'MLA-?(\d{8,12})', texto, re.IGNORECASE)
+    if meli_match:
+        data['_prop_id'] = f"MLA{meli_match.group(1)}"
+
+    # Argenprop
+    argenprop_match = re.search(r'argenprop\.com[^\s]*--(\d+)', texto)
+    if argenprop_match:
+        data['_prop_id'] = f"AP{argenprop_match.group(1)}"
+
+    return data
+
+
+def validar_datos_pdf_vs_sheet(datos_pdf, datos_sheet):
+    """
+    Compara datos extraídos del PDF con datos del sheet.
+
+    Args:
+        datos_pdf: Dict con datos extraídos del PDF
+        datos_sheet: Dict con datos de la fila del sheet
+
+    Returns:
+        dict: {coincidencias: [], discrepancias: [], faltantes_pdf: [], faltantes_sheet: []}
+    """
+    resultado = {
+        'coincidencias': [],
+        'discrepancias': [],
+        'faltantes_pdf': [],
+        'faltantes_sheet': [],
+    }
+
+    # Campos a comparar y tolerancias
+    campos_numericos = {
+        'precio': 0.01,      # 1% tolerancia
+        'm2_tot': 2,         # 2 m² tolerancia
+        'm2_cub': 2,
+        'm2_desc': 2,
+        'expensas': 5000,    # $5000 tolerancia
+        'ambientes': 0,
+        'banos': 0,
+        'antiguedad': 1,     # 1 año tolerancia
+    }
+
+    campos_texto = ['terraza', 'balcon', 'cochera', 'luminoso', 'disposicion']
+
+    # Comparar campos numéricos
+    for campo, tolerancia in campos_numericos.items():
+        pdf_val = datos_pdf.get(campo)
+        sheet_val = datos_sheet.get(campo)
+
+        # Convertir sheet_val a número si es string
+        if isinstance(sheet_val, str):
+            sheet_val = extraer_numero(sheet_val)
+
+        if pdf_val is None and sheet_val is None:
+            continue
+        elif pdf_val is None:
+            resultado['faltantes_pdf'].append(campo)
+        elif sheet_val is None:
+            resultado['faltantes_sheet'].append(campo)
+        else:
+            # Comparar con tolerancia
+            if tolerancia > 0 and tolerancia < 1:
+                # Tolerancia porcentual
+                diff = abs(pdf_val - sheet_val) / max(pdf_val, sheet_val, 1)
+                if diff <= tolerancia:
+                    resultado['coincidencias'].append(campo)
+                else:
+                    resultado['discrepancias'].append({
+                        'campo': campo,
+                        'pdf': pdf_val,
+                        'sheet': sheet_val,
+                        'diff': f"{diff*100:.1f}%"
+                    })
+            else:
+                # Tolerancia absoluta
+                if abs(pdf_val - sheet_val) <= tolerancia:
+                    resultado['coincidencias'].append(campo)
+                else:
+                    resultado['discrepancias'].append({
+                        'campo': campo,
+                        'pdf': pdf_val,
+                        'sheet': sheet_val,
+                        'diff': abs(pdf_val - sheet_val)
+                    })
+
+    # Comparar campos de texto
+    for campo in campos_texto:
+        pdf_val = (datos_pdf.get(campo) or '').lower()
+        sheet_val = (datos_sheet.get(campo) or '').lower()
+
+        if not pdf_val and not sheet_val:
+            continue
+        elif not pdf_val:
+            resultado['faltantes_pdf'].append(campo)
+        elif not sheet_val:
+            resultado['faltantes_sheet'].append(campo)
+        elif pdf_val == sheet_val:
+            resultado['coincidencias'].append(campo)
+        else:
+            resultado['discrepancias'].append({
+                'campo': campo,
+                'pdf': pdf_val,
+                'sheet': sheet_val
+            })
+
+    return resultado
+
+
+def analizar_prints_vs_sheet(rows, prints_dir=None):
+    """
+    Analiza todos los prints disponibles y compara con datos del sheet.
+
+    Args:
+        rows: Lista de filas del sheet
+        prints_dir: Directorio de prints (opcional)
+
+    Returns:
+        list: Lista de resultados por propiedad con discrepancias
+    """
+    if prints_dir is None:
+        prints_dir = PRINTS_DIR
+
+    prints_index = get_prints_index(rows, prints_dir)
+    resultados = []
+
+    for row in rows:
+        fila = row.get('_row', 0)
+        if fila < 2:
+            continue
+
+        print_info = prints_index.get(fila)
+        if not print_info:
+            continue
+
+        archivo = prints_dir / print_info['archivo']
+        if not archivo.exists() or archivo.suffix.lower() != '.pdf':
+            continue
+
+        # Extraer datos del PDF
+        datos_pdf = extraer_datos_pdf(archivo)
+        if not datos_pdf:
+            continue
+
+        # Comparar con sheet
+        validacion = validar_datos_pdf_vs_sheet(datos_pdf, row)
+
+        # Solo reportar si hay discrepancias o faltantes
+        if validacion['discrepancias'] or validacion['faltantes_sheet']:
+            resultados.append({
+                'fila': fila,
+                'direccion': row.get('direccion', ''),
+                'archivo': print_info['archivo'],
+                'validacion': validacion,
+                'datos_pdf': datos_pdf,
+            })
+
+    return resultados
