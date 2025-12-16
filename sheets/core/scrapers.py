@@ -415,7 +415,15 @@ def scrape_mercadolibre(url):
         if m2_tot == 0 and m2_cub > 0:
             # Calcular total como cubiertos + descubiertos
             data['m2_tot'] = m2_cub + m2_desc
-            data['_m2_tot_calculado'] = True
+            data['_inconsistencia'] = 'm2_tot=0 en publicación, calculado desde m2_cub+m2_desc'
+
+        # Detectar m2_desc sospechosamente grande (>50% del cubierto)
+        if m2_desc > 0 and m2_cub > 0 and m2_desc > m2_cub * 0.5:
+            msg = f'm2_desc={m2_desc} muy grande vs m2_cub={m2_cub}'
+            if '_inconsistencia' in data:
+                data['_inconsistencia'] += f'; {msg}'
+            else:
+                data['_inconsistencia'] = msg
 
         return data
     except Exception as e:
