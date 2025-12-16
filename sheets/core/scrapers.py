@@ -425,6 +425,15 @@ def scrape_mercadolibre(url):
             else:
                 data['_inconsistencia'] = msg
 
+        # Detectar m2_cub > m2_tot (imposible, probablemente invertidos)
+        m2_tot_final = int(data.get('m2_tot') or 0)
+        if m2_cub > 0 and m2_tot_final > 0 and m2_cub > m2_tot_final:
+            msg = f'm2_cub({m2_cub}) > m2_tot({m2_tot_final}) - probable inversión'
+            if '_inconsistencia' in data:
+                data['_inconsistencia'] += f'; {msg}'
+            else:
+                data['_inconsistencia'] = msg
+
         return data
     except Exception as e:
         return {'_error': str(e)}
