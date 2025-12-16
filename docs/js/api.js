@@ -21,31 +21,57 @@ function calcVariacion(actual, anterior) {
 
 async function fetchDolarBNA() {
   try {
-    // API principal: DolarAPI.com (más actualizada)
-    const data = await fetchJSON('https://dolarapi.com/v1/dolares/oficial');
+    // Fetch datos históricos de Bluelytics para calcular variaciones
+    const historicos = await fetchJSON('https://api.bluelytics.com.ar/v2/evolution.json');
+    const oficial = historicos.filter(d => d.source === 'Oficial');
+
+    if (oficial.length === 0) throw new Error('No hay datos históricos');
+
+    const hoy = oficial[0];
+    const valorHoy = hoy.value_sell;
+
+    // Buscar valores históricos por fecha
+    const fechaHoy = new Date(hoy.date);
+
+    // Helper para buscar valor en fecha específica (o la más cercana anterior)
+    const buscarValor = (diasAtras) => {
+      const fechaObjetivo = new Date(fechaHoy);
+      fechaObjetivo.setDate(fechaObjetivo.getDate() - diasAtras);
+
+      // Buscar la fecha exacta o la más cercana (hasta 3 días de tolerancia)
+      for (let i = 0; i <= 3; i++) {
+        const fechaBuscar = new Date(fechaObjetivo);
+        fechaBuscar.setDate(fechaBuscar.getDate() - i);
+        const fechaStr = fechaBuscar.toISOString().split('T')[0];
+        const registro = oficial.find(d => d.date === fechaStr);
+        if (registro) return registro.value_sell;
+      }
+      return null;
+    };
+
+    const valorAyer = buscarValor(1);
+    const valorSemana = buscarValor(7);
+    const valorMes = buscarValor(30);
 
     return {
-      venta: data.venta,
-      compra: data.compra,
-      fecha: data.fechaActualizacion?.split('T')[0] || new Date().toISOString().split('T')[0],
+      venta: valorHoy,
+      compra: hoy.value_buy,
+      fecha: hoy.date,
       variaciones: {
-        dia: null,
-        semana: null,
-        mes: null
+        dia: calcVariacion(valorHoy, valorAyer),
+        semana: calcVariacion(valorHoy, valorSemana),
+        mes: calcVariacion(valorHoy, valorMes)
       }
     };
   } catch (err) {
-    console.error('Error fetching dolar:', err);
-    // Fallback a Bluelytics si DolarAPI falla
+    console.error('Error fetching dolar históricos:', err);
+    // Fallback a DolarAPI (sin históricos)
     try {
-      const allData = await fetchJSON('https://api.bluelytics.com.ar/v2/evolution.json');
-      const oficial = allData.filter(d => d.source === 'Oficial');
-      if (oficial.length === 0) throw new Error('No data');
-      const hoy = oficial[0];
+      const data = await fetchJSON('https://dolarapi.com/v1/dolares/oficial');
       return {
-        venta: hoy.value_sell,
-        compra: hoy.value_buy,
-        fecha: hoy.date,
+        venta: data.venta,
+        compra: data.compra,
+        fecha: data.fechaActualizacion?.split('T')[0] || new Date().toISOString().split('T')[0],
         variaciones: { dia: null, semana: null, mes: null }
       };
     } catch (fallbackErr) {
