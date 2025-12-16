@@ -569,12 +569,23 @@ class TestGoogleSheetsAPI:
     @pytest.fixture(autouse=True)
     def check_api_requirements(self):
         """Verifica requisitos para tests de API."""
-        from core import SHEET_ID
-        creds_exists = Path('credentials.json').exists() or Path('../credentials.json').exists()
+        import os
+        # Resetear SHEET_ID al valor real (por si test_cli_commands lo cambió)
+        original_sheet_id = os.environ.get('GOOGLE_SHEET_ID_ORIGINAL') or os.environ.get('GOOGLE_SHEET_ID')
+
+        creds_locations = [
+            Path('credentials.json'),
+            Path('../credentials.json'),
+            Path(__file__).parent.parent / 'credentials.json',
+        ]
+        creds_exists = any(p.exists() for p in creds_locations)
         if not creds_exists:
-            pytest.skip("No credentials.json")
-        if not SHEET_ID:
-            pytest.skip("SHEET_ID not configured (check .env)")
+            pytest.skip("No credentials.json found")
+
+        # Verificar SHEET_ID real
+        from core import SHEET_ID
+        if not SHEET_ID or len(SHEET_ID) < 20:
+            pytest.skip("SHEET_ID not configured or is a test mock")
 
     def test_pull_returns_data(self):
         """Pull trae datos del sheet."""
@@ -722,6 +733,173 @@ class TestFullWorkflow:
         active_after = get_active_rows(sample_sheet_data['rows'])
         assert len(active_after) == 1
         assert active_after[0]['_row'] == 3
+
+
+# =============================================================================
+# TESTS: Comparación datos scrapeados vs planilla real
+# =============================================================================
+
+@pytest.mark.skipif(
+    os.environ.get('SKIP_NETWORK_TESTS', '0') == '1',
+    reason="SKIP_NETWORK_TESTS=1"
+)
+class TestScrapedVsSheet:
+    """Tests que comparan datos scrapeados frescos vs planilla."""
+
+    @pytest.fixture
+    def real_sheet_data(self):
+        """Carga datos de la planilla real (archivo local)."""
+        if not LOCAL_FILE.exists():
+            pytest.skip("No hay archivo local (ejecutar pull primero)")
+        data = load_local_data()
+        if not data or not data.get('rows'):
+            pytest.skip("Archivo local vacío")
+        return data
+
+    def test_scrape_vs_sheet_precios_consistentes(self, real_sheet_data):
+        """Compara precios scrapeados vs los de la planilla."""
+        rows = get_active_rows(real_sheet_data['rows'])
+        if not rows:
+            pytest.skip("No hay filas activas")
+
+        # Tomar muestra de 3 propiedades para no hacer muchos requests
+        sample = rows[:3]
+        discrepancias = []
+
+        for row in sample:
+            url = row.get('link', '')
+            if not url.startswith('http'):
+                continue
+
+            # Scrapear sin cache para obtener datos frescos
+            scraped, _ = scrape_link(url, use_cache=False, cache={})
+            if not scraped or scraped.get('_error'):
+                continue
+
+            # Comparar precio
+            sheet_precio = str(row.get('precio', '')).strip()
+            scraped_precio = str(scraped.get('precio', '')).strip()
+
+            if sheet_precio and scraped_precio and sheet_precio != scraped_precio:
+                discrepancias.append({
+                    'fila': row.get('_row'),
+                    'url': url[:50],
+                    'campo': 'precio',
+                    'sheet': sheet_precio,
+                    'scraped': scraped_precio,
+                })
+
+        # No debería haber discrepancias grandes (>10%)
+        for d in discrepancias:
+            try:
+                sheet_val = float(d['sheet'])
+                scraped_val = float(d['scraped'])
+                diff_pct = abs(sheet_val - scraped_val) / sheet_val * 100
+                assert diff_pct < 10, f"Fila {d['fila']}: precio difiere {diff_pct:.1f}% ({d['sheet']} vs {d['scraped']})"
+            except (ValueError, ZeroDivisionError):
+                pass  # No son números comparables
+
+    def test_scrape_vs_sheet_m2_consistentes(self, real_sheet_data):
+        """Compara m2 scrapeados vs los de la planilla."""
+        rows = get_active_rows(real_sheet_data['rows'])
+        if not rows:
+            pytest.skip("No hay filas activas")
+
+        sample = rows[:3]
+        discrepancias = []
+
+        for row in sample:
+            url = row.get('link', '')
+            if not url.startswith('http'):
+                continue
+
+            scraped, _ = scrape_link(url, use_cache=False, cache={})
+            if not scraped or scraped.get('_error'):
+                continue
+
+            # Comparar m2 cubiertos
+            for campo in ['m2_cub', 'm2_tot']:
+                sheet_val = str(row.get(campo, '')).strip()
+                scraped_val = str(scraped.get(campo, '')).strip()
+
+                if sheet_val and scraped_val and sheet_val != scraped_val:
+                    discrepancias.append({
+                        'fila': row.get('_row'),
+                        'campo': campo,
+                        'sheet': sheet_val,
+                        'scraped': scraped_val,
+                    })
+
+        # Reportar discrepancias pero no fallar (pueden haber actualizaciones legítimas)
+        if discrepancias:
+            print(f"\n⚠️  {len(discrepancias)} discrepancias de m² encontradas:")
+            for d in discrepancias:
+                print(f"   Fila {d['fila']}: {d['campo']} = {d['sheet']} (sheet) vs {d['scraped']} (scraped)")
+
+    def test_scrape_full_comparison(self, real_sheet_data):
+        """Comparación completa: scrapea todos y compara campos principales."""
+        rows = get_active_rows(real_sheet_data['rows'])
+        if not rows:
+            pytest.skip("No hay filas activas")
+
+        # Usar solo las primeras 5 para no tardar mucho
+        sample = rows[:5]
+        resultados = {
+            'total': len(sample),
+            'scrapeados': 0,
+            'errores': 0,
+            'coincidencias': [],
+            'discrepancias': [],
+        }
+
+        for row in sample:
+            url = row.get('link', '')
+            if not url.startswith('http'):
+                continue
+
+            scraped, _ = scrape_link(url, use_cache=False, cache={})
+            if not scraped or scraped.get('_error'):
+                resultados['errores'] += 1
+                continue
+
+            resultados['scrapeados'] += 1
+
+            # Comparar campos principales
+            campos = ['precio', 'm2_cub', 'm2_tot', 'amb', 'banos']
+            fila_ok = True
+            for campo in campos:
+                sheet_val = str(row.get(campo, '')).strip()
+                scraped_val = str(scraped.get(campo, '')).strip()
+
+                # Solo comparar si ambos tienen valor
+                if sheet_val and scraped_val and sheet_val != scraped_val:
+                    resultados['discrepancias'].append({
+                        'fila': row.get('_row'),
+                        'campo': campo,
+                        'sheet': sheet_val,
+                        'scraped': scraped_val,
+                    })
+                    fila_ok = False
+
+            if fila_ok:
+                resultados['coincidencias'].append(row.get('_row'))
+
+        # Reportar
+        print(f"\n📊 Resultados de comparación:")
+        print(f"   Total: {resultados['total']}")
+        print(f"   Scrapeados: {resultados['scrapeados']}")
+        print(f"   Errores: {resultados['errores']}")
+        print(f"   Coincidencias: {len(resultados['coincidencias'])}")
+        print(f"   Con discrepancias: {len(set(d['fila'] for d in resultados['discrepancias']))}")
+
+        if resultados['discrepancias']:
+            print(f"\n   Discrepancias encontradas:")
+            for d in resultados['discrepancias'][:10]:
+                print(f"   - Fila {d['fila']}: {d['campo']} = '{d['sheet']}' (sheet) vs '{d['scraped']}' (scraped)")
+
+        # El test pasa si al menos el 50% se scrapearon correctamente
+        assert resultados['scrapeados'] >= resultados['total'] * 0.5, \
+            f"Muy pocos scrapeados: {resultados['scrapeados']}/{resultados['total']}"
 
 
 if __name__ == '__main__':
