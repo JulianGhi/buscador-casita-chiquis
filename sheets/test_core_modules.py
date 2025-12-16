@@ -798,6 +798,320 @@ class TestHeadersConstants:
         assert 'Sec-Ch-Ua' in HEADERS_BROWSER or 'sec-ch-ua' in str(HEADERS_BROWSER).lower()
 
 
+class TestScrapeArgenprop:
+    """Tests de scrape_argenprop con mocks HTTP."""
+
+    @pytest.fixture
+    def mock_argenprop_html(self):
+        """HTML de ejemplo de Argenprop."""
+        return '''
+        <html>
+        <div class="titlebar__price">USD 120.000</div>
+        <div class="titlebar__address">Av. Corrientes 1234, Almagro</div>
+        <div class="property-description">
+            Departamento de 3 ambientes, 65 m² cubiertos.
+            2 dormitorios. 15 años de antigüedad.
+        </div>
+        <ul class="property-features">
+            <li>Sup. cubierta: 65 m²</li>
+            <li>Sup. total: 70 m²</li>
+            <li>Cant. ambientes: 3</li>
+            <li>Antigüedad: 15 años</li>
+            <li>Terraza: Si</li>
+            <li>Balcón: No</li>
+            <li>Cochera: No</li>
+            <li>Baños: 1</li>
+            <li>Expensas: $50.000</li>
+            <li>Apto crédito: Si</li>
+        </ul>
+        </html>
+        '''
+
+    def test_scrape_argenprop_exitoso(self, mock_argenprop_html):
+        """Scrapea página de Argenprop correctamente."""
+        from core.scrapers import scrape_argenprop
+
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.text = mock_argenprop_html
+
+        with patch('httpx.get', return_value=mock_response):
+            data = scrape_argenprop('https://www.argenprop.com/depto--12345')
+
+        assert '_error' not in data
+        assert data.get('precio') == '120000'
+        assert 'Corrientes' in data.get('direccion', '')
+
+    def test_scrape_argenprop_extrae_m2(self, mock_argenprop_html):
+        """Extrae metros cuadrados."""
+        from core.scrapers import scrape_argenprop
+
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.text = mock_argenprop_html
+
+        with patch('httpx.get', return_value=mock_response):
+            data = scrape_argenprop('https://www.argenprop.com/depto--12345')
+
+        assert data.get('m2_cub') == '65'
+        assert data.get('m2_tot') == '70'
+
+    def test_scrape_argenprop_extrae_atributos(self, mock_argenprop_html):
+        """Extrae atributos booleanos."""
+        from core.scrapers import scrape_argenprop
+
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.text = mock_argenprop_html
+
+        with patch('httpx.get', return_value=mock_response):
+            data = scrape_argenprop('https://www.argenprop.com/depto--12345')
+
+        assert data.get('terraza') == 'si'
+        assert data.get('balcon') == 'no'
+        assert data.get('amb') == '3'
+
+    def test_scrape_argenprop_error_404(self):
+        """Maneja error 404."""
+        from core.scrapers import scrape_argenprop
+
+        mock_response = MagicMock()
+        mock_response.status_code = 404
+
+        with patch('httpx.get', return_value=mock_response):
+            data = scrape_argenprop('https://www.argenprop.com/depto--99999')
+
+        assert '_error' in data
+        assert '404' in data['_error']
+
+    def test_scrape_argenprop_error_conexion(self):
+        """Maneja error de conexión."""
+        from core.scrapers import scrape_argenprop
+        import httpx
+
+        with patch('httpx.get', side_effect=httpx.ConnectError('Connection refused')):
+            data = scrape_argenprop('https://www.argenprop.com/depto--12345')
+
+        assert '_error' in data
+
+
+class TestScrapeMercadolibre:
+    """Tests de scrape_mercadolibre con mocks HTTP."""
+
+    @pytest.fixture
+    def mock_meli_html(self):
+        """HTML de ejemplo de MercadoLibre."""
+        return '''
+        <html>
+        <span class="andes-money-amount__fraction">95.000</span>
+        <div class="ui-vip-location">
+            Ubicación
+            Av. Rivadavia 5678, Caballito, Capital Federal
+        </div>
+        <table>
+            <tr class="andes-table__row">
+                <th>Superficie total</th>
+                <td>60 m²</td>
+            </tr>
+            <tr class="andes-table__row">
+                <th>Superficie cubierta</th>
+                <td>55 m²</td>
+            </tr>
+            <tr class="andes-table__row">
+                <th>Ambientes</th>
+                <td>3</td>
+            </tr>
+            <tr class="andes-table__row">
+                <th>Dormitorios</th>
+                <td>2</td>
+            </tr>
+            <tr class="andes-table__row">
+                <th>Baños</th>
+                <td>1</td>
+            </tr>
+            <tr class="andes-table__row">
+                <th>Antigüedad</th>
+                <td>10 años</td>
+            </tr>
+            <tr class="andes-table__row">
+                <th>Expensas</th>
+                <td>$45.000</td>
+            </tr>
+        </table>
+        <div class="ui-vip-specs__table">
+            <span>Balcón</span>
+            <span>Luminoso</span>
+        </div>
+        </html>
+        '''
+
+    def test_scrape_meli_exitoso(self, mock_meli_html):
+        """Scrapea página de MercadoLibre correctamente."""
+        from core.scrapers import scrape_mercadolibre
+
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.text = mock_meli_html
+        mock_response.url = 'https://inmueble.mercadolibre.com.ar/MLA-123456'
+
+        with patch('httpx.get', return_value=mock_response):
+            data = scrape_mercadolibre('https://inmueble.mercadolibre.com.ar/MLA-123456')
+
+        assert '_error' not in data
+        assert data.get('precio') == '95000'
+
+    def test_scrape_meli_extrae_ubicacion(self, mock_meli_html):
+        """Extrae ubicación y barrio."""
+        from core.scrapers import scrape_mercadolibre
+
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.text = mock_meli_html
+        mock_response.url = 'https://inmueble.mercadolibre.com.ar/MLA-123456'
+
+        with patch('httpx.get', return_value=mock_response):
+            data = scrape_mercadolibre('https://inmueble.mercadolibre.com.ar/MLA-123456')
+
+        assert 'Rivadavia' in data.get('direccion', '') or 'barrio' in data
+
+    def test_scrape_meli_extrae_caracteristicas(self, mock_meli_html):
+        """Extrae características de la tabla."""
+        from core.scrapers import scrape_mercadolibre
+
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.text = mock_meli_html
+        mock_response.url = 'https://inmueble.mercadolibre.com.ar/MLA-123456'
+
+        with patch('httpx.get', return_value=mock_response):
+            data = scrape_mercadolibre('https://inmueble.mercadolibre.com.ar/MLA-123456')
+
+        assert data.get('m2_tot') == '60'
+        assert data.get('m2_cub') == '55'
+        assert data.get('amb') == '3'
+        assert data.get('banos') == '1'
+
+    def test_scrape_meli_publicacion_finalizada(self):
+        """Detecta publicación finalizada via JSON en HTML."""
+        from core.scrapers import scrape_mercadolibre
+
+        # El scraper detecta 'Publicación finalizada' en el texto raw del HTML
+        html = '''
+        <html>
+        <script>"text":"Publicación finalizada"</script>
+        </html>
+        '''
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.text = html
+        mock_response.url = 'https://inmueble.mercadolibre.com.ar/MLA-123456'
+
+        with patch('httpx.get', return_value=mock_response):
+            data = scrape_mercadolibre('https://inmueble.mercadolibre.com.ar/MLA-123456')
+
+        assert '_error' in data
+        assert data.get('_offline') is True
+
+    def test_scrape_meli_redirect_a_busqueda(self):
+        """Detecta redirect a página de búsqueda (publicación no disponible)."""
+        from core.scrapers import scrape_mercadolibre
+
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.text = '<html></html>'
+        mock_response.url = 'https://inmuebles.mercadolibre.com.ar/venta?redirectedFromVip=true'
+
+        with patch('httpx.get', return_value=mock_response):
+            data = scrape_mercadolibre('https://inmueble.mercadolibre.com.ar/MLA-123456')
+
+        assert '_error' in data
+        assert data.get('_offline') is True
+
+    def test_scrape_meli_error_410(self):
+        """Maneja error 410 Gone."""
+        from core.scrapers import scrape_mercadolibre
+
+        mock_response = MagicMock()
+        mock_response.status_code = 410
+
+        with patch('httpx.get', return_value=mock_response):
+            data = scrape_mercadolibre('https://inmueble.mercadolibre.com.ar/MLA-123456')
+
+        assert '_error' in data
+        assert '410' in data['_error']
+
+    def test_scrape_meli_sin_precio(self):
+        """Maneja página sin precio."""
+        from core.scrapers import scrape_mercadolibre
+
+        html = '<html><body>Página sin precio</body></html>'
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.text = html
+        mock_response.url = 'https://inmueble.mercadolibre.com.ar/MLA-123456'
+
+        with patch('httpx.get', return_value=mock_response):
+            data = scrape_mercadolibre('https://inmueble.mercadolibre.com.ar/MLA-123456')
+
+        assert '_error' in data
+
+
+class TestScrapeLinkIntegration:
+    """Tests de integración de scrape_link."""
+
+    def test_scrape_link_detecta_argenprop(self):
+        """scrape_link usa scrape_argenprop para URLs de Argenprop."""
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.text = '<div class="titlebar__price">USD 100.000</div>'
+
+        with patch('httpx.get', return_value=mock_response):
+            data, from_cache = scrape_link(
+                'https://www.argenprop.com/depto--12345',
+                use_cache=False,
+                cache={}
+            )
+
+        assert from_cache is False
+        # Debería haber intentado scrapear (puede fallar por HTML incompleto)
+
+    def test_scrape_link_detecta_mercadolibre(self):
+        """scrape_link usa scrape_mercadolibre para URLs de MeLi."""
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.text = '<span class="andes-money-amount__fraction">95.000</span>'
+        mock_response.url = 'https://inmueble.mercadolibre.com.ar/MLA-123456'
+
+        with patch('httpx.get', return_value=mock_response):
+            data, from_cache = scrape_link(
+                'https://inmueble.mercadolibre.com.ar/MLA-123456',
+                use_cache=False,
+                cache={}
+            )
+
+        assert from_cache is False
+
+    def test_scrape_link_guarda_en_cache(self):
+        """scrape_link guarda resultados en cache."""
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.text = '''
+            <div class="titlebar__price">USD 100.000</div>
+            <div class="titlebar__address">Test 123</div>
+        '''
+        cache = {}
+
+        with patch('httpx.get', return_value=mock_response):
+            data, _ = scrape_link(
+                'https://www.argenprop.com/depto--12345',
+                use_cache=True,
+                cache=cache
+            )
+
+        assert 'https://www.argenprop.com/depto--12345' in cache
+        assert '_cached_at' in cache['https://www.argenprop.com/depto--12345']
+
+
 # =============================================================================
 # TESTS: templates.py
 # =============================================================================
