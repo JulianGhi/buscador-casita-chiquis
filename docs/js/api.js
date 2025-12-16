@@ -21,35 +21,37 @@ function calcVariacion(actual, anterior) {
 
 async function fetchDolarBNA() {
   try {
-    const allData = await fetchJSON('https://api.bluelytics.com.ar/v2/evolution.json');
-    const oficial = allData.filter(d => d.source === 'Oficial');
-    if (oficial.length === 0) throw new Error('No data');
-
-    const hoy = oficial[0];
-
-    // Buscar valores históricos para variaciones
-    const findByDaysAgo = (minDays, maxDays) => oficial.find(d => {
-      const diff = (new Date(hoy.date) - new Date(d.date)) / (1000 * 60 * 60 * 24);
-      return diff >= minDays && diff <= maxDays;
-    });
-
-    const hace1Dia = oficial.find((d, i) => i > 0 && d.date !== hoy.date);
-    const hace7Dias = findByDaysAgo(6, 8);
-    const hace30Dias = findByDaysAgo(28, 32);
+    // API principal: DolarAPI.com (más actualizada)
+    const data = await fetchJSON('https://dolarapi.com/v1/dolares/oficial');
 
     return {
-      venta: hoy.value_sell,
-      compra: hoy.value_buy,
-      fecha: hoy.date,
+      venta: data.venta,
+      compra: data.compra,
+      fecha: data.fechaActualizacion?.split('T')[0] || new Date().toISOString().split('T')[0],
       variaciones: {
-        dia: calcVariacion(hoy.value_sell, hace1Dia?.value_sell),
-        semana: calcVariacion(hoy.value_sell, hace7Dias?.value_sell),
-        mes: calcVariacion(hoy.value_sell, hace30Dias?.value_sell)
+        dia: null,
+        semana: null,
+        mes: null
       }
     };
   } catch (err) {
     console.error('Error fetching dolar:', err);
-    return null;
+    // Fallback a Bluelytics si DolarAPI falla
+    try {
+      const allData = await fetchJSON('https://api.bluelytics.com.ar/v2/evolution.json');
+      const oficial = allData.filter(d => d.source === 'Oficial');
+      if (oficial.length === 0) throw new Error('No data');
+      const hoy = oficial[0];
+      return {
+        venta: hoy.value_sell,
+        compra: hoy.value_buy,
+        fecha: hoy.date,
+        variaciones: { dia: null, semana: null, mes: null }
+      };
+    } catch (fallbackErr) {
+      console.error('Fallback también falló:', fallbackErr);
+      return null;
+    }
   }
 }
 

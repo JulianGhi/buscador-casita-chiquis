@@ -163,6 +163,7 @@ function init() {
   fetchDolarBNA().then(data => {
     if (data) {
       state.dolarBNA = data;
+      state.dolarEstimado = Math.round(data.venta);
       render();
     }
   });
