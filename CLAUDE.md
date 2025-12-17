@@ -641,3 +641,60 @@ efa04f1 Agregar sistema de comparación de 3 fuentes
 2712ab7 Agregar extracción de apto_credito y ascensor
 4120ec5 Unificar lógica de extracción con detectar_atributo()
 ```
+
+## Notas de Sesión (2025-12-17 noche) - Automatización del flujo
+
+### Cambios integrados al flujo de scrape
+
+El comando `scrape` ahora ejecuta automáticamente:
+
+```
+scrape_link()           ← Extrae datos del portal
+    ↓
+apply_scraped_data()    ← Aplica a la fila
+    ↓
+validar_propiedad()     ← Warnings de inconsistencias
+    ↓
+calcular_m2_faltantes() ← Si hay 2 de 3 m², calcula el tercero
+    ↓
+inferir_valores_faltantes() ← Infiere valores lógicos
+```
+
+### Inferencia automática de valores
+
+Nueva función `inferir_valores_faltantes()` en `core/helpers.py`:
+
+| Condición | Inferencia |
+|-----------|------------|
+| `status` vacío | → `"Por ver"` |
+| `m2_desc = 0` | → `terraza=no`, `balcon=no` |
+| `tipo = "ph"` | → `ascensor=no`, `cochera=no` |
+
+### Extracción de `estado`
+
+Agregada extracción del campo `estado` (condición del inmueble):
+- **Argenprop**: Busca "estado: X" en features
+- **MercadoLibre**: Busca en tabla de características
+- **PDF**: Busca patrones como "usado", "a estrenar", etc.
+
+**Nota**: No siempre está disponible como dato estructurado.
+
+### Limpieza de código
+
+Eliminados imports no utilizados en `sync_sheet.py`:
+- Constantes: `BARRIOS_CABA`, `ATTR_PATTERNS`
+- Funciones: `quitar_tildes`, `extraer_numero`, `extraer_m2`, `detectar_barrio`, `extraer_id_propiedad`, `detectar_atributo`
+- Módulo: `unicodedata`
+
+Estas funciones siguen disponibles internamente en `core/`.
+
+### Commits de la sesión
+
+```
+8b4600e Limpiar imports no utilizados en sync_sheet.py
+66db232 Agregar extracción de campo 'estado' a scrapers
+bcc54dd Agregar cálculo automático de m² faltantes al flujo
+d373581 Integrar inferencia automática de valores al flujo
+71d1480 Arreglar bugs del PDF extractor
+aabe837 Agregar status='Por ver' por defecto en add_links.py
+```
