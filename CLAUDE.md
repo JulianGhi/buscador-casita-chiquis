@@ -224,13 +224,47 @@ Los IDs se extraen automáticamente del link:
 ```bash
 python sheets/sync_sheet.py prints           # Estado general
 python sheets/sync_sheet.py prints validate  # Validar datos PDFs vs sheet (offline)
+python sheets/sync_sheet.py prints compare   # Comparar Sheet vs Web Cache vs PDF
+python sheets/sync_sheet.py prints import    # Importar datos con consenso de fuentes
 python sheets/sync_sheet.py pendientes       # Datos faltantes + sin print
 python sheets/sync_sheet.py pendientes --sin-print  # Solo sin print
 ```
 
-#### Validación offline con PDFs
+#### Sistema de 3 fuentes (Sheet vs Web Cache vs PDF)
 
-El comando `prints validate` extrae datos de los PDFs guardados y los compara con el sheet:
+El sistema compara datos de 3 fuentes antes de importar:
+
+| Fuente | Descripción |
+|--------|-------------|
+| **Sheet** | Valor actual en Google Sheets |
+| **Web Cache** | Lo que scrapeó el web scraper (`data/scrape_cache.json`) |
+| **PDF** | Datos extraídos del PDF guardado (`data/prints/*.pdf`) |
+
+**`prints compare`** - Muestra tabla comparativa con acciones:
+- ✓ OK: Todas las fuentes coinciden
+- ← IMPORTAR: Web y PDF coinciden, sheet vacío (alta confianza)
+- ← solo PDF/Web: Una sola fuente, sheet vacío (media confianza)
+- ⚠ REVISAR: Fuentes no coinciden (no se importa automáticamente)
+- Muestra antigüedad del cache (ej: "4d" = 4 días)
+
+**`prints import`** - Importa solo datos seguros:
+- Alta confianza: Web y PDF coinciden → importa
+- Media confianza: Solo una fuente → importa
+- Discrepancias: NO importa, muestra warning
+- Usar `--dry-run` para preview sin modificar
+
+```bash
+# Flujo recomendado
+python sync_sheet.py scrape        # Actualiza web cache
+python sync_sheet.py prints compare # Revisar diferencias
+python sync_sheet.py prints import --dry-run  # Preview
+python sync_sheet.py prints import  # Aplicar cambios seguros
+python sync_sheet.py push           # Subir a Google Sheets
+```
+
+#### Validación offline (prints validate)
+
+El comando `prints validate` compara PDF vs Sheet directamente:
 - No hace requests a internet (evita rate limiting)
 - Detecta discrepancias (precio cambió, m² no coinciden)
 - Muestra datos que están en el PDF pero faltan en el sheet

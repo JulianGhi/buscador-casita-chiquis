@@ -859,6 +859,180 @@ def validar_datos_pdf_vs_sheet(datos_pdf, datos_sheet):
     return resultado
 
 
+def comparar_tres_fuentes(campo, val_sheet, val_web, val_pdf):
+    """
+    Compara un campo entre las 3 fuentes y determina la acción recomendada.
+
+    Args:
+        campo: Nombre del campo
+        val_sheet: Valor en el sheet (string o None)
+        val_web: Valor del web cache (string o None)
+        val_pdf: Valor del PDF (string o None)
+
+    Returns:
+        dict con:
+            - sheet: valor en sheet
+            - web: valor en web cache
+            - pdf: valor en PDF
+            - accion: 'ok', 'importar', 'solo_pdf', 'solo_web', 'revisar', 'desactualizado'
+            - confianza: 'alta', 'media', 'baja'
+            - valor_sugerido: valor a importar (si aplica)
+    """
+    # Normalizar valores
+    s = str(val_sheet or '').strip().lower() if val_sheet else ''
+    w = str(val_web or '').strip().lower() if val_web else ''
+    p = str(val_pdf or '').strip().lower() if val_pdf else ''
+
+    result = {
+        'sheet': val_sheet or '',
+        'web': val_web or '',
+        'pdf': val_pdf or '',
+        'accion': 'ok',
+        'confianza': 'alta',
+        'valor_sugerido': None,
+    }
+
+    # Caso 1: Sheet vacío
+    if not s:
+        if w and p and w == p:
+            # Web y PDF coinciden → alta confianza
+            result['accion'] = 'importar'
+            result['confianza'] = 'alta'
+            result['valor_sugerido'] = val_web or val_pdf
+        elif p and not w:
+            # Solo PDF tiene dato
+            result['accion'] = 'solo_pdf'
+            result['confianza'] = 'media'
+            result['valor_sugerido'] = val_pdf
+        elif w and not p:
+            # Solo Web tiene dato
+            result['accion'] = 'solo_web'
+            result['confianza'] = 'media'
+            result['valor_sugerido'] = val_web
+        elif w and p and w != p:
+            # Web y PDF difieren → revisar
+            result['accion'] = 'revisar'
+            result['confianza'] = 'baja'
+        # else: ambos vacíos, no hacer nada
+
+    # Caso 2: Sheet tiene valor
+    else:
+        if w and p:
+            if s == w == p:
+                # Todos coinciden → OK
+                result['accion'] = 'ok'
+            elif w == p and s != w:
+                # Web y PDF coinciden pero sheet difiere → desactualizado
+                result['accion'] = 'desactualizado'
+                result['confianza'] = 'alta'
+                result['valor_sugerido'] = val_web or val_pdf
+            else:
+                # Los 3 difieren → revisar
+                result['accion'] = 'revisar'
+                result['confianza'] = 'baja'
+        elif w and s != w:
+            result['accion'] = 'revisar'
+            result['confianza'] = 'media'
+        elif p and s != p:
+            result['accion'] = 'revisar'
+            result['confianza'] = 'media'
+        # else: sheet coincide con lo que hay
+
+    return result
+
+
+def analizar_tres_fuentes(rows, prints_dir=None, cache=None):
+    """
+    Analiza todas las propiedades comparando Sheet vs Web Cache vs PDF.
+
+    Args:
+        rows: Lista de filas del sheet
+        prints_dir: Directorio de prints (opcional)
+        cache: Cache del web scraper (opcional, se carga si no se pasa)
+
+    Returns:
+        list: Lista de resultados por propiedad
+    """
+    from .storage import get_cache_for_url, load_cache
+
+    if prints_dir is None:
+        prints_dir = PRINTS_DIR
+
+    if cache is None:
+        cache = load_cache()
+
+    prints_index = get_prints_index(rows, prints_dir)
+    resultados = []
+
+    # Campos a comparar (nombres del sheet)
+    # Mapping: sheet_name -> pdf_name (si es diferente)
+    campos = ['terraza', 'balcon', 'cocheras', 'luminosidad', 'amb',
+              'banos', 'antiguedad', 'expensas', 'disposicion', 'ascensor', 'apto_credito']
+
+    # Mapeo de nombres: sheet/cache -> PDF extractor
+    pdf_field_map = {
+        'amb': 'ambientes',
+        'cocheras': 'cochera',
+    }
+
+    for row in rows:
+        fila = row.get('_row', 0)
+        if fila < 2:
+            continue
+
+        link = row.get('link', '')
+        if not link.startswith('http'):
+            continue
+
+        # Obtener datos del cache
+        cache_info = get_cache_for_url(link, cache)
+        datos_web = cache_info['data'] or {}
+        web_age = cache_info['age_days']
+        web_stale = cache_info['is_stale']
+
+        # Obtener datos del PDF
+        print_info = prints_index.get(fila)
+        datos_pdf = {}
+        if print_info:
+            archivo = prints_dir / print_info['archivo']
+            if archivo.exists() and archivo.suffix.lower() == '.pdf':
+                datos_pdf = extraer_datos_pdf(archivo)
+
+        # Comparar cada campo
+        comparaciones = []
+        hay_diferencias = False
+
+        for campo in campos:
+            val_sheet = row.get(campo)
+            val_web = datos_web.get(campo)
+            # Para PDF, usar el nombre mapeado si existe
+            pdf_campo = pdf_field_map.get(campo, campo)
+            val_pdf = datos_pdf.get(pdf_campo)
+
+            comp = comparar_tres_fuentes(campo, val_sheet, val_web, val_pdf)
+            comp['campo'] = campo
+
+            if comp['accion'] != 'ok':
+                hay_diferencias = True
+
+            # Solo incluir si hay algo que mostrar
+            if val_sheet or val_web or val_pdf:
+                comparaciones.append(comp)
+
+        if hay_diferencias or comparaciones:
+            resultados.append({
+                'fila': fila,
+                'direccion': row.get('direccion', ''),
+                'link': link,
+                'web_age': web_age,
+                'web_stale': web_stale,
+                'tiene_pdf': bool(print_info),
+                'comparaciones': comparaciones,
+            })
+
+    return resultados
+
+
 def analizar_prints_vs_sheet(rows, prints_dir=None):
     """
     Analiza todos los prints disponibles y compara con datos del sheet.

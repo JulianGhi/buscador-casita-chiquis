@@ -195,9 +195,14 @@ Genera `data/prints/pendientes.json` con las propiedades que tienen campos impor
 Guardar PDFs de los avisos para tener respaldo en caso de que bajen la publicación.
 
 ```bash
-python sheets/sync_sheet.py prints      # Ver estado de prints
-python sheets/sync_sheet.py push        # Sincroniza fecha_print al Sheet
+python sheets/sync_sheet.py prints           # Ver estado de prints
+python sheets/sync_sheet.py prints validate  # Comparar datos PDF vs sheet (offline)
+python sheets/sync_sheet.py prints compare   # Comparar Sheet vs Web Cache vs PDF
+python sheets/sync_sheet.py prints import    # Importar datos con consenso de fuentes
+python sheets/sync_sheet.py push             # Sincroniza fecha_print al Sheet
 ```
+
+**Sistema de 3 fuentes:** El comando `compare` muestra datos de Sheet, Web Cache y PDF lado a lado. Solo importa automáticamente cuando hay consenso entre fuentes.
 
 **Nomenclatura de archivos:**
 

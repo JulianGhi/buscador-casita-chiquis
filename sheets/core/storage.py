@@ -8,6 +8,7 @@ Incluye:
 """
 
 import json
+from datetime import datetime
 from pathlib import Path
 
 # =============================================================================
@@ -77,3 +78,53 @@ def save_cache(cache):
     CACHE_FILE.parent.mkdir(exist_ok=True)
     with open(CACHE_FILE, 'w', encoding='utf-8') as f:
         json.dump(cache, f, ensure_ascii=False, indent=2)
+
+
+def get_cache_for_url(url, cache=None, max_age_days=30):
+    """Obtiene datos del cache para una URL específica.
+
+    Args:
+        url: URL a buscar en el cache
+        cache: Cache ya cargado (opcional, si no se pasa se carga)
+        max_age_days: Máximo de días de antigüedad para considerar válido
+
+    Returns:
+        dict con:
+            - data: datos del cache (None si no existe o es muy viejo)
+            - age_days: antigüedad en días (None si no existe)
+            - is_stale: True si >7 días pero <max_age_days
+            - is_expired: True si >max_age_days
+    """
+    if cache is None:
+        cache = load_cache()
+
+    result = {
+        'data': None,
+        'age_days': None,
+        'is_stale': False,
+        'is_expired': False,
+    }
+
+    if url not in cache:
+        return result
+
+    entry = cache[url]
+
+    # Calcular antigüedad
+    cached_at = entry.get('_cached_at')
+    if cached_at:
+        try:
+            cache_date = datetime.strptime(cached_at, '%Y-%m-%d %H:%M:%S')
+            age = (datetime.now() - cache_date).days
+            result['age_days'] = age
+            result['is_stale'] = age > 7
+            result['is_expired'] = age > max_age_days
+        except ValueError:
+            pass
+
+    # Solo devolver datos si no está expirado
+    if not result['is_expired']:
+        # Filtrar campos internos (_cached_at, _error)
+        result['data'] = {k: v for k, v in entry.items() if not k.startswith('_')}
+
+    return result

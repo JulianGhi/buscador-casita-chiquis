@@ -94,6 +94,9 @@ from core import (
     clasificar_prints,
     extraer_datos_pdf,
     analizar_prints_vs_sheet,
+    analizar_tres_fuentes,
+    # Storage adicional
+    get_cache_for_url,
     # Templates
     PREVIEW_SHOW_COLS,
     PREVIEW_DIFF_COLS,
@@ -772,6 +775,236 @@ def cmd_prints_validate():
     print(f"💡 Tip: Los datos del PDF son una snapshot. Si hay discrepancias,")
     print(f"        el aviso pudo haber cambiado o el scraper extrajo mal.")
 
+    # Sugerir import si hay datos faltantes
+    total_faltantes = sum(len(r['validacion']['faltantes_sheet']) for r in resultados)
+    if total_faltantes:
+        print(f"\n💡 Hay {total_faltantes} campos que se pueden importar desde los PDFs.")
+        print(f"   Ejecutá: python sync_sheet.py prints import")
+
+
+def cmd_prints_compare():
+    """Muestra comparación detallada: Sheet vs Web Cache vs PDF para cada propiedad."""
+    data = load_local_data()
+    if not data:
+        print("❌ Primero ejecutá: python sync_sheet.py pull")
+        return
+
+    rows = data['rows']
+
+    print(f"\n📊 COMPARACIÓN: SHEET vs WEB CACHE vs PDF")
+    print(f"{'='*90}")
+
+    # Usar la nueva función que compara las 3 fuentes
+    resultados = analizar_tres_fuentes(rows, PRINTS_DIR)
+
+    if not resultados:
+        print(f"✅ No hay diferencias entre las fuentes")
+        return
+
+    # Contadores
+    total_importar = 0
+    total_revisar = 0
+    total_solo_pdf = 0
+    total_solo_web = 0
+    cache_viejo = False
+
+    for r in resultados:
+        # Filtrar solo los que tienen diferencias
+        diffs = [c for c in r['comparaciones'] if c['accion'] != 'ok']
+        if not diffs:
+            continue
+
+        # Header de la propiedad
+        web_info = ""
+        if r['web_age'] is not None:
+            if r['web_stale']:
+                web_info = f" {YELLOW}(cache {r['web_age']}d){RESET}"
+                cache_viejo = True
+            else:
+                web_info = f" ({r['web_age']}d)"
+
+        pdf_info = " 📄" if r['tiene_pdf'] else f" {DIM}(sin PDF){RESET}"
+
+        print(f"\n📍 Fila {r['fila']}: {r['direccion'][:40]}{web_info}{pdf_info}")
+        print(f"   {'Campo':<12} │ {'Sheet':<10} │ {'Web':<10} │ {'PDF':<10} │ Acción")
+        print(f"   {'─'*12}─┼─{'─'*10}─┼─{'─'*10}─┼─{'─'*10}─┼─{'─'*18}")
+
+        for c in r['comparaciones']:
+            accion = c['accion']
+
+            # Formatear valores
+            v_sheet = str(c['sheet'])[:10] if c['sheet'] else '-'
+            v_web = str(c['web'])[:10] if c['web'] else '-'
+            v_pdf = str(c['pdf'])[:10] if c['pdf'] else '-'
+
+            # Colorear según acción
+            if accion == 'importar':
+                estado = f"{GREEN}← IMPORTAR{RESET}"
+                total_importar += 1
+            elif accion == 'solo_pdf':
+                estado = f"{GREEN}← solo PDF{RESET}"
+                total_solo_pdf += 1
+            elif accion == 'solo_web':
+                estado = f"{GREEN}← solo Web{RESET}"
+                total_solo_web += 1
+            elif accion == 'revisar':
+                estado = f"{YELLOW}⚠ REVISAR{RESET}"
+                total_revisar += 1
+            elif accion == 'desactualizado':
+                estado = f"{YELLOW}⚠ DESACTUALIZADO{RESET}"
+                total_revisar += 1
+            else:
+                estado = f"{DIM}✓ OK{RESET}"
+
+            print(f"   {c['campo']:<12} │ {v_sheet:<10} │ {v_web:<10} │ {v_pdf:<10} │ {estado}")
+
+    print(f"\n{'='*90}")
+    print(f"📋 RESUMEN:")
+    if total_importar:
+        print(f"   {GREEN}● Alta confianza (Web=PDF): {total_importar} campos{RESET}")
+    if total_solo_pdf:
+        print(f"   {GREEN}● Solo en PDF: {total_solo_pdf} campos{RESET}")
+    if total_solo_web:
+        print(f"   {GREEN}● Solo en Web: {total_solo_web} campos{RESET}")
+    if total_revisar:
+        print(f"   {YELLOW}● Revisar manualmente: {total_revisar} campos{RESET}")
+
+    total_importables = total_importar + total_solo_pdf + total_solo_web
+    if total_importables:
+        print(f"\n💡 Para importar {total_importables} campos: python sync_sheet.py prints import")
+    if total_revisar:
+        print(f"⚠️  Los {total_revisar} campos marcados 'REVISAR' requieren revisión manual")
+    if cache_viejo:
+        print(f"\n⚠️  Algunos datos de Web Cache tienen >7 días. Considerá re-scrapear:")
+        print(f"   python sync_sheet.py scrape --all --no-cache")
+
+
+def cmd_prints_import(dry_run=False):
+    """Importa datos donde hay consenso entre fuentes (Web=PDF o única fuente)."""
+    data = load_local_data()
+    if not data:
+        print("❌ Primero ejecutá: python sync_sheet.py pull")
+        return
+
+    rows = data['rows']
+    headers = data['headers']
+
+    # Analizar las 3 fuentes
+    resultados = analizar_tres_fuentes(rows, PRINTS_DIR)
+
+    if not resultados:
+        print(f"✅ No hay datos para importar")
+        return
+
+    # Separar cambios por confianza
+    rows_by_fila = {r['_row']: r for r in rows}
+    cambios_alta = []     # Web y PDF coinciden
+    cambios_media = []    # Solo una fuente
+    cambios_revisar = []  # Discrepancias (no importar)
+
+    for r in resultados:
+        fila = r['fila']
+        row = rows_by_fila.get(fila)
+        if not row:
+            continue
+
+        for c in r['comparaciones']:
+            if c['accion'] == 'ok' or not c['valor_sugerido']:
+                continue
+
+            campo = c['campo']
+            if campo not in headers:
+                continue
+
+            cambio = {
+                'fila': fila,
+                'direccion': r['direccion'],
+                'campo': campo,
+                'valor': str(c['valor_sugerido']),
+                'web': c['web'],
+                'pdf': c['pdf'],
+                'row': row
+            }
+
+            if c['accion'] == 'importar':
+                cambios_alta.append(cambio)
+            elif c['accion'] in ('solo_pdf', 'solo_web'):
+                cambios_media.append(cambio)
+            elif c['accion'] in ('revisar', 'desactualizado'):
+                cambios_revisar.append(cambio)
+
+    if not cambios_alta and not cambios_media:
+        if cambios_revisar:
+            print(f"⚠️  Hay {len(cambios_revisar)} campos con discrepancias que requieren revisión manual")
+            print(f"   Ejecutá: python sync_sheet.py prints compare")
+        else:
+            print(f"✅ No hay campos para importar")
+        return
+
+    # Mostrar preview
+    print(f"\n📥 IMPORTAR DATOS VALIDADOS")
+    print(f"{'='*80}")
+
+    if cambios_alta:
+        print(f"\n{GREEN}✅ ALTA CONFIANZA (Web y PDF coinciden): {len(cambios_alta)} campos{RESET}")
+        by_fila = {}
+        for c in cambios_alta:
+            if c['fila'] not in by_fila:
+                by_fila[c['fila']] = {'direccion': c['direccion'], 'campos': []}
+            by_fila[c['fila']]['campos'].append(f"{c['campo']}={c['valor']}")
+        for fila, info in by_fila.items():
+            print(f"   Fila {fila}: {info['direccion'][:35]}")
+            print(f"      + {', '.join(info['campos'])}")
+
+    if cambios_media:
+        print(f"\n{YELLOW}⚡ CONFIANZA MEDIA (única fuente): {len(cambios_media)} campos{RESET}")
+        by_fila = {}
+        for c in cambios_media:
+            if c['fila'] not in by_fila:
+                by_fila[c['fila']] = {'direccion': c['direccion'], 'campos': []}
+            fuente = "PDF" if c['pdf'] else "Web"
+            by_fila[c['fila']]['campos'].append(f"{c['campo']}={c['valor']} ({fuente})")
+        for fila, info in by_fila.items():
+            print(f"   Fila {fila}: {info['direccion'][:35]}")
+            print(f"      + {', '.join(info['campos'])}")
+
+    if cambios_revisar:
+        print(f"\n{RED}❌ NO SE IMPORTARÁN ({len(cambios_revisar)} discrepancias):{RESET}")
+        for c in cambios_revisar[:5]:
+            print(f"   Fila {c['fila']}: {c['campo']} → Web={c['web'] or '-'}, PDF={c['pdf'] or '-'}")
+        if len(cambios_revisar) > 5:
+            print(f"   ... y {len(cambios_revisar) - 5} más")
+
+    print(f"\n{'='*80}")
+
+    total = len(cambios_alta) + len(cambios_media)
+
+    if dry_run:
+        print(f"📋 [DRY RUN] Se importarían {total} campos")
+        print(f"   Ejecutá sin --dry-run para aplicar")
+        return
+
+    # Pedir confirmación
+    print(f"\n¿Importar {total} campos? [s/N]: ", end='')
+    try:
+        respuesta = input().strip().lower()
+    except EOFError:
+        respuesta = 'n'
+
+    if respuesta != 's':
+        print("❌ Cancelado")
+        return
+
+    # Aplicar cambios
+    for c in cambios_alta + cambios_media:
+        c['row'][c['campo']] = c['valor']
+
+    save_local_data(data)
+    print(f"\n✅ Importados {total} campos")
+    print(f"   Guardado en: {LOCAL_FILE}")
+    print(f"\n   Revisá con: python sync_sheet.py view")
+    print(f"   Subí con: python sync_sheet.py push --force")
+
 
 def cmd_pendientes(solo_sin_print=False):
     """Genera lista de propiedades con datos faltantes."""
@@ -843,6 +1076,8 @@ Flujo de trabajo:
     python sync_sheet.py push --force    # 4. Subir sobrescribiendo todo
     python sync_sheet.py prints          # 5. Ver estado de prints/backups
     python sync_sheet.py prints validate # 5. Validar PDFs vs sheet (offline)
+    python sync_sheet.py prints compare  # 5. Comparar Sheet vs Web Cache vs PDF
+    python sync_sheet.py prints import   # 5. Importar datos con consenso de fuentes
     python sync_sheet.py pendientes      # 6. Ver props con datos faltantes
         """
     )
@@ -850,7 +1085,7 @@ Flujo de trabajo:
     parser.add_argument('command', choices=['pull', 'scrape', 'view', 'diff', 'push', 'prints', 'pendientes'],
                        help='Comando a ejecutar')
     parser.add_argument('subcommand', nargs='?', default=None,
-                       help='[prints] Subcomando: open, scan, validate')
+                       help='[prints] Subcomando: open, scan, validate, compare, import')
     parser.add_argument('--force', action='store_true',
                        help='[push] Sobrescribe todo el sheet')
     parser.add_argument('--dry-run', action='store_true',
@@ -887,6 +1122,10 @@ Flujo de trabajo:
             cmd_prints_scan()
         elif args.subcommand == 'validate':
             cmd_prints_validate()
+        elif args.subcommand == 'compare':
+            cmd_prints_compare()
+        elif args.subcommand == 'import':
+            cmd_prints_import(dry_run=args.dry_run)
         else:
             cmd_prints()
     elif args.command == 'pendientes':

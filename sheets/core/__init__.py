@@ -63,6 +63,7 @@ from .storage import (
     require_local_data,
     load_cache,
     save_cache,
+    get_cache_for_url,
 )
 
 from .validation import (
@@ -99,6 +100,9 @@ from .prints import (
     extraer_datos_pdf,
     validar_datos_pdf_vs_sheet,
     analizar_prints_vs_sheet,
+    # Funciones de comparación de 3 fuentes
+    comparar_tres_fuentes,
+    analizar_tres_fuentes,
 )
 
 from .templates import (
