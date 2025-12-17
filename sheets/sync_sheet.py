@@ -51,6 +51,7 @@ from core import (
     extraer_id_propiedad,
     get_active_rows,
     calcular_m2_faltantes,
+    inferir_valores_faltantes,
     detectar_atributo,
     # Sheets API
     get_client,
@@ -274,6 +275,17 @@ def cmd_scrape(check_all=False, no_cache=False, force_update=False):
 
         validar_propiedad(rows[idx], contexto=direccion)
         time.sleep(0.5)
+
+    # Aplicar inferencias a todas las filas
+    inferencias_total = 0
+    for row in rows:
+        inferidos = inferir_valores_faltantes(row)
+        for campo, valor in inferidos.items():
+            row[campo] = valor
+        inferencias_total += len(inferidos)
+
+    if inferencias_total:
+        print(f"🧠 {inferencias_total} valores inferidos (status, cochera, ascensor, etc.)")
 
     # Guardar cambios
     data['rows'] = rows

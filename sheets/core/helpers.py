@@ -258,3 +258,50 @@ def detectar_atributo(texto, atributo, warning_callback=None, contexto=None):
         return '?'
 
     return None
+
+
+# =============================================================================
+# INFERENCIA DE VALORES FALTANTES
+# =============================================================================
+
+def inferir_valores_faltantes(row):
+    """
+    Infiere valores faltantes basado en reglas lógicas.
+
+    Reglas:
+    - status vacío → 'Por ver' (valor por defecto)
+    - m2_desc = 0 → terraza=no, balcon=no (sin espacio descubierto)
+    - tipo=ph + ascensor vacío → ascensor=no (PHs no tienen ascensor)
+    - tipo=ph + cochera vacía → cochera=no (PHs raramente tienen)
+
+    Args:
+        row: dict con datos de la propiedad
+
+    Returns:
+        dict: campos inferidos {campo: valor}
+    """
+    inferidos = {}
+
+    # Status por defecto
+    if not row.get('status'):
+        inferidos['status'] = 'Por ver'
+
+    m2_desc = int(row.get('m2_desc') or 0)
+    tipo = (row.get('tipo') or '').lower()
+
+    # Sin espacio descubierto → sin terraza/balcon
+    if m2_desc == 0:
+        if not row.get('terraza'):
+            inferidos['terraza'] = 'no'
+        if not row.get('balcon'):
+            inferidos['balcon'] = 'no'
+
+    # PH → sin ascensor (son de 1-2 pisos)
+    if tipo == 'ph' and not row.get('ascensor'):
+        inferidos['ascensor'] = 'no'
+
+    # PH → sin cochera (raramente tienen)
+    if tipo == 'ph' and not row.get('cochera'):
+        inferidos['cochera'] = 'no'
+
+    return inferidos

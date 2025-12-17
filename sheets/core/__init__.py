@@ -25,6 +25,8 @@ from .helpers import (
     calcular_m2_faltantes,
     # Deteccion de atributos
     detectar_atributo,
+    # Inferencia de valores
+    inferir_valores_faltantes,
 )
 
 from .scrapers import (
