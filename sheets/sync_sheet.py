@@ -276,14 +276,24 @@ def cmd_scrape(check_all=False, no_cache=False, force_update=False):
         validar_propiedad(rows[idx], contexto=direccion)
         time.sleep(0.5)
 
-    # Aplicar inferencias a todas las filas
+    # Calcular m2 faltantes y aplicar inferencias a todas las filas
+    m2_calculados = 0
     inferencias_total = 0
     for row in rows:
+        # Calcular m2 faltantes (si tenemos 2 de 3)
+        m2_calc = calcular_m2_faltantes(row)
+        for campo, valor in m2_calc.items():
+            row[campo] = valor
+        m2_calculados += len(m2_calc)
+
+        # Inferir valores faltantes
         inferidos = inferir_valores_faltantes(row)
         for campo, valor in inferidos.items():
             row[campo] = valor
         inferencias_total += len(inferidos)
 
+    if m2_calculados:
+        print(f"📐 {m2_calculados} m² calculados (cub/tot/desc)")
     if inferencias_total:
         print(f"🧠 {inferencias_total} valores inferidos (status, cochera, ascensor, etc.)")
 
