@@ -242,9 +242,16 @@ def cmd_scrape(check_all=False, no_cache=False, force_update=False):
         if '_error' in scraped:
             print(f"      ❌ {scraped['_error']}")
             if is_offline_error(scraped) and 'activo' in headers:
+                # Solo guardar fecha_inactivo si es la primera vez que se marca como inactivo
+                era_activo = rows[idx].get('activo', '').lower() != 'no'
                 rows[idx]['activo'] = 'no'
+                if era_activo and 'fecha_inactivo' in headers:
+                    from datetime import datetime
+                    rows[idx]['fecha_inactivo'] = datetime.now().strftime('%Y-%m-%d')
+                    print(f"      📴 Marcado como NO activo (vendida {rows[idx]['fecha_inactivo']})")
+                else:
+                    print(f"      📴 Marcado como NO activo")
                 offline += 1
-                print(f"      📴 Marcado como NO activo")
             continue
 
         # Link activo - marcar y aplicar datos
