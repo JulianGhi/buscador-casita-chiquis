@@ -119,6 +119,10 @@ def add_links(links_with_notes):
         if 'fecha_agregado' in col_idx:
             new_row[col_idx['fecha_agregado']] = today
 
+        # Status por defecto: "Por ver"
+        if 'status' in col_idx and not new_row[col_idx['status']]:
+            new_row[col_idx['status']] = 'Por ver'
+
         # Write to specific row using update (more reliable than append_row)
         # Range A{next_row}:AD{next_row} = columns 1-30
         cell_range = f'A{next_row}:AD{next_row}'
