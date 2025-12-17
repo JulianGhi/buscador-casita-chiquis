@@ -683,37 +683,38 @@ def extraer_datos_pdf(filepath):
     # COCHERA
     # =========================================================================
     if re.search(r'cochera|garage|estacionamiento', texto_lower):
-        # Verificar que no sea "sin cochera"
-        if not re.search(r'sin\s+cochera|no\s+(?:tiene\s+)?cochera', texto_lower):
-            data['cochera'] = 'si'
-            # Cantidad de cocheras
-            coch_num = re.search(r'cocheras?[:\s]*(\d+)', texto_lower)
-            if coch_num:
-                data['cocheras'] = int(coch_num.group(1))
-        else:
+        # Primero buscar cantidad: "cocheras: 0" = no tiene
+        coch_num = re.search(r'cocheras?[:\s]*(\d+)', texto_lower)
+        if coch_num:
+            num = int(coch_num.group(1))
+            data['cocheras'] = num
+            data['cochera'] = 'si' if num > 0 else 'no'
+        # Verificar negaciones explícitas
+        elif re.search(r'sin\s+cochera|no\s+(?:tiene\s+)?cochera|cochera[:\s]*no', texto_lower):
             data['cochera'] = 'no'
+        # Si menciona cochera sin número ni negación, asumir que tiene
+        elif re.search(r'con\s+cochera|c/cochera|tiene\s+cochera', texto_lower):
+            data['cochera'] = 'si'
 
     # =========================================================================
-    # TERRAZA / BALCÓN
+    # TERRAZA / BALCÓN (usando detectar_atributo compartido)
     # =========================================================================
+    from .helpers import detectar_atributo
+
     # Tipo de balcón: Terraza → es balcón, no terraza
     if re.search(r'tipo\s+de\s+balc[oó]n[:\s]*terraza', texto_lower):
         data['balcon'] = 'si'
         # No marcar terraza
     else:
         # Terraza real
-        if re.search(r'terraza', texto_lower):
-            if not re.search(r'sin\s+terraza|terraza[:\s]*no', texto_lower):
-                data['terraza'] = 'si'
-            else:
-                data['terraza'] = 'no'
+        result = detectar_atributo(texto, 'terraza')
+        if result:
+            data['terraza'] = result
 
         # Balcón
-        if re.search(r'balc[oó]n', texto_lower):
-            if not re.search(r'sin\s+balc[oó]n|balc[oó]n[:\s]*no', texto_lower):
-                data['balcon'] = 'si'
-            else:
-                data['balcon'] = 'no'
+        result = detectar_atributo(texto, 'balcon')
+        if result:
+            data['balcon'] = result
 
     # =========================================================================
     # ANTIGÜEDAD
@@ -735,28 +736,25 @@ def extraer_datos_pdf(filepath):
         data['disposicion'] = 'contrafrente'
 
     # =========================================================================
-    # LUMINOSIDAD
+    # LUMINOSIDAD (usando detectar_atributo compartido)
     # =========================================================================
-    if re.search(r'luminoso|mucha\s+luz|muy\s+luminoso', texto_lower):
-        data['luminoso'] = 'si'
+    result = detectar_atributo(texto, 'luminosidad')
+    if result:
+        data['luminoso'] = result
 
     # =========================================================================
-    # APTO CRÉDITO
+    # APTO CRÉDITO (usando detectar_atributo compartido)
     # =========================================================================
-    if re.search(r'apto\s*(cr[eé]dito|bancario|banco)|acepta\s*cr[eé]dito|cr[eé]dito\s*hipotecario', texto_lower):
-        # Verificar que no sea negación
-        if re.search(r'no\s+apto|sin\s+cr[eé]dito|no\s+acepta', texto_lower):
-            data['apto_credito'] = 'no'
-        else:
-            data['apto_credito'] = 'si'
+    result = detectar_atributo(texto, 'apto_credito')
+    if result:
+        data['apto_credito'] = result
 
     # =========================================================================
-    # ASCENSOR
+    # ASCENSOR (usando detectar_atributo compartido)
     # =========================================================================
-    if re.search(r'sin\s+ascensor|no\s+tiene\s+ascensor', texto_lower):
-        data['ascensor'] = 'no'
-    elif re.search(r'ascensor|con\s+ascensor', texto_lower):
-        data['ascensor'] = 'si'
+    result = detectar_atributo(texto, 'ascensor')
+    if result:
+        data['ascensor'] = result
 
     # =========================================================================
     # ID DE PROPIEDAD (para verificación)
@@ -896,10 +894,36 @@ def comparar_tres_fuentes(campo, val_sheet, val_web, val_pdf):
             - confianza: 'alta', 'media', 'baja'
             - valor_sugerido: valor a importar (si aplica)
     """
+    # Función para normalizar valores booleanos/numéricos
+    def normalizar(val, campo):
+        if not val:
+            return ''
+        v = str(val).strip().lower()
+
+        # Normalizar cocheras: 0="no", 1+="si"
+        if campo == 'cocheras':
+            if v in ('0', 'no', 'sin'):
+                return 'no'
+            elif v in ('si', 'sí') or (v.isdigit() and int(v) > 0):
+                return 'si'
+
+        # Normalizar expensas: tratar 128 como 128000 (miles)
+        if campo == 'expensas':
+            try:
+                num = float(v.replace('.', '').replace(',', '.'))
+                # Si es < 1000, probablemente está en miles
+                if num < 1000:
+                    num = num * 1000
+                return str(int(num))
+            except ValueError:
+                pass
+
+        return v
+
     # Normalizar valores
-    s = str(val_sheet or '').strip().lower() if val_sheet else ''
-    w = str(val_web or '').strip().lower() if val_web else ''
-    p = str(val_pdf or '').strip().lower() if val_pdf else ''
+    s = normalizar(val_sheet, campo)
+    w = normalizar(val_web, campo)
+    p = normalizar(val_pdf, campo)
 
     result = {
         'sheet': val_sheet or '',
