@@ -546,12 +546,98 @@ El **PDF scraper** SÍ los extrae (porque lee el texto completo del PDF).
    - Sheet dice `balcon=no`
    - Hay que mirar el aviso y decidir cuál es correcto
 
-### Archivos modificados (sin commitear)
+## Notas de Sesión (2025-12-17) - Sistema de 3 Fuentes
+
+### Problema resuelto
+
+Antes: `prints import` importaba datos del PDF sin validar contra otras fuentes.
+Ahora: Sistema compara **3 fuentes** (Sheet vs Web Cache vs PDF) antes de importar.
+
+### Arquitectura de comparación
 
 ```
-modified:   CLAUDE.md
-modified:   sheets/core/__init__.py
-modified:   sheets/core/prints.py      ← Funciones de extracción PDF
-modified:   sheets/sync_sheet.py       ← Comando prints validate
-modified:   sheets/test_cli_commands.py ← Tests nuevos
+┌─────────────┐   ┌─────────────┐   ┌─────────────┐
+│   SHEET     │   │  WEB CACHE  │   │    PDF      │
+│ (actual)    │   │ (scrape_    │   │ (pdftotext) │
+│             │   │  cache.json)│   │             │
+└──────┬──────┘   └──────┬──────┘   └──────┬──────┘
+       │                 │                 │
+       └────────────────►│◄────────────────┘
+                         ▼
+              ┌─────────────────────┐
+              │ comparar_tres_      │
+              │ fuentes()           │
+              │                     │
+              │ Acciones:           │
+              │ - OK (coinciden)    │
+              │ - IMPORTAR (Web=PDF)│
+              │ - SOLO_PDF/WEB      │
+              │ - REVISAR (difieren)│
+              └─────────────────────┘
+```
+
+### Lógica de extracción unificada
+
+**IMPORTANTE**: Ambos scrapers usan `detectar_atributo()` de `core/helpers.py`:
+
+```python
+# En helpers.py - FUENTE ÚNICA DE VERDAD para patrones
+ATTR_PATTERNS = {
+    'terraza': {
+        'si': ['terraza: si', 'con terraza', ...],
+        'no': ['terraza: no', 'sin terraza', ...],  # Se evalúa PRIMERO
+    },
+    # ... otros atributos
+}
+```
+
+- **Web scraper** (`core/scrapers.py`): Usa `detectar_atributo(txt, 'terraza')`
+- **PDF scraper** (`core/prints.py`): Usa `detectar_atributo(texto, 'terraza')`
+
+Para agregar un nuevo patrón, modificar SOLO `ATTR_PATTERNS` en `helpers.py`.
+
+### Normalización en comparación
+
+En `comparar_tres_fuentes()` se normalizan valores antes de comparar:
+
+```python
+# cocheras: 0 = "no", 1+ = "si"
+if campo == 'cocheras':
+    if v in ('0', 'no'): return 'no'
+    elif v.isdigit() and int(v) > 0: return 'si'
+
+# expensas: valores < 1000 se asumen en miles
+if campo == 'expensas':
+    if num < 1000: num = num * 1000
+```
+
+### Bugs conocidos
+
+1. **Web scraper terraza**: A veces detecta "terraza=si" cuando el aviso dice "balcón tipo terraza"
+   - **Solución**: PDF es la fuente más confiable para terraza
+   - **Propiedades afectadas**: Fila 28 (Alvarez Jonte), Fila 29 (Espinosa)
+
+2. **Ambientes**: Ambigüedad entre "3 ambientes" vs "2 dormitorios + living"
+   - Esto es un problema del aviso, no del scraper
+
+### Comandos nuevos
+
+```bash
+python sync_sheet.py prints compare   # Ver tabla de 3 columnas
+python sync_sheet.py prints import    # Importar solo datos seguros
+```
+
+### Política de importación
+
+- **Vacío NO es contradicción**: Si Web="-" y PDF="si" → importa "si"
+- **Contradicción = valores diferentes**: Web="no" vs PDF="si" → NO importar
+- **Formato normalizado**: cocheras 0="no", expensas en pesos completos
+
+### Commits de la sesión
+
+```
+efa04f1 Agregar sistema de comparación de 3 fuentes
+5b7f074 Documentar política de contradicciones
+2712ab7 Agregar extracción de apto_credito y ascensor
+4120ec5 Unificar lógica de extracción con detectar_atributo()
 ```
