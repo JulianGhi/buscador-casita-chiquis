@@ -189,10 +189,13 @@ function calculateProperty(p) {
   const costs = calculateCosts(precio, { tieneInmob });
 
   // Calcular datos básicos
+  const expensas = parseFloat(p.expensas) || 0;
+
   const calc = {
     ...p,
     _precio: precio,
     _m2: m2,
+    _expensas: expensas,
     _preciom2: m2 > 0 ? Math.round(precio / m2) : 0,
     _ref: REF_M2[barrio] || 0,
     // Costos (de calculateCosts)

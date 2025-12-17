@@ -152,6 +152,7 @@ function renderFilters(barrios, filtered, properties) {
             <option value="total" ${state.sortBy === 'total' ? 'selected' : ''}>A juntar</option>
             <option value="dif" ${state.sortBy === 'dif' ? 'selected' : ''}>Diferencia</option>
             <option value="preciom2" ${state.sortBy === 'preciom2' ? 'selected' : ''}>$/m²</option>
+            <option value="expensas" ${state.sortBy === 'expensas' ? 'selected' : ''}>💵 Expensas</option>
           </select>
           <button onclick="state.sortDir=state.sortDir==='asc'?'desc':'asc';render()" class="px-2 py-1.5 border border-slate-200 rounded-lg bg-white hover:bg-slate-50">${state.sortDir === 'asc' ? '↑' : '↓'}</button>
         </div>
@@ -192,6 +193,7 @@ function renderTable(filtered) {
               <th class="px-2 py-2.5 text-center font-medium text-slate-600" title="Terraza">🌿</th>
               <th class="px-2 py-2.5 text-center font-medium text-slate-600" title="Balcón">🪴</th>
               <th class="px-2 py-2.5 text-center font-medium text-slate-600" title="Baños">🚿</th>
+              <th class="px-2 py-2.5 text-right font-medium text-slate-600" title="Expensas">💵</th>
             </tr>
           </thead>
           <tbody class="divide-y divide-slate-100">
@@ -218,6 +220,7 @@ function renderTable(filtered) {
                 <td class="px-2 py-2.5 text-center">${p.terraza?.toLowerCase() === 'si' ? '<span class="text-green-600">✓</span>' : p.terraza?.toLowerCase() === 'no' ? '<span class="text-red-400">✗</span>' : '<span class="text-slate-300">-</span>'}</td>
                 <td class="px-2 py-2.5 text-center">${p.balcon?.toLowerCase() === 'si' ? '<span class="text-green-600">✓</span>' : p.balcon?.toLowerCase() === 'no' ? '<span class="text-red-400">✗</span>' : '<span class="text-slate-300">-</span>'}</td>
                 <td class="px-2 py-2.5 text-center text-xs">${p.banos && p.banos !== '0' ? p.banos : '<span class="text-slate-300">-</span>'}</td>
+                <td class="px-2 py-2.5 text-right text-xs font-mono">${p._expensas > 0 ? '$' + Math.round(p._expensas / 1000) + 'k' : '<span class="text-slate-300">-</span>'}</td>
               </tr>
             `;}).join('')}
           </tbody>
