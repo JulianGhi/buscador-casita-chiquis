@@ -192,6 +192,15 @@ function calculateProperty(p) {
   const expensas = parseFloat(p.expensas) || 0;
 
   const precioNeg = costs.precio;  // precio con negociación aplicada
+  const antiguedad = parseFloat(p.antiguedad) || null;
+
+  // Calcular si es nueva (agregada en últimos 7 días)
+  const diasAgregado = diasHace(p.fecha_agregado);
+  const esNueva = diasAgregado !== null && diasAgregado <= 7;
+
+  // Calcular si se vendió recientemente (inactiva + fecha_inactivo en últimos 7 días)
+  const diasInactivo = diasHace(p.fecha_inactivo);
+  const vendidaReciente = (p.activo || '').toLowerCase() === 'no' && diasInactivo !== null && diasInactivo <= 7;
 
   const calc = {
     ...p,
@@ -200,6 +209,9 @@ function calculateProperty(p) {
     _hayNeg: CONFIG.NEGOCIACION > 0,
     _m2: m2,
     _expensas: expensas,
+    _antiguedad: antiguedad,
+    _esNueva: esNueva,
+    _vendidaReciente: vendidaReciente,
     _preciom2: m2 > 0 ? Math.round(precio / m2) : 0,
     _ref: REF_M2[barrio] || 0,
     // Costos (de calculateCosts)
@@ -479,7 +491,14 @@ function ratingStars(rating) {
 }
 
 function fechaIndicators(p) {
+  const badges = [];
   const items = [];
+
+  // Badge de nueva (agregada en últimos 7 días)
+  if (p._esNueva) badges.push('<span class="text-[10px] bg-green-500 text-white px-1 rounded">NUEVA</span>');
+
+  // Badge de vendida recientemente
+  if (p._vendidaReciente) badges.push('<span class="text-[10px] bg-purple-500 text-white px-1 rounded">VENDIDA</span>');
 
   // Publicado (cuánto tiempo lleva el aviso online)
   const pubRel = fechaRelativa(p.fecha_publicado);
@@ -489,6 +508,8 @@ function fechaIndicators(p) {
   const agrRel = fechaRelativa(p.fecha_agregado);
   if (agrRel) items.push(`➕${agrRel}`);
 
-  if (items.length === 0) return '';
-  return `<div class="text-[10px] text-slate-400 mt-0.5">${items.join(' · ')}</div>`;
+  const badgeHtml = badges.length ? `<div class="flex gap-1 mt-0.5">${badges.join('')}</div>` : '';
+  const itemsHtml = items.length ? `<div class="text-[10px] text-slate-400 mt-0.5">${items.join(' · ')}</div>` : '';
+
+  return badgeHtml + itemsHtml;
 }
