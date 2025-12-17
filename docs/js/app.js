@@ -5,7 +5,7 @@
 
 function showDetail(idx) {
   state.selectedProperty = idx;
-  state.negotiationPct = 0;
+  state.negotiationPct = CONFIG.NEGOCIACION || 0;  // Usar valor global como default
   state.dolarEstimado = null;
   render();
 }
