@@ -183,6 +183,7 @@ function renderTable(filtered) {
               <th class="px-3 py-2.5 text-left font-medium text-slate-600">Barrio</th>
               <th class="px-2 py-2.5 text-center font-medium text-slate-600">Tipo</th>
               <th class="px-3 py-2.5 text-right font-medium text-slate-600">Precio</th>
+              <th class="px-2 py-2.5 text-right font-medium text-slate-600" title="Expensas">Exp</th>
               <th class="px-2 py-2.5 text-right font-medium text-slate-600" title="m² cubiertos">m² cub</th>
               <th class="px-2 py-2.5 text-right font-medium text-slate-600" title="m² descubiertos (balcón + terraza)">m² desc</th>
               <th class="px-3 py-2.5 text-right font-medium text-slate-600">$/m²</th>
@@ -193,7 +194,6 @@ function renderTable(filtered) {
               <th class="px-2 py-2.5 text-center font-medium text-slate-600" title="Terraza">🌿</th>
               <th class="px-2 py-2.5 text-center font-medium text-slate-600" title="Balcón">🪴</th>
               <th class="px-2 py-2.5 text-center font-medium text-slate-600" title="Baños">🚿</th>
-              <th class="px-2 py-2.5 text-right font-medium text-slate-600" title="Expensas">💵</th>
             </tr>
           </thead>
           <tbody class="divide-y divide-slate-100">
@@ -210,6 +210,7 @@ function renderTable(filtered) {
                 <td class="px-3 py-2.5 text-slate-600">${p.barrio ? escapeHtml(p.barrio) : '<span class="text-slate-300 text-xs italic">-</span>'}</td>
                 <td class="px-2 py-2.5 text-center text-xs text-slate-600">${p.tipo ? escapeHtml(p.tipo.toUpperCase()) : '<span class="text-slate-300">-</span>'}</td>
                 <td class="px-3 py-2.5 text-right font-mono text-slate-800">${p._precio > 0 ? '$' + p._precio.toLocaleString() : '<span class="text-slate-300">-</span>'}</td>
+                <td class="px-2 py-2.5 text-right text-xs font-mono text-slate-600">${p._expensas > 0 ? '$' + Math.round(p._expensas / 1000) + 'k' : '<span class="text-slate-300">-</span>'}</td>
                 <td class="px-2 py-2.5 text-right text-slate-600">${p._m2 ? p._m2 : '<span class="text-slate-300">-</span>'}</td>
                 <td class="px-2 py-2.5 text-right text-slate-600">${p.m2_desc && p.m2_desc !== '0' ? p.m2_desc : '<span class="text-slate-300">-</span>'}</td>
                 <td class="px-3 py-2.5 text-right font-mono text-slate-600">${p._preciom2 > 0 ? '$' + p._preciom2.toLocaleString() : '<span class="text-slate-300">-</span>'}</td>
@@ -220,7 +221,6 @@ function renderTable(filtered) {
                 <td class="px-2 py-2.5 text-center">${p.terraza?.toLowerCase() === 'si' ? '<span class="text-green-600">✓</span>' : p.terraza?.toLowerCase() === 'no' ? '<span class="text-red-400">✗</span>' : '<span class="text-slate-300">-</span>'}</td>
                 <td class="px-2 py-2.5 text-center">${p.balcon?.toLowerCase() === 'si' ? '<span class="text-green-600">✓</span>' : p.balcon?.toLowerCase() === 'no' ? '<span class="text-red-400">✗</span>' : '<span class="text-slate-300">-</span>'}</td>
                 <td class="px-2 py-2.5 text-center text-xs">${p.banos && p.banos !== '0' ? p.banos : '<span class="text-slate-300">-</span>'}</td>
-                <td class="px-2 py-2.5 text-right text-xs font-mono">${p._expensas > 0 ? '$' + Math.round(p._expensas / 1000) + 'k' : '<span class="text-slate-300">-</span>'}</td>
               </tr>
             `;}).join('')}
           </tbody>
