@@ -85,7 +85,7 @@ function renderMainHeader(activePage = 'buscador') {
           <button onclick="state.showConfig=!state.showConfig;render()" class="px-3 py-1.5 ${state.showConfig ? 'bg-blue-500 text-white' : 'bg-slate-200 text-slate-700'} text-sm rounded-lg hover:opacity-80" title="Config">⚙️</button>
         </div>
       </div>
-      <p class="text-xs text-slate-500 mt-1">Crédito $${getCreditoUSD().toLocaleString()} USD · Tengo $${CONFIG.PRESUPUESTO.toLocaleString()} · Busco $${getPrecioRange().min.toLocaleString()} - $${getPrecioRange().max.toLocaleString()}</p>
+      <p class="text-xs text-slate-500 mt-1">Crédito $${getCreditoUSD().toLocaleString()} USD · Tengo $${CONFIG.PRESUPUESTO.toLocaleString()} · Busco $${getPrecioRange().min.toLocaleString()} - $${getPrecioRange().max.toLocaleString()}${CONFIG.NEGOCIACION > 0 ? ' · <span class="text-orange-600 font-medium">🤝 Neg. -' + CONFIG.NEGOCIACION + '%</span>' : ''}</p>
     </div>
   `;
 }
@@ -209,7 +209,7 @@ function renderTable(filtered) {
                 <td class="px-3 py-2.5"><span class="font-medium text-slate-800">${p.direccion ? escapeHtml(p.direccion) : '<span class="text-slate-300 text-xs italic">sin dir</span>'}</span>${fechaIndicators(p)}</td>
                 <td class="px-3 py-2.5 text-slate-600">${p.barrio ? escapeHtml(p.barrio) : '<span class="text-slate-300 text-xs italic">-</span>'}</td>
                 <td class="px-2 py-2.5 text-center text-xs text-slate-600">${p.tipo ? escapeHtml(p.tipo.toUpperCase()) : '<span class="text-slate-300">-</span>'}</td>
-                <td class="px-3 py-2.5 text-right font-mono text-slate-800">${p._precio > 0 ? '$' + p._precio.toLocaleString() : '<span class="text-slate-300">-</span>'}</td>
+                <td class="px-3 py-2.5 text-right font-mono text-slate-800">${p._precio > 0 ? (p._hayNeg ? '<span class="text-xs line-through text-slate-400">$' + p._precio.toLocaleString() + '</span><br><span class="text-orange-600">$' + p._precioNeg.toLocaleString() + '</span>' : '$' + p._precio.toLocaleString()) : '<span class="text-slate-300">-</span>'}</td>
                 <td class="px-2 py-2.5 text-right text-xs font-mono text-slate-600">${p._expensas > 0 ? '$' + Math.round(p._expensas / 1000) + 'k' : '<span class="text-slate-300">-</span>'}</td>
                 <td class="px-2 py-2.5 text-right text-slate-600">${p._m2 ? p._m2 : '<span class="text-slate-300">-</span>'}</td>
                 <td class="px-2 py-2.5 text-right text-slate-600">${p.m2_desc && p.m2_desc !== '0' ? p.m2_desc : '<span class="text-slate-300">-</span>'}</td>
@@ -367,6 +367,7 @@ function renderConfigTab_General() {
       ${configInput('Dólar base (ARS/USD)', CONFIG.DOLAR_BASE, "updateConfig('DOLAR_BASE', parseInt(this.value))")}
       ${configDisplay('= Crédito en USD', '$' + getCreditoUSD().toLocaleString(), 'font-bold ' + THEME.success.text)}
       ${configInput('Tengo para poner (USD)', CONFIG.PRESUPUESTO, "updateConfig('PRESUPUESTO', parseInt(this.value))")}
+      ${configInput('Negociación base (%)', CONFIG.NEGOCIACION, "updateConfig('NEGOCIACION', parseFloat(this.value))", { step: '0.5' })}
       ${configDisplay('= Rango de precios', '$' + getPrecioRange().min.toLocaleString() + ' - $' + getPrecioRange().max.toLocaleString())}
       ${configInput('Auto-refresh (seg, 0=off)', CONFIG.AUTO_REFRESH, "updateConfig('AUTO_REFRESH', parseInt(this.value)); startAutoRefresh();")}
     </div>

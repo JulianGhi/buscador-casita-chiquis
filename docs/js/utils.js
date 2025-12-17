@@ -185,15 +185,19 @@ function calculateProperty(p) {
   // Asumir siempre inmobiliaria EXCEPTO si explícitamente es venta directa
   const tieneInmob = !esVentaDirecta(p.inmobiliaria);
 
-  // Usar calculateCosts para costos
-  const costs = calculateCosts(precio, { tieneInmob });
+  // Usar calculateCosts para costos (con negociación global si está configurada)
+  const costs = calculateCosts(precio, { tieneInmob, negociacionPct: CONFIG.NEGOCIACION || 0 });
 
   // Calcular datos básicos
   const expensas = parseFloat(p.expensas) || 0;
 
+  const precioNeg = costs.precio;  // precio con negociación aplicada
+
   const calc = {
     ...p,
     _precio: precio,
+    _precioNeg: precioNeg,
+    _hayNeg: CONFIG.NEGOCIACION > 0,
     _m2: m2,
     _expensas: expensas,
     _preciom2: m2 > 0 ? Math.round(precio / m2) : 0,
