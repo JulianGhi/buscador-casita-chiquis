@@ -18,7 +18,6 @@ import json
 import re
 import subprocess
 import time
-import unicodedata
 from datetime import datetime, timedelta
 from pathlib import Path
 
@@ -34,8 +33,6 @@ import httpx
 # =============================================================================
 from core import (
     # Constantes
-    BARRIOS_CABA,
-    ATTR_PATTERNS,
     SCOPES,
     SHEET_ID,
     WORKSHEET_NAME,
@@ -44,15 +41,9 @@ from core import (
     PRINTS_DIR,
     PRINTS_INDEX,
     # Helpers
-    quitar_tildes,
-    extraer_numero,
-    extraer_m2,
-    detectar_barrio,
-    extraer_id_propiedad,
     get_active_rows,
     calcular_m2_faltantes,
     inferir_valores_faltantes,
-    detectar_atributo,
     # Sheets API
     get_client,
     get_worksheet,
