@@ -741,6 +741,24 @@ def extraer_datos_pdf(filepath):
         data['luminoso'] = 'si'
 
     # =========================================================================
+    # APTO CRÉDITO
+    # =========================================================================
+    if re.search(r'apto\s*(cr[eé]dito|bancario|banco)|acepta\s*cr[eé]dito|cr[eé]dito\s*hipotecario', texto_lower):
+        # Verificar que no sea negación
+        if re.search(r'no\s+apto|sin\s+cr[eé]dito|no\s+acepta', texto_lower):
+            data['apto_credito'] = 'no'
+        else:
+            data['apto_credito'] = 'si'
+
+    # =========================================================================
+    # ASCENSOR
+    # =========================================================================
+    if re.search(r'sin\s+ascensor|no\s+tiene\s+ascensor', texto_lower):
+        data['ascensor'] = 'no'
+    elif re.search(r'ascensor|con\s+ascensor', texto_lower):
+        data['ascensor'] = 'si'
+
+    # =========================================================================
     # ID DE PROPIEDAD (para verificación)
     # =========================================================================
     # MercadoLibre: MLA-123456789
