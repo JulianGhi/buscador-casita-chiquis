@@ -157,6 +157,13 @@ def scrape_argenprop(url):
                     if exp_val < 1000:
                         exp_val = exp_val * 1000
                     data['expensas'] = str(exp_val)
+            elif 'estado' in txt:
+                # Estado del inmueble: "Estado: Usado", "Estado del inmueble: Buen estado"
+                # Valores comunes: A estrenar, Usado, Buen estado, Muy buen estado, A reciclar
+                txt_clean = txt.replace('estado del inmueble', '').replace('estado:', '').replace('estado', '').strip()
+                txt_clean = txt_clean.strip(': ').title()
+                if txt_clean and txt_clean.lower() not in ['si', 'no', '']:
+                    data['estado'] = txt_clean
 
         # Luminosidad (buscar en descripción completa)
         desc_full = soup.select_one('.property-description-container, .property-description')
@@ -357,6 +364,10 @@ def scrape_mercadolibre(url):
                         data['terraza'] = result
                     else:
                         data['terraza'] = 'si' if 'sí' in v.lower() or v.lower() == 'si' else 'no'
+                elif 'estado' in h or 'condición' in h or 'condicion' in h:
+                    # Estado del inmueble: Usado, A estrenar, Buen estado, etc.
+                    if v and v.lower() not in ['si', 'sí', 'no']:
+                        data['estado'] = v.title()
 
         # Info del título y URL
         title = soup.select_one('h1.ui-pdp-title')

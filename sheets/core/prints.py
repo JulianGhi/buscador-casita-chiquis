@@ -758,6 +758,23 @@ def extraer_datos_pdf(filepath):
         data['disposicion'] = 'contrafrente'
 
     # =========================================================================
+    # ESTADO DEL INMUEBLE
+    # =========================================================================
+    # Buscar "Estado: Usado", "Estado del inmueble: Buen estado", etc.
+    estado_match = re.search(
+        r'(?:estado(?:\s+del\s+inmueble)?|condici[oó]n)[:\s]*(a\s+estrenar|usado|buen(?:\s+estado)?|muy\s+buen(?:\s+estado)?|excelente|a\s+reciclar|a\s+refaccionar|reciclado|en\s+construcci[oó]n)',
+        texto_lower
+    )
+    if estado_match:
+        val = estado_match.group(1).strip().title()
+        # Normalizar valores comunes
+        if val.lower() == 'buen':
+            val = 'Buen Estado'
+        elif val.lower() == 'muy buen':
+            val = 'Muy Buen Estado'
+        data['estado'] = val
+
+    # =========================================================================
     # LUMINOSIDAD (usando detectar_atributo compartido)
     # =========================================================================
     result = detectar_atributo(texto, 'luminosidad')

@@ -122,7 +122,7 @@ CAMPOS_IMPORTANTES = ['terraza', 'balcon', 'cocheras', 'luminosidad', 'disposici
 SCRAPEABLE_COLS = ['precio', 'm2_cub', 'm2_tot', 'm2_desc', 'm2_terr', 'amb', 'barrio', 'direccion',
                    'expensas', 'terraza', 'antiguedad', 'apto_credito', 'tipo', 'activo',
                    'cocheras', 'disposicion', 'piso', 'ascensor', 'balcon', 'luminosidad',
-                   'fecha_publicado', 'banos', 'inmobiliaria', 'dormitorios', 'fecha_print']
+                   'fecha_publicado', 'banos', 'inmobiliaria', 'dormitorios', 'fecha_print', 'estado']
 
 
 # =============================================================================
