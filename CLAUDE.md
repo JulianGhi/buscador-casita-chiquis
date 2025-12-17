@@ -253,6 +253,11 @@ El sistema compara datos de 3 fuentes antes de importar:
 - Discrepancias: NO importa, muestra warning
 - Usar `--dry-run` para preview sin modificar
 
+**Política de contradicciones:**
+- Un campo vacío NO cuenta como contradicción (si Web="-" y PDF="si" → importa)
+- Contradicción = dos fuentes con valores DIFERENTES (ej: Web="no" vs PDF="si")
+- Diferencias de formato también cuentan (ej: cocheras="0" vs cochera="si")
+
 ```bash
 # Flujo recomendado
 python sync_sheet.py scrape        # Actualiza web cache
