@@ -574,9 +574,24 @@ def extraer_datos_pdf(filepath):
         dict: Datos extraídos {precio, moneda, m2_tot, m2_cub, m2_desc,
               expensas, ambientes, banos, terraza, balcon, cochera, ...}
     """
-    texto = extraer_texto_pdf(filepath)
-    if not texto:
+    texto_completo = extraer_texto_pdf(filepath)
+    if not texto_completo:
         return {}
+
+    # Filtrar texto: solo usar contenido ANTES del sidebar de propiedades sugeridas
+    # Esto evita capturar datos de otras propiedades
+    cortes = [
+        'estas propiedades también podrían interesarte',
+        'propiedades similares',
+        'te puede interesar',
+    ]
+    texto = texto_completo
+    texto_check = texto_completo.lower()
+    for corte in cortes:
+        idx = texto_check.find(corte)
+        if idx > 500:  # Solo cortar si hay suficiente contenido antes
+            texto = texto_completo[:idx]
+            break
 
     data = {}
     texto_lower = texto.lower()
@@ -653,10 +668,17 @@ def extraer_datos_pdf(filepath):
     # =========================================================================
     # AMBIENTES / HABITACIONES
     # =========================================================================
-    # 3 ambientes / 3 amb / Ambientes: 3
-    amb_match = re.search(r'(\d+)\s*amb', texto_lower)
+    # Priorizar dato estructurado de MercadoLibre: línea que empieza con "Ambientes" y tiene número
+    # Formato típico: "      Ambientes                   3"
+    # Usar newline antes de Ambientes para asegurar que es dato estructurado, no título
+    amb_match = re.search(r'(?:^|\n)\s*ambientes\s+(\d{1,2})(?:\s|$)', texto_lower, re.MULTILINE)
     if amb_match:
         data['ambientes'] = int(amb_match.group(1))
+    elif not data.get('ambientes'):
+        # Fallback: "3 ambientes" o "3 amb" en descripción (número ANTES de "amb")
+        amb_match = re.search(r'(\d{1,2})\s*amb(?:ientes)?(?:\s|\.|\,|$)', texto_lower)
+        if amb_match:
+            data['ambientes'] = int(amb_match.group(1))
 
     # Dormitorios / Habitaciones
     dorm_match = re.search(
@@ -743,18 +765,36 @@ def extraer_datos_pdf(filepath):
         data['luminoso'] = result
 
     # =========================================================================
-    # APTO CRÉDITO (usando detectar_atributo compartido)
+    # APTO CRÉDITO - Buscar primero patrón estructurado "Apto crédito: Si/No"
     # =========================================================================
-    result = detectar_atributo(texto, 'apto_credito')
-    if result:
-        data['apto_credito'] = result
+    # MercadoLibre muestra "Apto crédito    Si" o "Apto crédito    No" en tabla
+    apto_match = re.search(
+        r'apto\s+cr[eé]dito\s+([sn][ioí])',
+        texto_lower
+    )
+    if apto_match:
+        val = apto_match.group(1).lower()
+        data['apto_credito'] = 'si' if val.startswith('s') else 'no'
+    else:
+        # Fallback a detectar_atributo solo si no encontró patrón estructurado
+        result = detectar_atributo(texto, 'apto_credito')
+        if result:
+            data['apto_credito'] = result
 
     # =========================================================================
-    # ASCENSOR (usando detectar_atributo compartido)
+    # ASCENSOR - Buscar primero patrón estructurado "Ascensor: Si/No"
     # =========================================================================
-    result = detectar_atributo(texto, 'ascensor')
-    if result:
-        data['ascensor'] = result
+    asc_match = re.search(
+        r'ascensor\s+([sn][ioí])',
+        texto_lower
+    )
+    if asc_match:
+        val = asc_match.group(1).lower()
+        data['ascensor'] = 'si' if val.startswith('s') else 'no'
+    else:
+        result = detectar_atributo(texto, 'ascensor')
+        if result:
+            data['ascensor'] = result
 
     # =========================================================================
     # ID DE PROPIEDAD (para verificación)
@@ -920,6 +960,21 @@ def comparar_tres_fuentes(campo, val_sheet, val_web, val_pdf):
 
         return v
 
+    # Función para comparar valores con tolerancia numérica
+    def valores_iguales(v1, v2, campo):
+        if v1 == v2:
+            return True
+        # Tolerancia numérica para expensas (2%)
+        if campo == 'expensas':
+            try:
+                n1, n2 = float(v1), float(v2)
+                if max(n1, n2) > 0:
+                    diff_pct = abs(n1 - n2) / max(n1, n2)
+                    return diff_pct < 0.02  # 2% tolerancia
+            except (ValueError, TypeError):
+                pass
+        return False
+
     # Normalizar valores
     s = normalizar(val_sheet, campo)
     w = normalizar(val_web, campo)
@@ -936,7 +991,7 @@ def comparar_tres_fuentes(campo, val_sheet, val_web, val_pdf):
 
     # Caso 1: Sheet vacío
     if not s:
-        if w and p and w == p:
+        if w and p and valores_iguales(w, p, campo):
             # Web y PDF coinciden → alta confianza
             result['accion'] = 'importar'
             result['confianza'] = 'alta'
@@ -951,7 +1006,7 @@ def comparar_tres_fuentes(campo, val_sheet, val_web, val_pdf):
             result['accion'] = 'solo_web'
             result['confianza'] = 'media'
             result['valor_sugerido'] = val_web
-        elif w and p and w != p:
+        elif w and p and not valores_iguales(w, p, campo):
             # Web y PDF difieren → revisar
             result['accion'] = 'revisar'
             result['confianza'] = 'baja'
@@ -960,10 +1015,10 @@ def comparar_tres_fuentes(campo, val_sheet, val_web, val_pdf):
     # Caso 2: Sheet tiene valor
     else:
         if w and p:
-            if s == w == p:
+            if valores_iguales(s, w, campo) and valores_iguales(w, p, campo):
                 # Todos coinciden → OK
                 result['accion'] = 'ok'
-            elif w == p and s != w:
+            elif valores_iguales(w, p, campo) and not valores_iguales(s, w, campo):
                 # Web y PDF coinciden pero sheet difiere → desactualizado
                 result['accion'] = 'desactualizado'
                 result['confianza'] = 'alta'
@@ -972,10 +1027,10 @@ def comparar_tres_fuentes(campo, val_sheet, val_web, val_pdf):
                 # Los 3 difieren → revisar
                 result['accion'] = 'revisar'
                 result['confianza'] = 'baja'
-        elif w and s != w:
+        elif w and not valores_iguales(s, w, campo):
             result['accion'] = 'revisar'
             result['confianza'] = 'media'
-        elif p and s != p:
+        elif p and not valores_iguales(s, p, campo):
             result['accion'] = 'revisar'
             result['confianza'] = 'media'
         # else: sheet coincide con lo que hay
