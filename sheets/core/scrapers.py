@@ -149,10 +149,14 @@ def scrape_argenprop(url):
                 if num:
                     data['banos'] = num
             elif 'expensas' in txt:
-                # Extraer sin quitar miles para mantener pesos completos
-                num = extraer_numero(txt)
+                # Quitar puntos de miles para obtener número completo (107.000 → 107000)
+                num = extraer_numero(txt, quitar_miles=True)
                 if num:
-                    data['expensas'] = num
+                    exp_val = int(num)
+                    # Si es muy bajo, probablemente está en miles (ej: 107 = $107.000)
+                    if exp_val < 1000:
+                        exp_val = exp_val * 1000
+                    data['expensas'] = str(exp_val)
 
         # Luminosidad (buscar en descripción completa)
         desc_full = soup.select_one('.property-description-container, .property-description')
