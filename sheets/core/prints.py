@@ -341,6 +341,11 @@ def extract_id_from_pdf(filepath):
         if meli_match:
             return f"MLA{meli_match.group(1)}"
 
+        # MercadoLibre alternativo: "Publicación #2539332096"
+        pub_match = re.search(r'[Pp]ublicaci[oó]n\s*#\s*(\d{8,12})', contenido)
+        if pub_match:
+            return f"MLA{pub_match.group(1)}"
+
         # Argenprop: URLs con --123456
         argenprop_match = re.search(r'argenprop\.com[^\s]*--(\d+)', contenido)
         if argenprop_match:
@@ -738,15 +743,22 @@ def extraer_datos_pdf(filepath):
     # =========================================================================
     # ID DE PROPIEDAD (para verificación)
     # =========================================================================
-    # MercadoLibre
+    # MercadoLibre: MLA-123456789
     meli_match = re.search(r'MLA-?(\d{8,12})', texto, re.IGNORECASE)
     if meli_match:
         data['_prop_id'] = f"MLA{meli_match.group(1)}"
 
+    # MercadoLibre alternativo: "Publicación #2539332096"
+    if '_prop_id' not in data:
+        pub_match = re.search(r'[Pp]ublicaci[oó]n\s*#\s*(\d{8,12})', texto)
+        if pub_match:
+            data['_prop_id'] = f"MLA{pub_match.group(1)}"
+
     # Argenprop
-    argenprop_match = re.search(r'argenprop\.com[^\s]*--(\d+)', texto)
-    if argenprop_match:
-        data['_prop_id'] = f"AP{argenprop_match.group(1)}"
+    if '_prop_id' not in data:
+        argenprop_match = re.search(r'argenprop\.com[^\s]*--(\d+)', texto)
+        if argenprop_match:
+            data['_prop_id'] = f"AP{argenprop_match.group(1)}"
 
     return data
 
