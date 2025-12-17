@@ -65,9 +65,10 @@ ATTR_PATTERNS = {
     },
     'apto_credito': {
         'si': ['apto credito: si', 'apto crédito: si', 'apto credito: sí', 'apto crédito: sí',
-               'apto banco', 'acepta credito', 'acepta crédito'],
+               'apto banco', 'acepta credito', 'acepta crédito',
+               'es apto credito', 'es apto crédito', 'apto credito', 'apto crédito'],
         'no': ['apto credito: no', 'apto crédito: no', 'no apto credito', 'no apto crédito',
-               'no acepta credito', 'no acepta crédito'],
+               'no acepta credito', 'no acepta crédito', 'no es apto credito', 'no es apto crédito'],
         'solo_label': False,
     },
 }

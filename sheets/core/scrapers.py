@@ -410,6 +410,12 @@ def scrape_mercadolibre(url):
         if result_luz == 'si':
             data['luminosidad'] = 'si'
 
+        # Apto crédito (buscar en descripción si no se encontró en campos estructurados)
+        if 'apto_credito' not in data:
+            result_apto = detectar_atributo(full_text, 'apto_credito')
+            if result_apto:
+                data['apto_credito'] = result_apto
+
         # Tipo de propiedad
         if '-ph-' in search_text or ' ph ' in search_text or 'p.h' in search_text:
             data['tipo'] = 'ph'
