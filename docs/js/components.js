@@ -235,46 +235,74 @@ function renderCards(filtered) {
   return `
     <div class="space-y-3">
       ${filtered.map(p => {
-        const completePct = p._completeness * 25;
-        const barColor = p._completeness >= 3 ? 'bg-green-500' : p._completeness >= 2 ? 'bg-yellow-500' : 'bg-red-400';
         const isInactivo = (p.activo || '').toLowerCase() === 'no';
-        const noAptoCredito = (p.apto_credito || '').toLowerCase() !== 'si';
+        const aptoCredito = (p.apto_credito || '').toLowerCase();
+        const noAptoCredito = aptoCredito !== 'si';
         const cardStyle = isInactivo
           ? 'bg-red-50 border-2 border-red-200 opacity-70'
-          : noAptoCredito
-            ? 'bg-yellow-100 border-2 border-yellow-300'
-            : 'bg-white';
-        const warnings = [];
-        if (isInactivo) warnings.push('<span class="text-red-600">INACTIVO</span>');
-        if (noAptoCredito) warnings.push('<span class="text-amber-600">NO APTO CRÉDITO</span>');
-        if (p._missingCount > 0) warnings.push(`<span class="text-orange-500">${p._missingCount} DATO${p._missingCount > 1 ? 'S' : ''} FALTANTE${p._missingCount > 1 ? 'S' : ''}</span>`);
+          : noAptoCredito && aptoCredito === 'no'
+            ? 'bg-yellow-50 border-l-4 border-yellow-400'
+            : p._ok
+              ? 'bg-white border-l-4 border-green-400'
+              : 'bg-white';
+
+        // Amenities compactos
+        const amenities = [
+          p.terraza?.toLowerCase() === 'si' ? '🌿' : null,
+          p.balcon?.toLowerCase() === 'si' ? '🪴' : null,
+          p.cocheras && p.cocheras !== '0' ? '🚗' : null,
+          p.banos && p.banos !== '0' ? '🚿' + p.banos : null,
+          p.amb ? '🚪' + p.amb : null,
+        ].filter(Boolean);
+
         return `
           <div class="${cardStyle} rounded-xl p-4 shadow-sm cursor-pointer hover:shadow-md transition-shadow" onclick="showDetail(${p._idx})">
-            ${warnings.length ? '<div class="text-xs font-medium mb-1">' + warnings.join(' · ') + '</div>' : ''}
-            <div class="flex items-center gap-2 mb-2">
-              <div class="flex-1 h-1.5 bg-slate-200 rounded-full overflow-hidden">
-                <div class="h-full ${barColor} rounded-full transition-all" style="width: ${completePct}%"></div>
+            <!-- Header: Tier + Score + Status + Apto -->
+            <div class="flex items-center justify-between mb-2">
+              <div class="flex items-center gap-2">
+                ${tierBadge(p._tier)}
+                <span class="text-xs font-mono px-1.5 py-0.5 rounded ${p._score > 50 ? 'bg-green-100 text-green-700 font-bold' : p._score > 0 ? 'bg-green-50 text-green-600' : 'bg-slate-100 text-slate-400'}">⭐${p._score}</span>
+                ${statusBadge(p.status)}
               </div>
-              <span class="text-xs text-slate-400">${p._completeness}/4</span>
+              <div class="flex items-center gap-1">
+                ${aptoCredito === 'si' ? '<span class="text-xs bg-purple-100 text-purple-700 px-1.5 py-0.5 rounded">Apto</span>' : aptoCredito === 'no' ? '<span class="text-xs bg-red-100 text-red-600 px-1.5 py-0.5 rounded">No apto</span>' : '<span class="text-xs bg-yellow-100 text-yellow-700 px-1.5 py-0.5 rounded">?</span>'}
+                ${printBadge(p.fecha_print)}
+              </div>
             </div>
-            <div class="flex items-start justify-between gap-2 mb-1">
-              <span class="font-medium text-slate-800">${p.direccion ? escapeHtml(p.direccion) : '<span class="text-slate-300 italic">sin dirección</span>'}</span>
-              ${p._precio > 0 ? okPill(p._ok) : ''}
+
+            <!-- Dirección y Barrio -->
+            <div class="mb-2">
+              <div class="font-medium text-slate-800 leading-tight">${p.direccion ? escapeHtml(p.direccion) : '<span class="text-slate-300 italic">sin dirección</span>'}</div>
+              <div class="text-sm text-slate-500">${p.barrio ? escapeHtml(p.barrio) : '<span class="text-slate-300 italic">sin barrio</span>'} ${p.tipo ? '· ' + p.tipo.toUpperCase() : ''}</div>
             </div>
-            <div class="text-sm text-slate-500 mb-2">${p.barrio ? escapeHtml(p.barrio) : '<span class="text-slate-300 italic">sin barrio</span>'}</div>
-            <div class="flex items-center gap-2 text-sm mb-2">
-              <span class="font-mono font-medium">${p._precio > 0 ? '$' + p._precio.toLocaleString() : '<span class="text-slate-300">$?</span>'}</span>
-              <span class="text-slate-300">·</span>
-              <span>${p._m2 ? p._m2 + 'm²' : '<span class="text-slate-300">m²?</span>'}</span>
-              ${p._preciom2 > 0 ? `<span class="text-slate-300">·</span><span class="text-slate-500">$${p._preciom2.toLocaleString()}/m²</span>` : ''}
+
+            <!-- Precio y Expensas -->
+            <div class="flex items-baseline gap-3 mb-2">
+              ${p._precio > 0 ? (p._hayNeg
+                ? '<span class="text-sm line-through text-slate-400">$' + p._precio.toLocaleString() + '</span><span class="text-lg font-bold text-orange-600">$' + p._precioNeg.toLocaleString() + '</span>'
+                : '<span class="text-lg font-bold text-slate-800">$' + p._precio.toLocaleString() + '</span>')
+              : '<span class="text-slate-300">$?</span>'}
+              ${p._expensas > 0 ? '<span class="text-xs text-slate-500">+ $' + Math.round(p._expensas/1000) + 'k exp</span>' : ''}
             </div>
-            <div class="flex flex-wrap items-center gap-2">
-              ${statusBadge(p.status)}
-              ${activoBadge(p.activo)}
+
+            <!-- Stats: m², $/m², vs Ref -->
+            <div class="flex items-center gap-3 text-sm text-slate-600 mb-2">
+              <span>${p._m2 ? p._m2 + 'm²' : '<span class="text-slate-300">-</span>'}</span>
+              ${p._preciom2 > 0 ? '<span class="text-slate-400">·</span><span>$' + p._preciom2.toLocaleString() + '/m²</span>' : ''}
               ${evalIcon(p._vsRef)}
-              ${tierBadge(p._tier)}
-              <span class="text-xs font-mono px-1.5 py-0.5 rounded ${p._score > 50 ? 'bg-green-100 text-green-700 font-bold' : p._score > 0 ? 'bg-green-50 text-green-600' : 'bg-slate-100 text-slate-400'}">⭐${p._score}</span>
             </div>
+
+            <!-- A juntar + OK -->
+            <div class="flex items-center justify-between mb-2 py-2 px-3 rounded-lg ${p._ok ? 'bg-green-50' : 'bg-red-50'}">
+              <span class="text-xs text-slate-600">A juntar:</span>
+              <div class="flex items-center gap-2">
+                <span class="font-mono font-medium ${p._ok ? 'text-green-700' : 'text-red-600'}">$${p._precio > 0 ? p._total.toLocaleString() : '-'}</span>
+                ${p._precio > 0 ? okPill(p._ok) : ''}
+              </div>
+            </div>
+
+            <!-- Amenities -->
+            ${amenities.length > 0 ? '<div class="flex items-center gap-2 text-sm">' + amenities.join('<span class="text-slate-300">·</span>') + '</div>' : ''}
           </div>
         `;
       }).join('')}
