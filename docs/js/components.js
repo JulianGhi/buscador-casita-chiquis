@@ -418,6 +418,7 @@ function renderCards(filtered) {
               </div>
               <div class="flex items-center gap-1.5">
                 ${tierBadge(p._tier)}
+                <span class="text-xs font-mono ${p._score > 50 ? 'text-green-600 font-bold' : p._score > 0 ? 'text-green-500' : 'text-slate-400'}">${p._score}</span>
                 ${p._esNueva ? '<span class="text-[10px] bg-green-500 text-white px-1.5 py-0.5 rounded font-medium">NUEVA</span>' : ''}
                 ${p._vendidaReciente ? '<span class="text-[10px] bg-purple-500 text-white px-1.5 py-0.5 rounded font-medium">VENDIDA</span>' : ''}
               </div>
