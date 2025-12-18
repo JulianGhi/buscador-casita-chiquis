@@ -110,6 +110,12 @@ function resetConfig() {
 // ============================================
 
 function render() {
+  // Guardar estado del input de búsqueda ANTES de destruir el DOM
+  const searchInput = document.getElementById('search-input');
+  const searchWasFocused = document.activeElement === searchInput;
+  const searchValue = searchInput?.value || '';
+  const searchCursor = searchInput?.selectionStart || 0;
+
   const properties = getProperties();
   const filtered = getFiltered(properties);
   const stats = getStats(properties);
@@ -141,6 +147,16 @@ function render() {
 
     ${selectedProp ? renderDetailModal(selectedProp) : ''}
   `;
+
+  // Restaurar estado del input de búsqueda DESPUÉS de recrear el DOM
+  const newSearchInput = document.getElementById('search-input');
+  if (newSearchInput) {
+    newSearchInput.value = searchValue;
+    if (searchWasFocused) {
+      newSearchInput.focus();
+      newSearchInput.setSelectionRange(searchCursor, searchCursor);
+    }
+  }
 
   updateContentPadding();
 }

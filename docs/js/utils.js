@@ -2,37 +2,17 @@
 // UTILIDADES
 // ============================================
 
-// Debounce para evitar renders excesivos
-function debounce(fn, delay) {
-  let timeoutId;
-  return function(...args) {
-    clearTimeout(timeoutId);
-    timeoutId = setTimeout(() => fn.apply(this, args), delay);
-  };
-}
-
-// Handler de búsqueda con debounce - NO hace render completo
+// Debounce: retrasa ejecución hasta que el usuario deja de escribir
 let searchTimeout;
 function handleSearchDebounced(value) {
   clearTimeout(searchTimeout);
   searchTimeout = setTimeout(() => {
-    if (state.searchText !== value) {
-      state.searchText = value;
-      render();
-      // Restaurar valor y foco del input después del render
-      requestAnimationFrame(() => {
-        const input = document.getElementById('search-input');
-        if (input) {
-          input.value = value;
-          input.focus();
-          input.setSelectionRange(value.length, value.length);
-        }
-      });
-    }
+    state.searchText = value;
+    render();
   }, 300);
 }
 
-// Limpia búsqueda
+// Limpia búsqueda y re-renderiza
 function clearSearch() {
   state.searchText = '';
   render();
