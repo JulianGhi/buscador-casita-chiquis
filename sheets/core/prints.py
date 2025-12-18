@@ -650,12 +650,12 @@ def _extraer_ambientes_pdf(texto_lower):
     # Priorizar dato estructurado de MercadoLibre: línea con "Ambientes" y número
     amb_match = re.search(r'(?:^|\n)\s*ambientes\s+(\d{1,2})(?:\s|$)', texto_lower, re.MULTILINE)
     if amb_match:
-        data['ambientes'] = int(amb_match.group(1))
+        data['amb'] = int(amb_match.group(1))
     else:
         # Fallback: "3 ambientes" o "3 amb" en descripción
         amb_match = re.search(r'(\d{1,2})\s*amb(?:ientes)?(?:\s|\.|\,|$)', texto_lower)
         if amb_match:
-            data['ambientes'] = int(amb_match.group(1))
+            data['amb'] = int(amb_match.group(1))
 
     # Dormitorios / Habitaciones
     dorm_match = re.search(
@@ -689,15 +689,13 @@ def _extraer_cochera_pdf(texto_lower):
         # Primero buscar cantidad: "cocheras: 0" = no tiene
         coch_num = re.search(r'cocheras?[:\s]*(\d+)', texto_lower)
         if coch_num:
-            num = int(coch_num.group(1))
-            data['cocheras'] = num
-            data['cochera'] = 'si' if num > 0 else 'no'
+            data['cocheras'] = int(coch_num.group(1))
         # Verificar negaciones explícitas
         elif re.search(r'sin\s+cochera|no\s+(?:tiene\s+)?cochera|cochera[:\s]*no', texto_lower):
-            data['cochera'] = 'no'
-        # Si menciona cochera sin número ni negación, asumir que tiene
+            data['cocheras'] = 0
+        # Si menciona cochera sin número ni negación, asumir que tiene 1
         elif re.search(r'con\s+cochera|c/cochera|tiene\s+cochera', texto_lower):
-            data['cochera'] = 'si'
+            data['cocheras'] = 1
     return data
 
 
@@ -769,7 +767,7 @@ def _extraer_atributos_si_no_pdf(texto_lower, texto_original):
     # LUMINOSIDAD
     result = detectar_atributo(texto_original, 'luminosidad')
     if result:
-        data['luminoso'] = result
+        data['luminosidad'] = result
 
     # APTO CRÉDITO - Buscar primero patrón estructurado
     apto_match = re.search(r'apto\s+cr[eé]dito\s+([sn][ioí])', texto_lower)
@@ -890,12 +888,13 @@ def validar_datos_pdf_vs_sheet(datos_pdf, datos_sheet):
         'm2_cub': 2,
         'm2_desc': 2,
         'expensas': 5000,    # $5000 tolerancia
-        'ambientes': 0,
+        'amb': 0,
         'banos': 0,
         'antiguedad': 1,     # 1 año tolerancia
+        'cocheras': 0,
     }
 
-    campos_texto = ['terraza', 'balcon', 'cochera', 'luminoso', 'disposicion']
+    campos_texto = ['terraza', 'balcon', 'luminosidad', 'disposicion']
 
     # Comparar campos numéricos
     for campo, tolerancia in campos_numericos.items():
@@ -1108,15 +1107,11 @@ def analizar_tres_fuentes(rows, prints_dir=None, cache=None):
     resultados = []
 
     # Campos a comparar (nombres del sheet)
-    # Mapping: sheet_name -> pdf_name (si es diferente)
     campos = ['terraza', 'balcon', 'cocheras', 'luminosidad', 'amb',
               'banos', 'antiguedad', 'expensas', 'disposicion', 'ascensor', 'apto_credito']
 
-    # Mapeo de nombres: sheet/cache -> PDF extractor
-    pdf_field_map = {
-        'amb': 'ambientes',
-        'cocheras': 'cochera',
-    }
+    # Mapeo de nombres: todos los scrapers ahora usan los mismos nombres que el sheet
+    pdf_field_map = {}
 
     for row in rows:
         fila = row.get('_row', 0)
