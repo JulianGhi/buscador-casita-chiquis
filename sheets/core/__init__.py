@@ -13,6 +13,8 @@ from .helpers import (
     # Constantes
     BARRIOS_CABA,
     ATTR_PATTERNS,
+    BARRIO_NORMALIZE,
+    REF_M2_DEFAULT,
     # Funciones de extraccion
     quitar_tildes,
     extraer_numero,
@@ -27,6 +29,10 @@ from .helpers import (
     detectar_atributo,
     # Inferencia de valores
     inferir_valores_faltantes,
+    # Normalizacion
+    normalizar_barrio,
+    # Generacion de notas
+    generar_nota_auto,
 )
 
 from .scrapers import (

@@ -40,6 +40,9 @@ from core import (
     # Helpers
     calcular_m2_faltantes,
     inferir_valores_faltantes,
+    normalizar_barrio,
+    generar_nota_auto,
+    extraer_id_propiedad,
     # Sheets API
     get_client,
     get_worksheet,
@@ -255,7 +258,23 @@ def cmd_scrape(check_all=False, no_cache=False, force_update=False):
     # Calcular m2 faltantes y aplicar inferencias a todas las filas
     m2_calculados = 0
     inferencias_total = 0
+    barrios_normalizados = 0
+    notas_generadas = 0
+    fechas_agregadas = 0
+    hoy = time.strftime('%Y-%m-%d')
+
     for row in rows:
+        # Solo procesar filas con link
+        if not row.get('link', '').startswith('http'):
+            continue
+
+        # Normalizar barrio
+        barrio_orig = row.get('barrio', '')
+        barrio_norm = normalizar_barrio(barrio_orig)
+        if barrio_norm != barrio_orig and 'barrio' in headers:
+            row['barrio'] = barrio_norm
+            barrios_normalizados += 1
+
         # Calcular m2 faltantes (si tenemos 2 de 3)
         m2_calc = calcular_m2_faltantes(row)
         for campo, valor in m2_calc.items():
@@ -268,10 +287,28 @@ def cmd_scrape(check_all=False, no_cache=False, force_update=False):
             row[campo] = valor
         inferencias_total += len(inferidos)
 
+        # Auto-setear fecha_agregado si falta
+        if not row.get('fecha_agregado') and 'fecha_agregado' in headers:
+            row['fecha_agregado'] = hoy
+            fechas_agregadas += 1
+
+        # Generar nota automática si está vacía
+        if not row.get('notas') and 'notas' in headers:
+            nota = generar_nota_auto(row)
+            if nota:
+                row['notas'] = nota
+                notas_generadas += 1
+
     if m2_calculados:
         print(f"📐 {m2_calculados} m² calculados (cub/tot/desc)")
     if inferencias_total:
         print(f"🧠 {inferencias_total} valores inferidos (status, cochera, ascensor, etc.)")
+    if barrios_normalizados:
+        print(f"🏘️ {barrios_normalizados} barrios normalizados")
+    if fechas_agregadas:
+        print(f"📅 {fechas_agregadas} fechas de agregado seteadas")
+    if notas_generadas:
+        print(f"📝 {notas_generadas} notas auto-generadas")
 
     # Guardar cambios
     data['rows'] = rows
@@ -1056,6 +1093,101 @@ def cmd_pendientes(solo_sin_print=False):
     print(f"📸 Tip: Guardá PDFs con Ctrl+P → 'Guardar como PDF'")
 
 
+def cmd_nuevos(scrape_after=True):
+    """Procesa PDFs nuevos desde data/prints/nuevos/."""
+    from core.prints import extraer_datos_pdf
+
+    nuevos_dir = PRINTS_DIR / 'nuevos'
+    if not nuevos_dir.exists():
+        nuevos_dir.mkdir(parents=True)
+        print(f"📁 Creado directorio: {nuevos_dir}")
+        print("   Guardá PDFs de avisos nuevos ahí")
+        return
+
+    # Buscar PDFs en /nuevos
+    pdfs = list(nuevos_dir.glob('*.pdf'))
+    if not pdfs:
+        print(f"📁 No hay PDFs en {nuevos_dir}")
+        return
+
+    print(f"📄 Procesando {len(pdfs)} PDFs de {nuevos_dir}\n")
+
+    # Cargar datos existentes
+    if not LOCAL_FILE.exists():
+        print("❌ Primero ejecutá: python sync_sheet.py pull")
+        return
+
+    with open(LOCAL_FILE, 'r', encoding='utf-8') as f:
+        data = json.load(f)
+
+    rows = data['rows']
+    headers = data['headers']
+    existing_links = {r.get('link', '') for r in rows}
+    hoy = time.strftime('%Y-%m-%d')
+
+    procesados = 0
+    agregados = 0
+
+    for pdf_path in pdfs:
+        print(f"   📄 {pdf_path.name}")
+
+        # Extraer datos del PDF
+        pdf_data = extraer_datos_pdf(str(pdf_path))
+        prop_id = pdf_data.get('_prop_id')
+
+        if not prop_id:
+            print(f"      ⚠️  No se pudo extraer ID del PDF")
+            continue
+
+        # Generar link según el tipo de ID
+        if prop_id.startswith('MLA'):
+            link = f"https://inmueble.mercadolibre.com.ar/{prop_id[:3]}-{prop_id[3:]}"
+        elif prop_id.startswith('AP'):
+            print(f"      ⚠️  Argenprop requiere URL completa, no se puede generar desde ID")
+            continue
+        else:
+            print(f"      ⚠️  Tipo de ID no soportado: {prop_id}")
+            continue
+
+        print(f"      🔗 {link}")
+
+        # Verificar si ya existe
+        if link in existing_links:
+            print(f"      ⚠️  Ya existe en el sheet")
+        else:
+            # Agregar nueva fila
+            max_row = max((r.get('_row', 1) for r in rows), default=1)
+            new_row = {
+                '_row': max_row + 1,
+                'link': link,
+                'activo': 'si',
+                'fecha_agregado': hoy,
+            }
+            rows.append(new_row)
+            existing_links.add(link)
+            agregados += 1
+            print(f"      ✅ Agregado como fila {max_row + 1}")
+
+        # Renombrar y mover PDF
+        new_name = f"{prop_id}_{hoy}.pdf"
+        new_path = PRINTS_DIR / new_name
+        pdf_path.rename(new_path)
+        print(f"      📁 Movido a: {new_name}")
+        procesados += 1
+
+    # Guardar cambios
+    if agregados > 0:
+        data['rows'] = rows
+        with open(LOCAL_FILE, 'w', encoding='utf-8') as f:
+            json.dump(data, f, ensure_ascii=False, indent=2)
+
+    print(f"\n✅ {procesados} PDFs procesados, {agregados} links agregados")
+
+    if agregados > 0 and scrape_after:
+        print(f"\n🔄 Scrapeando nuevos links...")
+        cmd_scrape()
+
+
 # =============================================================================
 # MAIN
 # =============================================================================
@@ -1077,10 +1209,11 @@ Flujo de trabajo:
     python sync_sheet.py prints compare  # 5. Comparar Sheet vs Web Cache vs PDF
     python sync_sheet.py prints import   # 5. Importar datos con consenso de fuentes
     python sync_sheet.py pendientes      # 6. Ver props con datos faltantes
+    python sync_sheet.py nuevos          # 7. Procesar PDFs de data/prints/nuevos/
         """
     )
 
-    parser.add_argument('command', choices=['pull', 'scrape', 'view', 'diff', 'push', 'prints', 'pendientes'],
+    parser.add_argument('command', choices=['pull', 'scrape', 'view', 'diff', 'push', 'prints', 'pendientes', 'nuevos'],
                        help='Comando a ejecutar')
     parser.add_argument('subcommand', nargs='?', default=None,
                        help='[prints] Subcomando: open, scan, validate, compare, import')
@@ -1128,6 +1261,8 @@ Flujo de trabajo:
             cmd_prints()
     elif args.command == 'pendientes':
         cmd_pendientes(solo_sin_print=args.sin_print)
+    elif args.command == 'nuevos':
+        cmd_nuevos()
 
 
 if __name__ == '__main__':

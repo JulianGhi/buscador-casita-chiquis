@@ -305,3 +305,135 @@ def inferir_valores_faltantes(row):
         inferidos['cochera'] = 'no'
 
     return inferidos
+
+
+# =============================================================================
+# NORMALIZACIÓN DE BARRIOS
+# =============================================================================
+
+# Mapeo de variantes a nombre canónico
+BARRIO_NORMALIZE = {
+    'Velez Sarsfield': 'Vélez Sarsfield',
+    'Velez Sársfield': 'Vélez Sarsfield',
+    'Vélez Sársfield': 'Vélez Sarsfield',
+    'Villa Gral. Mitre': 'Villa General Mitre',
+    'Villa Gral Mitre': 'Villa General Mitre',
+    'V. del Parque': 'Villa del Parque',
+    'V. Crespo': 'Villa Crespo',
+    'V. Urquiza': 'Villa Urquiza',
+    'V. Devoto': 'Villa Devoto',
+    'V. Luro': 'Villa Luro',
+    'Pque. Chacabuco': 'Parque Chacabuco',
+    'Pque Chacabuco': 'Parque Chacabuco',
+    'Pque. Avellaneda': 'Parque Avellaneda',
+    'Pque Avellaneda': 'Parque Avellaneda',
+}
+
+
+def normalizar_barrio(barrio):
+    """Normaliza nombre de barrio a forma canónica."""
+    if not barrio:
+        return barrio
+    return BARRIO_NORMALIZE.get(barrio, barrio)
+
+
+# =============================================================================
+# GENERACIÓN DE NOTAS AUTOMÁTICAS
+# =============================================================================
+
+# Precios de referencia por barrio (USD/m²)
+REF_M2_DEFAULT = {
+    "Almagro": 2000, "Boedo": 1876, "Caballito": 2357, "Flores": 1953,
+    "Floresta": 1683, "Liniers": 1857, "Mataderos": 1629, "Monte Castro": 1854,
+    "Parque Avellaneda": 1750, "Parque Chacabuco": 1951, "Paternal": 1897,
+    "Villa Crespo": 2150, "Villa del Parque": 2063, "Villa Devoto": 2348,
+    "Villa Luro": 1785, "Villa Santa Rita": 1750, "Vélez Sarsfield": 1663
+}
+
+
+def generar_nota_auto(row, ref_m2=None):
+    """
+    Genera una nota descriptiva automática basada en los datos de la propiedad.
+
+    Args:
+        row: dict con datos de la propiedad
+        ref_m2: dict opcional con precios de referencia por barrio
+
+    Returns:
+        str: Nota generada (máx ~100 chars)
+    """
+    if ref_m2 is None:
+        ref_m2 = REF_M2_DEFAULT
+
+    partes = []
+
+    # Tipo y ambientes
+    tipo = (row.get('tipo') or '').upper()
+    amb = row.get('amb') or ''
+    m2_cub = int(row.get('m2_cub') or 0)
+
+    if tipo and amb:
+        partes.append(f"{tipo} {amb}amb")
+    elif tipo:
+        partes.append(tipo)
+
+    if m2_cub:
+        partes.append(f"{m2_cub}m²")
+
+    # Barrio
+    barrio = row.get('barrio', '')
+    if barrio:
+        partes.append(f"en {barrio}")
+
+    # Antigüedad y estado
+    antiguedad = row.get('antiguedad')
+    estado = row.get('estado', '')
+    if antiguedad:
+        ant = int(antiguedad)
+        if ant == 0:
+            partes.append("a estrenar")
+        elif ant <= 10:
+            partes.append(f"{ant} años")
+        else:
+            partes.append(f"{ant}a")
+    if estado and estado.lower() not in ['', 'usado', 'bueno']:
+        partes.append(estado.lower())
+
+    # Características destacadas
+    extras = []
+    if row.get('terraza', '').lower() == 'si':
+        extras.append('terraza')
+    if row.get('balcon', '').lower() == 'si':
+        extras.append('balcón')
+    if row.get('luminosidad', '').lower() in ['si', 'buena', 'muy buena']:
+        extras.append('luminoso')
+    if int(row.get('cocheras') or 0) > 0:
+        extras.append('cochera')
+
+    if extras:
+        partes.append('+'.join(extras))
+
+    # Precio vs referencia
+    precio = float(row.get('precio') or 0)
+    if precio > 0 and m2_cub > 0 and barrio in ref_m2:
+        precio_m2 = precio / m2_cub
+        ref = ref_m2[barrio]
+        diff_pct = (precio_m2 - ref) / ref * 100
+
+        if diff_pct <= -10:
+            partes.append(f"{diff_pct:.0f}% bajo mercado")
+        elif diff_pct >= 10:
+            partes.append(f"+{diff_pct:.0f}% sobre mercado")
+
+    # Expensas
+    expensas = int(row.get('expensas') or 0)
+    if expensas == 0:
+        partes.append("sin exp")
+    elif expensas >= 200000:
+        partes.append(f"exp ${expensas//1000}k")
+
+    # Apto crédito
+    if row.get('apto_credito', '').lower() == 'no':
+        partes.append("NO apto crédito")
+
+    return '. '.join(partes) + '.' if partes else ''
