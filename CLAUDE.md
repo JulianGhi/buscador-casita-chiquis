@@ -763,3 +763,93 @@ e3c60f0 Restaurar score numérico junto al tier en cards
 9ccc56b Agregar validaciones de m² y exterior con warnings visuales
 161e571 Agregar campo patio al sistema completo
 ```
+
+## Notas de Sesión (2025-12-18 tarde) - Fix Sliders Mobile
+
+### Problema identificado
+
+Los sliders del modal (negociación y dólar) funcionaban mal en mobile:
+- El modal se recreaba completo en cada movimiento del slider
+- La animación `slideUp` se disparaba repetidamente
+- El scroll del modal se perdía al soltar el slider
+- El gesto de arrastre se interrumpía
+
+### Arquitectura del problema
+
+El dashboard usa vanilla JS con un patrón de "re-render completo":
+```
+slider cambia → render() → destruye TODO el DOM → recrea TODO
+```
+
+Esto funciona bien para páginas estáticas, pero causa problemas con interacciones continuas como sliders.
+
+### Solución implementada
+
+**Actualización parcial del DOM** - Solo se actualiza lo que cambia:
+
+1. **Separar sliders de cálculos**:
+   - `#simulation-calcs`: Contiene precios, costos, desglose (SE ACTUALIZA)
+   - Sliders: Están fuera del contenedor, no se recrean
+
+2. **Funciones de actualización parcial**:
+   - `updateSimulation()`: Solo actualiza `#simulation-calcs`
+   - `updateNegotiation()` y `updateDolarEstimado()`: Actualizan displays + cálculos
+
+3. **Displays con IDs para actualización directa**:
+   - `#neg-display`: Muestra el % de negociación
+   - `#dolar-display`: Muestra el valor del dólar
+   - `#dolar-credito-info`: Muestra impacto en crédito
+
+### Mejoras de CSS para touch
+
+```css
+input[type="range"] {
+  touch-action: manipulation;  /* Evita delay 300ms */
+  -webkit-user-select: none;
+}
+
+input[type="range"]::-webkit-slider-thumb {
+  width: 28px;   /* Desktop */
+  width: 32px;   /* Mobile (@media) */
+}
+
+input[type="range"]::-webkit-slider-thumb:active {
+  transform: scale(1.15);  /* Feedback visual */
+}
+```
+
+### Otras mejoras de la sesión
+
+1. **Versión visible**: `APP_VERSION` en status bar y panel de ayuda
+2. **Animación slideUp removida**: Causaba flicker en re-renders
+3. **Indicador de uso del crédito**: Muestra % usado y cuánto sobra
+4. **Fix inmobiliaria**: Se muestra cuando `!esVentaDirecta()`, no solo cuando existe el campo
+
+### Lógica del crédito explicada
+
+```
+anticipo = max(precio - crédito, 10% del precio)
+```
+
+- Si crédito ≥ 90% del precio → anticipo = 10% (mínimo legal)
+- Si crédito < 90% del precio → anticipo = precio - crédito
+
+Esto causa un "punto de quiebre" cuando el dólar sube y el crédito (en USD) ya no cubre el 90%.
+
+### Archivos modificados
+
+- `docs/js/app.js`: Funciones de actualización parcial
+- `docs/js/components.js`: Separación sliders/cálculos, IDs para displays
+- `docs/js/config.js`: APP_VERSION
+- `docs/css/styles.css`: Mejoras touch, sin animación slideUp
+
+### Commits de la sesión
+
+```
+6c0be08 Fix: mostrar inmobiliaria correctamente + actualizar displays de sliders en tiempo real
+8d8c57b Mostrar uso del crédito en desglose de costos
+8ac66e5 Fix: separar sliders de cálculos para arrastre fluido en mobile
+0a257dd Refactor: actualización parcial del modal (fix scroll en sliders mobile)
+7ffe760 Quitar animación slideUp del modal (fix flicker en sliders)
+dccc429 Fix sliders en mobile: evitar re-render durante arrastre
+```
