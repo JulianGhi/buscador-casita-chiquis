@@ -194,13 +194,13 @@ function calculateProperty(p) {
   const precioNeg = costs.precio;  // precio con negociación aplicada
   const antiguedad = parseFloat(p.antiguedad) || null;
 
-  // Calcular si es nueva (agregada en últimos 7 días)
+  // Calcular si es nueva (agregada en últimos N días - configurable)
   const diasAgregado = diasHace(p.fecha_agregado);
-  const esNueva = diasAgregado !== null && diasAgregado <= 7;
+  const esNueva = diasAgregado !== null && diasAgregado <= (CONFIG.DIAS_NUEVA || 7);
 
-  // Calcular si se vendió recientemente (inactiva + fecha_inactivo en últimos 7 días)
+  // Calcular si se vendió recientemente (inactiva + fecha_inactivo en últimos N días)
   const diasInactivo = diasHace(p.fecha_inactivo);
-  const vendidaReciente = (p.activo || '').toLowerCase() === 'no' && diasInactivo !== null && diasInactivo <= 7;
+  const vendidaReciente = (p.activo || '').toLowerCase() === 'no' && diasInactivo !== null && diasInactivo <= (CONFIG.DIAS_VENDIDA_RECIENTE || 7);
 
   const calc = {
     ...p,
@@ -313,12 +313,47 @@ function getProperties() {
 
 function getFiltered(properties) {
   let result = [...properties];
+
+  // Filtros básicos
   if (state.filterStatus !== 'todos') result = result.filter(p => p.status?.toLowerCase().includes(state.filterStatus.toLowerCase()));
   if (state.filterOk === 'ok') result = result.filter(p => p._ok);
   else if (state.filterOk === 'no') result = result.filter(p => !p._ok);
   if (state.filterBarrio !== 'todos') result = result.filter(p => p.barrio === state.filterBarrio);
   if (state.filterActivo === 'si') result = result.filter(p => p.activo?.toLowerCase() === 'si');
   else if (state.filterActivo === 'no') result = result.filter(p => p.activo?.toLowerCase() === 'no');
+
+  // Filtro por tier
+  if (state.filterTier !== 'todos') {
+    const tierNum = parseInt(state.filterTier);
+    result = result.filter(p => p._tier === tierNum);
+  }
+
+  // Filtro apto crédito
+  if (state.filterCredito === 'si') result = result.filter(p => p.apto_credito?.toLowerCase() === 'si');
+  else if (state.filterCredito === 'no') result = result.filter(p => p.apto_credito?.toLowerCase() === 'no');
+  else if (state.filterCredito === '?') result = result.filter(p => !p.apto_credito || p.apto_credito === '?');
+
+  // Filtros booleanos (atributos)
+  const boolFilter = (field, stateVal) => {
+    if (stateVal === 'si') return p => p[field]?.toLowerCase() === 'si';
+    if (stateVal === 'no') return p => p[field]?.toLowerCase() === 'no';
+    return null;
+  };
+  if (state.filterTerraza !== 'todos') result = result.filter(boolFilter('terraza', state.filterTerraza));
+  if (state.filterBalcon !== 'todos') result = result.filter(boolFilter('balcon', state.filterBalcon));
+  if (state.filterCochera !== 'todos') result = result.filter(boolFilter('cochera', state.filterCochera));
+  if (state.filterLuminoso !== 'todos') result = result.filter(boolFilter('luminosidad', state.filterLuminoso));
+
+  // Búsqueda por texto (dirección, notas, barrio)
+  if (state.searchText?.trim()) {
+    const q = state.searchText.toLowerCase().trim();
+    result = result.filter(p =>
+      p.direccion?.toLowerCase().includes(q) ||
+      p.notas?.toLowerCase().includes(q) ||
+      p.barrio?.toLowerCase().includes(q)
+    );
+  }
+
   result.sort((a, b) => {
     // Ordenamiento especial para 'score': primero por tier (menor = mejor), luego por score
     if (state.sortBy === 'score') {

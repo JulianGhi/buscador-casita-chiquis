@@ -112,10 +112,74 @@ function renderStatsCards(stats) {
   `;
 }
 
+function countActiveFilters() {
+  let count = 0;
+  if (state.filterStatus !== 'todos') count++;
+  if (state.filterOk !== 'todos') count++;
+  if (state.filterBarrio !== 'todos') count++;
+  if (state.filterActivo !== 'todos') count++;
+  if (state.filterTier !== 'todos') count++;
+  if (state.filterCredito !== 'todos') count++;
+  if (state.filterTerraza !== 'todos') count++;
+  if (state.filterBalcon !== 'todos') count++;
+  if (state.filterCochera !== 'todos') count++;
+  if (state.filterLuminoso !== 'todos') count++;
+  if (state.searchText?.trim()) count++;
+  return count;
+}
+
+function clearAllFilters() {
+  state.filterStatus = 'todos';
+  state.filterOk = 'todos';
+  state.filterBarrio = 'todos';
+  state.filterActivo = 'todos';
+  state.filterTier = 'todos';
+  state.filterCredito = 'todos';
+  state.filterTerraza = 'todos';
+  state.filterBalcon = 'todos';
+  state.filterCochera = 'todos';
+  state.filterLuminoso = 'todos';
+  state.searchText = '';
+  render();
+}
+
+function renderBoolChip(label, icon, field, stateKey) {
+  const val = state[stateKey];
+  const isActive = val !== 'todos';
+  const nextVal = val === 'todos' ? 'si' : val === 'si' ? 'no' : 'todos';
+  const colors = val === 'si' ? 'bg-green-100 text-green-700 border-green-300' :
+                 val === 'no' ? 'bg-red-100 text-red-700 border-red-300' :
+                 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100';
+  const display = val === 'si' ? `${icon} ✓` : val === 'no' ? `${icon} ✗` : icon;
+  return `<button onclick="state.${stateKey}='${nextVal}';render()"
+    class="px-2 py-1 text-xs rounded-full border transition-colors ${colors}"
+    title="${label}: ${val === 'todos' ? 'Todos' : val === 'si' ? 'Solo con' : 'Solo sin'}">${display}</button>`;
+}
+
 function renderFilters(barrios, filtered, properties) {
+  const activeCount = countActiveFilters();
+
   return `
     <div class="bg-white rounded-xl shadow-sm mb-4">
+      <!-- Fila principal de filtros -->
       <div class="filters-container">
+        <!-- Búsqueda -->
+        <div class="relative">
+          <input type="text"
+            placeholder="🔍 Buscar..."
+            value="${escapeHtml(state.searchText || '')}"
+            onkeyup="state.searchText=this.value;render()"
+            class="filter-select pl-2 pr-6 w-28"
+          />
+          ${state.searchText ? `<button onclick="state.searchText='';render()" class="absolute right-1 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 text-xs">✕</button>` : ''}
+        </div>
+
+        <!-- Tier con descripciones -->
+        <select onchange="state.filterTier=this.value;render()" class="filter-select" title="Filtrar por nivel de prioridad">
+          <option value="todos" ${state.filterTier === 'todos' ? 'selected' : ''}>⭐ Tier</option>
+          ${[1,2,3,4,5].map(t => `<option value="${t}" ${state.filterTier === String(t) ? 'selected' : ''}>${TIER_INFO[t].label}</option>`).join('')}
+        </select>
+
         <select onchange="state.filterStatus=this.value;render()" class="filter-select">
           <option value="todos" ${state.filterStatus === 'todos' ? 'selected' : ''}>Status</option>
           <option value="por ver" ${state.filterStatus === 'por ver' ? 'selected' : ''}>Por ver</option>
@@ -123,20 +187,24 @@ function renderFilters(barrios, filtered, properties) {
           <option value="interesado" ${state.filterStatus === 'interesado' ? 'selected' : ''}>Interesado</option>
           <option value="descartado" ${state.filterStatus === 'descartado' ? 'selected' : ''}>Descartado</option>
         </select>
-        <select onchange="state.filterOk=this.value;render()" class="filter-select">
-          <option value="todos" ${state.filterOk === 'todos' ? 'selected' : ''}>$ Todos</option>
-          <option value="ok" ${state.filterOk === 'ok' ? 'selected' : ''}>✓ Alcanza</option>
-          <option value="no" ${state.filterOk === 'no' ? 'selected' : ''}>✗ No alcanza</option>
-        </select>
+
         <select onchange="state.filterBarrio=this.value;render()" class="filter-select">
           <option value="todos" ${state.filterBarrio === 'todos' ? 'selected' : ''}>Barrio</option>
           ${barrios.map(b => `<option value="${escapeHtml(b)}" ${state.filterBarrio === b ? 'selected' : ''}>${escapeHtml(b)}</option>`).join('')}
         </select>
+
         <select onchange="state.filterActivo=this.value;render()" class="filter-select">
           <option value="todos" ${state.filterActivo === 'todos' ? 'selected' : ''}>Aviso</option>
           <option value="si" ${state.filterActivo === 'si' ? 'selected' : ''}>✓ Activo</option>
           <option value="no" ${state.filterActivo === 'no' ? 'selected' : ''}>✗ Baja</option>
         </select>
+
+        <select onchange="state.filterOk=this.value;render()" class="filter-select">
+          <option value="todos" ${state.filterOk === 'todos' ? 'selected' : ''}>$ Todos</option>
+          <option value="ok" ${state.filterOk === 'ok' ? 'selected' : ''}>✓ Alcanza</option>
+          <option value="no" ${state.filterOk === 'no' ? 'selected' : ''}>✗ No alcanza</option>
+        </select>
+
         <div class="flex items-center gap-1 ml-auto shrink-0">
           <select onchange="state.sortBy=this.value;render()" class="filter-select">
             <option value="score" ${state.sortBy === 'score' ? 'selected' : ''}>⭐ Mejor</option>
@@ -147,12 +215,45 @@ function renderFilters(barrios, filtered, properties) {
           </select>
           <button onclick="state.sortDir=state.sortDir==='asc'?'desc':'asc';render()" class="btn-icon border border-slate-200 bg-white">${state.sortDir === 'asc' ? '↑' : '↓'}</button>
         </div>
+
         <div class="flex items-center border border-slate-200 rounded-lg overflow-hidden shrink-0">
           <button onclick="state.viewMode='cards';render()" class="px-2 py-1.5 text-sm ${state.viewMode === 'cards' ? 'bg-blue-500 text-white' : 'bg-white'}" title="Cards">📱</button>
           <button onclick="state.viewMode='table';render()" class="px-2 py-1.5 text-sm ${state.viewMode === 'table' ? 'bg-blue-500 text-white' : 'bg-white'}" title="Tabla">📊</button>
         </div>
-        <span class="text-slate-400 text-xs font-medium shrink-0">${filtered.length}</span>
+
+        <span class="text-slate-500 text-sm font-medium shrink-0">${filtered.length}</span>
       </div>
+
+      <!-- Fila de chips de atributos -->
+      <div class="px-3 py-2 border-t border-slate-100 flex flex-wrap items-center gap-2">
+        <span class="text-xs text-slate-400 mr-1">Atributos:</span>
+        ${renderBoolChip('Terraza', '🌿', 'terraza', 'filterTerraza')}
+        ${renderBoolChip('Balcón', '🪴', 'balcon', 'filterBalcon')}
+        ${renderBoolChip('Cochera', '🚗', 'cochera', 'filterCochera')}
+        ${renderBoolChip('Luminoso', '☀️', 'luminosidad', 'filterLuminoso')}
+
+        <span class="text-slate-300 mx-1">|</span>
+
+        <select onchange="state.filterCredito=this.value;render()" class="text-xs px-2 py-1 rounded border border-slate-200 bg-white">
+          <option value="todos" ${state.filterCredito === 'todos' ? 'selected' : ''}>💳 Crédito</option>
+          <option value="si" ${state.filterCredito === 'si' ? 'selected' : ''}>💳 ✓ Apto</option>
+          <option value="no" ${state.filterCredito === 'no' ? 'selected' : ''}>💳 ✗ No apto</option>
+          <option value="?" ${state.filterCredito === '?' ? 'selected' : ''}>💳 ? Sin dato</option>
+        </select>
+
+        ${activeCount > 0 ? `
+          <button onclick="clearAllFilters()" class="ml-auto text-xs px-2 py-1 rounded bg-slate-100 text-slate-600 hover:bg-slate-200 transition-colors">
+            ✕ Limpiar (${activeCount})
+          </button>
+        ` : ''}
+      </div>
+
+      <!-- Info del tier seleccionado -->
+      ${state.filterTier !== 'todos' ? `
+        <div class="px-3 py-1.5 border-t border-slate-100 bg-slate-50 text-xs text-slate-500">
+          <strong>${TIER_INFO[state.filterTier].label}:</strong> ${TIER_INFO[state.filterTier].desc}
+        </div>
+      ` : ''}
     </div>
   `;
 }

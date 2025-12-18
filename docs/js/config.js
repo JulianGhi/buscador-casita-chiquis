@@ -114,6 +114,8 @@ const DEFAULT_CONFIG = {
   HIPOTECA: 0.01,
   CERTIFICADOS: 300,
   AUTO_REFRESH: 10,
+  DIAS_NUEVA: 7,           // Días para considerar propiedad como "Nueva"
+  DIAS_VENDIDA_RECIENTE: 7, // Días para mostrar badge "Vendida recientemente"
 };
 
 const DEFAULT_REF_M2 = {
@@ -128,6 +130,15 @@ const DEFAULT_CONDITIONS = {
   activo:        { label: 'Activo',         enabled: true, desc: 'Solo publicaciones online' },
   apto_credito:  { label: 'Apto crédito',   enabled: true, desc: 'Solo las que aceptan crédito' },
   ok_presupuesto:{ label: 'En presupuesto', enabled: true, desc: 'Solo las que podés pagar' },
+};
+
+// Descripciones de tiers para el filtro
+const TIER_INFO = {
+  1: { label: 'T1 - Ideales', color: 'green',  desc: 'Apto crédito + en presupuesto' },
+  2: { label: 'T2 - Negociar', color: 'blue',   desc: 'Apto crédito, hay que negociar precio' },
+  3: { label: 'T3 - Averiguar', color: 'yellow', desc: 'No sabemos si acepta crédito' },
+  4: { label: 'T4 - Difícil', color: 'orange', desc: 'No acepta crédito' },
+  5: { label: 'T5 - Inactivas', color: 'red',    desc: 'Dadas de baja o sin link' },
 };
 
 const DEFAULT_WEIGHTS = {
@@ -410,6 +421,14 @@ let state = {
   filterOk: 'todos',
   filterBarrio: 'todos',
   filterActivo: 'todos',
+  filterTier: 'todos',      // Filtro por tier (1-5)
+  filterCredito: 'todos',   // Filtro apto crédito (si/no/?)
+  searchText: '',           // Búsqueda por texto
+  // Filtros booleanos (todos/si/no)
+  filterTerraza: 'todos',
+  filterBalcon: 'todos',
+  filterCochera: 'todos',
+  filterLuminoso: 'todos',
   showHelp: false,
   sortBy: 'score',
   sortDir: 'desc',
