@@ -5,13 +5,8 @@
 
 function showDetail(idx) {
   state.selectedProperty = idx;
-  state.negotiationPct = CONFIG.NEGOCIACION || 0;  // Usar valor global como default
+  state.negotiationPct = CONFIG.NEGOCIACION || 0;
   state.dolarEstimado = null;
-  // Pausar auto-refresh mientras el modal está abierto
-  if (state.autoRefreshEnabled) {
-    state._wasAutoRefreshing = true;
-    stopAutoRefresh();
-  }
   render();
 }
 
@@ -19,11 +14,6 @@ function closeDetail() {
   state.selectedProperty = null;
   state.negotiationPct = 0;
   state.dolarEstimado = null;
-  // Reanudar auto-refresh si estaba activo
-  if (state._wasAutoRefreshing) {
-    state._wasAutoRefreshing = false;
-    startAutoRefresh();
-  }
   render();
 }
 

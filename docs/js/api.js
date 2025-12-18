@@ -95,10 +95,26 @@ function arrayToCSV(rows) {
   ).join('\n');
 }
 
-async function fetchData() {
-  state.loading = true;
-  state.error = null;
-  render();
+// Hash simple para detectar cambios en datos
+function simpleHash(str) {
+  let hash = 0;
+  for (let i = 0; i < str.length; i++) {
+    hash = ((hash << 5) - hash) + str.charCodeAt(i);
+    hash |= 0;
+  }
+  return hash;
+}
+
+// fetchData con soporte para background refresh silencioso
+async function fetchData(options = {}) {
+  const { silent = false } = options;
+
+  // Solo mostrar loading en refresh manual
+  if (!silent) {
+    state.loading = true;
+    state.error = null;
+    render();
+  }
 
   const API_URL = `https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}/values/A:AH?key=${API_KEY}`;
 
@@ -109,31 +125,49 @@ async function fetchData() {
       throw new Error('No hay datos');
     }
 
-    state.rawData = arrayToCSV(data.values);
-    state.lastUpdate = new Date();
-    state.error = null;
+    const newData = arrayToCSV(data.values);
+    const newHash = simpleHash(newData);
+
+    // Solo re-render si los datos cambiaron
+    if (newHash !== state.dataHash) {
+      state.rawData = newData;
+      state.dataHash = newHash;
+      state.lastUpdate = new Date();
+      state.error = null;
+
+      if (!silent) {
+        state.loading = false;
+      }
+      render();
+    } else if (!silent) {
+      // Refresh manual sin cambios: quitar loading
+      state.loading = false;
+      render();
+    }
+    // Si es silent y no hay cambios: no hacer nada
 
   } catch (err) {
     console.error('fetchData error:', err.message);
     state.error = 'Error: ' + err.message;
     if (!state.rawData) state.rawData = SAMPLE_CSV;
+    if (!silent) {
+      state.loading = false;
+      render();
+    }
   }
-
-  state.loading = false;
-  render();
 }
 
 // ============================================
-// AUTO REFRESH
+// AUTO REFRESH (con Visibility API)
 // ============================================
 
 function startAutoRefresh() {
   stopAutoRefresh();
-  if (CONFIG.AUTO_REFRESH > 0) {
+  if (CONFIG.AUTO_REFRESH > 0 && !document.hidden) {
     state.autoRefreshEnabled = true;
-    console.log(`⏱️ Auto-refresh cada ${CONFIG.AUTO_REFRESH}s`);
     autoRefreshInterval = setInterval(() => {
-      fetchData();
+      // Background refresh silencioso
+      fetchData({ silent: true });
     }, CONFIG.AUTO_REFRESH * 1000);
   }
 }
@@ -154,6 +188,21 @@ function toggleAutoRefresh() {
   }
   render();
 }
+
+// Visibility API: pausar cuando tab está oculta
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) {
+    if (state.autoRefreshEnabled) {
+      state._wasAutoRefreshing = true;
+      stopAutoRefresh();
+    }
+  } else {
+    if (state._wasAutoRefreshing) {
+      state._wasAutoRefreshing = false;
+      startAutoRefresh();
+    }
+  }
+});
 
 async function cargarDolarHoy() {
   state.loadingDolar = true;

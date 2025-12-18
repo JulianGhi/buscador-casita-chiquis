@@ -417,6 +417,7 @@ let REF_M2 = loadRefM2();
 
 let state = {
   rawData: '',
+  dataHash: null,  // Hash para detectar cambios en datos
   loading: false,
   error: null,
   lastUpdate: null,
