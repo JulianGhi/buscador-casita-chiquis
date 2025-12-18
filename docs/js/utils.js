@@ -321,6 +321,49 @@ function calculateProperty(p) {
   calc._score = score;
   calc._tier = tier;
 
+  // === VALIDACIONES / WARNINGS ===
+  const warnings = [];
+  const m2Cub = parseFloat(p.m2_cub) || 0;
+  const m2Desc = parseFloat(p.m2_desc) || 0;
+  const m2Tot = parseFloat(p.m2_tot) || 0;
+  const terraza = (p.terraza || '').toLowerCase();
+  const balcon = (p.balcon || '').toLowerCase();
+  const patio = (p.patio || '').toLowerCase();
+
+  // 1. Validación de m² math: si tenemos los 3 valores, verificar consistencia
+  if (m2Cub > 0 && m2Desc > 0 && m2Tot > 0) {
+    const expected = m2Cub + m2Desc;
+    const diff = Math.abs(m2Tot - expected);
+    if (diff > 1) { // tolerancia de 1m² por redondeos
+      warnings.push({ type: 'm2_math', msg: `m² no cuadran: ${m2Cub} + ${m2Desc} ≠ ${m2Tot}`, severity: 'warning' });
+    }
+  }
+
+  // 2. m² cubiertos > m² totales (ilógico)
+  if (m2Cub > 0 && m2Tot > 0 && m2Cub > m2Tot) {
+    warnings.push({ type: 'm2_cub_tot', msg: `m² cub (${m2Cub}) > m² tot (${m2Tot})`, severity: 'error' });
+  }
+
+  // 3. Tiene exterior marcado (balcon/terraza) pero m²_desc = 0
+  const tieneExteriorElevado = balcon === 'si' || terraza === 'si';
+  if (tieneExteriorElevado && m2Desc === 0 && m2Tot > 0) {
+    warnings.push({ type: 'exterior_sin_m2', msg: `Tiene ${balcon === 'si' ? 'balcón' : 'terraza'} pero m²_desc = 0`, severity: 'warning' });
+  }
+
+  // 4. Inverso: tiene m²_desc pero no tiene ningún exterior marcado
+  // (patio es diferente - es a nivel de suelo, puede no contar en m²_desc)
+  if (m2Desc > 0 && !tieneExteriorElevado && patio !== 'si') {
+    const noHayExterior = terraza === 'no' && balcon === 'no' && patio === 'no';
+    const exteriorDesconocido = terraza !== 'si' && balcon !== 'si' && patio !== 'si';
+    if (noHayExterior) {
+      warnings.push({ type: 'm2_sin_exterior', msg: `Tiene ${m2Desc}m² desc pero sin exterior`, severity: 'warning' });
+    } else if (exteriorDesconocido) {
+      warnings.push({ type: 'm2_exterior_desconocido', msg: `Tiene ${m2Desc}m² desc, verificar exterior`, severity: 'info' });
+    }
+  }
+
+  calc._warnings = warnings;
+
   return calc;
 }
 
@@ -535,6 +578,18 @@ function printBadge(fechaPrint) {
     return `<span class="text-amber-500" title="Print desactualizado (${dias}d)">📄</span>`;
   }
   return `<span class="text-green-600" title="Print OK (${fechaPrint})">📄</span>`;
+}
+
+function warningsBadge(warnings) {
+  if (!warnings || warnings.length === 0) {
+    return `<span class="text-slate-200">-</span>`;
+  }
+  // Color según severidad más alta
+  const hasError = warnings.some(w => w.severity === 'error');
+  const hasWarning = warnings.some(w => w.severity === 'warning');
+  const color = hasError ? 'text-red-500' : hasWarning ? 'text-amber-500' : 'text-blue-400';
+  const msgs = warnings.map(w => w.msg).join('\n');
+  return `<span class="${color} cursor-help" title="${escapeHtml(msgs)}">⚠️ ${warnings.length}</span>`;
 }
 
 function ratingStars(rating) {

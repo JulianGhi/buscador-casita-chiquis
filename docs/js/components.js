@@ -295,6 +295,7 @@ function renderTable(filtered) {
           <thead class="bg-slate-50 border-b border-slate-200">
             <tr>
               <th class="px-2 py-2.5 text-center font-medium text-slate-600" title="Tier + Score">⭐</th>
+              <th class="px-2 py-2.5 text-center font-medium text-slate-600" title="Inconsistencias">⚠</th>
               <th class="px-2 py-2.5 text-center font-medium text-slate-600" title="Backup PDF">📄</th>
               <th class="px-2 py-2.5 text-center font-medium text-slate-600">Activo</th>
               <th class="px-2 py-2.5 text-center font-medium text-slate-600" title="Apto Crédito">Apto</th>
@@ -324,6 +325,7 @@ function renderTable(filtered) {
               return `
               <tr class="hover:bg-slate-100 transition-colors cursor-pointer ${rowBg}" onclick="showDetail(${p._idx})">
                 <td class="px-2 py-2.5 text-center"><span class="inline-flex items-center gap-1">${tierBadge(p._tier)}<span class="text-xs font-mono ${p._score > 50 ? 'text-green-600 font-bold' : p._score > 0 ? 'text-green-500' : 'text-slate-400'}">${p._score}</span></span></td>
+                <td class="px-2 py-2.5 text-center">${warningsBadge(p._warnings)}</td>
                 <td class="px-2 py-2.5 text-center">${printBadge(p.fecha_print)}</td>
                 <td class="px-2 py-2.5 text-center">${activoBadge(p.activo)}</td>
                 <td class="px-2 py-2.5 text-center">${aptoCreditoBadge(p.apto_credito)}</td>
@@ -391,6 +393,7 @@ function renderCards(filtered) {
               </div>
               <div class="flex items-center gap-1">
                 ${aptoCredito === 'si' ? '<span class="text-xs bg-purple-100 text-purple-700 px-1.5 py-0.5 rounded">Apto</span>' : aptoCredito === 'no' ? '<span class="text-xs bg-red-100 text-red-600 px-1.5 py-0.5 rounded">No apto</span>' : '<span class="text-xs bg-yellow-100 text-yellow-700 px-1.5 py-0.5 rounded">?</span>'}
+                ${warningsBadge(p._warnings)}
                 ${printBadge(p.fecha_print)}
               </div>
             </div>
@@ -718,6 +721,29 @@ function renderMissingData(p) {
   `;
 }
 
+// Renderiza warnings de validación (m², exterior, etc.)
+function renderWarnings(p) {
+  if (!p._warnings || p._warnings.length === 0) return '';
+
+  const severityConfig = {
+    error: { bg: THEME.error.bg, text: THEME.error.text, icon: '❌' },
+    warning: { bg: THEME.warning.bg, text: THEME.warning.text, icon: '⚠️' },
+    info: { bg: THEME.info.bg, text: THEME.info.text, icon: 'ℹ️' }
+  };
+
+  const warningItems = p._warnings.map(w => {
+    const cfg = severityConfig[w.severity] || severityConfig.info;
+    return `<span class="text-xs ${cfg.bg} ${cfg.text} px-2 py-0.5 rounded">${cfg.icon} ${escapeHtml(w.msg)}</span>`;
+  }).join('');
+
+  return `
+    <div class="${THEME.error.bg.replace('100', '50')} border ${THEME.error.border} rounded-lg p-3">
+      <div class="text-xs font-medium ${THEME.error.text} mb-2">⚠️ Inconsistencias detectadas:</div>
+      <div class="flex flex-wrap gap-2">${warningItems}</div>
+    </div>
+  `;
+}
+
 // Renderiza características y amenities
 function renderCaracteristicas(p) {
   const caracteristicas = [
@@ -1002,6 +1028,7 @@ function renderDetailModal(p) {
 
         <div class="p-4 sm:p-6 space-y-4 sm:space-y-5 safe-bottom">
           ${renderModalBadges(p)}
+          ${renderWarnings(p)}
           ${renderMissingData(p)}
           ${renderCaracteristicas(p)}
           ${renderPriceStats(p, costsNeg, hayAjuste)}
