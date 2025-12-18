@@ -975,10 +975,16 @@ function renderQuitaSugerencia(quita, dolarActual, creditoEstimado) {
 
 // Renderiza desglose de costos
 function renderCostsBreakdown(p, costsNeg, hayAjuste, ahorro) {
-  // Calcular label dinámico para anticipo
+  // Calcular datos del crédito
   const precioActual = hayAjuste ? costsNeg.precio : p._precio;
   const creditoActual = hayAjuste ? costsNeg.creditoUSD : getCreditoUSD();
   const tu10Actual = hayAjuste ? costsNeg.tu10 : p._tu10;
+
+  // Cuánto del crédito se usa realmente
+  const creditoUsado = precioActual - tu10Actual;
+  const pctCreditoUsado = ((creditoUsado / creditoActual) * 100).toFixed(0);
+  const usaTodoCredito = creditoUsado >= creditoActual - 1; // -1 por redondeo
+
   const pctReal = ((tu10Actual / precioActual) * 100).toFixed(1);
   const esMinimo10 = tu10Actual <= precioActual * 0.1 + 1; // +1 por redondeo
   const anticipoLabel = esMinimo10
@@ -1010,10 +1016,21 @@ function renderCostsBreakdown(p, costsNeg, hayAjuste, ahorro) {
   const totalVal = hayAjuste ? costsNeg.total : p._total;
   const difVal = hayAjuste ? costsNeg.dif : p._dif;
 
+  // Indicador de uso del crédito
+  const creditoInfo = usaTodoCredito
+    ? `<span class="${THEME.warning.textLight}">Usás 100% del crédito</span>`
+    : `<span class="text-slate-500">Usás ${pctCreditoUsado}% del crédito</span> <span class="text-slate-400">(sobran $${(creditoActual - creditoUsado).toLocaleString()})</span>`;
+
   return `
     <div class="${THEME.neutral.bg} rounded-xl p-4">
       <h3 class="text-sm font-medium ${THEME.neutral.text} mb-3">${ICONS.precio} Desglose de costos</h3>
       <div class="space-y-2 text-sm">
+        <!-- Info del crédito -->
+        <div class="flex justify-between items-center text-xs pb-2 border-b border-slate-200">
+          <span class="text-slate-500">Crédito: <span class="font-mono font-medium text-slate-700">$${creditoActual.toLocaleString()}</span></span>
+          <span>${creditoInfo}</span>
+        </div>
+
         ${costItems.map(item => `
           <div class="flex justify-between">
             <span class="text-slate-600">${item.label}</span>

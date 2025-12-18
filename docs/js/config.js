@@ -2,7 +2,7 @@
 // CONFIGURACIÓN Y ESTADO
 // ============================================
 
-const APP_VERSION = 'v7.4-20241218';  // Cambiar en cada deploy
+const APP_VERSION = 'v7.5-20241218';  // Cambiar en cada deploy
 
 // ============================================
 // TEMA DE COLORES (Tailwind classes)
