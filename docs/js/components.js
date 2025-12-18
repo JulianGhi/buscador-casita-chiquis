@@ -496,48 +496,86 @@ function renderCards(filtered) {
 // ============================================
 
 function renderHelpPanel() {
-  const sheetUrl = 'https://docs.google.com/spreadsheets/d/16n92ghEe8Vr1tiLdqbccF3i97kiwhHin9OPWY-O50L4';
   return `
     <div>
       <div class="flex items-center justify-between mb-3">
-        <h3 class="font-medium text-purple-700">❓ Cómo usar</h3>
+        <h3 class="font-medium text-purple-700">❓ Guía rápida</h3>
         <button onclick="state.showHelp=false;render()" class="text-slate-400 hover:text-slate-600 text-xl">&times;</button>
       </div>
-      <div class="space-y-4 text-sm text-slate-600">
-        <div class="bg-purple-50 rounded-lg p-3">
-          <p class="font-medium text-purple-800 mb-2">Agregar propiedades</p>
-          <a href="${sheetUrl}" target="_blank" class="inline-flex items-center gap-2 px-3 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors">
-            Abrir Google Sheet <span>↗</span>
-          </a>
-        </div>
-        <div>
-          <p class="font-medium text-slate-700 mb-2">Campos con desplegable:</p>
-          <div class="grid grid-cols-2 md:grid-cols-3 gap-2 text-xs">
-            <div><span class="font-mono bg-slate-100 px-1 rounded">barrio</span> - seleccionar de lista</div>
-            <div><span class="font-mono bg-slate-100 px-1 rounded">amb</span> - 1 a 5</div>
-            <div><span class="font-mono bg-slate-100 px-1 rounded">apto_credito</span> - si/no</div>
-            <div><span class="font-mono bg-slate-100 px-1 rounded">terraza</span> - si/no</div>
-            <div><span class="font-mono bg-slate-100 px-1 rounded">status</span> - Por ver, Visitado, etc.</div>
-            <div><span class="font-mono bg-slate-100 px-1 rounded">activo</span> - si/no (aviso online)</div>
-          </div>
-        </div>
-        <div class="bg-blue-50 rounded-lg p-3">
-          <p class="font-medium text-blue-800 mb-1">Indicadores de precio:</p>
-          <div class="flex gap-4 text-xs">
-            <span>🟢 Bajo mercado (&lt;-12%)</span>
-            <span>🟡 En mercado</span>
-            <span>🔴 Sobre mercado (&gt;+12%)</span>
-          </div>
-        </div>
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs text-slate-600">
+
+        <!-- Tiers -->
         <div class="bg-slate-50 rounded-lg p-3">
-          <p class="font-medium text-slate-800 mb-2">Colores de fila:</p>
-          <div class="grid grid-cols-1 md:grid-cols-2 gap-2 text-xs">
-            <div class="flex items-center gap-2"><span class="w-4 h-4 rounded bg-green-100 border border-green-300"></span> Entra en presupuesto</div>
-            <div class="flex items-center gap-2"><span class="w-4 h-4 rounded bg-yellow-200 border-l-4 border-yellow-500"></span> Verificar si es apto crédito</div>
-            <div class="flex items-center gap-2"><span class="w-4 h-4 rounded bg-yellow-100 border border-yellow-300"></span> NO apto crédito (confirmado)</div>
-            <div class="flex items-center gap-2"><span class="w-4 h-4 rounded bg-red-100 border border-red-300 opacity-60"></span> Link dado de baja</div>
+          <p class="font-medium text-slate-800 mb-2">Tiers (prioridad)</p>
+          <div class="space-y-1">
+            <div><span class="bg-green-100 text-green-700 px-1.5 py-0.5 rounded text-[10px] font-medium">T1</span> Apto crédito + entra $</div>
+            <div><span class="bg-green-100 text-green-700 px-1.5 py-0.5 rounded text-[10px] font-medium">T2</span> Apto crédito + negociar</div>
+            <div><span class="bg-yellow-100 text-yellow-700 px-1.5 py-0.5 rounded text-[10px] font-medium">T3</span> Averiguar si apto</div>
+            <div><span class="bg-orange-100 text-orange-700 px-1.5 py-0.5 rounded text-[10px] font-medium">T4</span> No apto crédito</div>
+            <div><span class="bg-red-100 text-red-600 px-1.5 py-0.5 rounded text-[10px] font-medium">T5</span> Inactivo/sin link</div>
           </div>
         </div>
+
+        <!-- Score -->
+        <div class="bg-slate-50 rounded-lg p-3">
+          <p class="font-medium text-slate-800 mb-2">Score (puntos)</p>
+          <div class="space-y-1">
+            <div>Base por tier: T1=100, T2=80...</div>
+            <div class="text-green-600">+ Bajo mercado, m² grandes</div>
+            <div class="text-green-600">+ Terraza, balcón, patio, cochera</div>
+            <div class="text-green-600">+ Luminoso, frente, nuevo</div>
+            <div class="text-red-500">− Datos faltantes penalizan</div>
+            <div class="mt-1 text-slate-400">⚙️ Ajustable en config</div>
+          </div>
+        </div>
+
+        <!-- Indicadores -->
+        <div class="bg-slate-50 rounded-lg p-3">
+          <p class="font-medium text-slate-800 mb-2">Indicadores</p>
+          <div class="space-y-1">
+            <div><span class="text-green-600">-5%</span> / <span class="text-red-500">+10%</span> vs precio ref barrio</div>
+            <div><span class="text-green-600">✓</span> entra $ · <span class="text-red-500">✗</span> no entra</div>
+            <div><span class="bg-green-500 text-white px-1 rounded text-[10px]">NUEVA</span> agregada hace &lt;3 días</div>
+            <div><span class="bg-purple-500 text-white px-1 rounded text-[10px]">VENDIDA</span> bajada hace &lt;3 días</div>
+            <div><span class="text-amber-500">⚠️</span> inconsistencias en datos</div>
+            <div><span class="text-green-600">📄</span> tiene print · <span class="text-slate-300">○</span> sin print</div>
+          </div>
+        </div>
+
+        <!-- Amenities -->
+        <div class="bg-slate-50 rounded-lg p-3">
+          <p class="font-medium text-slate-800 mb-2">Amenities</p>
+          <div class="space-y-1">
+            <div><span class="text-green-600">T✓</span> terraza · <span class="text-slate-300">T✗</span> no tiene</div>
+            <div><span class="text-green-600">B✓</span> balcón · <span class="text-green-600">P✓</span> patio</div>
+            <div>🚗 cochera · 🚿 baños · 🚪 ambientes</div>
+            <div>✨ antigüedad · ☀️ frente</div>
+          </div>
+        </div>
+
+        <!-- Bordes cards -->
+        <div class="bg-slate-50 rounded-lg p-3">
+          <p class="font-medium text-slate-800 mb-2">Borde izquierdo (cards)</p>
+          <div class="space-y-1">
+            <div class="flex items-center gap-2"><span class="w-1 h-4 bg-green-500 rounded"></span> OK + apto crédito</div>
+            <div class="flex items-center gap-2"><span class="w-1 h-4 bg-blue-400 rounded"></span> OK + sin confirmar</div>
+            <div class="flex items-center gap-2"><span class="w-1 h-4 bg-amber-400 rounded"></span> No entra en $</div>
+            <div class="flex items-center gap-2"><span class="w-1 h-4 bg-red-300 rounded"></span> Inactivo</div>
+          </div>
+        </div>
+
+        <!-- Acciones -->
+        <div class="bg-purple-50 rounded-lg p-3">
+          <p class="font-medium text-purple-800 mb-2">Acciones</p>
+          <div class="space-y-1">
+            <div>📝 Editar datos en Google Sheet</div>
+            <div>⚙️ Ajustar pesos del score</div>
+            <div>🔄 Refrescar datos</div>
+            <div>📊 Ver stats y gráfico</div>
+            <div>Click en fila → ver detalle</div>
+          </div>
+        </div>
+
       </div>
     </div>
   `;
