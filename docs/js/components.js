@@ -363,74 +363,125 @@ function renderCards(filtered) {
       ${filtered.map(p => {
         const isInactivo = (p.activo || '').toLowerCase() === 'no';
         const aptoCredito = (p.apto_credito || '').toLowerCase();
-        const noAptoCredito = aptoCredito !== 'si';
-        const cardStyle = isInactivo
-          ? 'bg-red-50 border-2 border-red-200 opacity-70'
-          : noAptoCredito && aptoCredito === 'no'
-            ? 'bg-yellow-50 border-l-4 border-yellow-400'
-            : p._ok
-              ? 'bg-white border-l-4 border-green-400'
-              : 'bg-white';
 
-        // Amenities compactos
-        const amenities = [
-          p.terraza?.toLowerCase() === 'si' ? '🌿' : null,
-          p.balcon?.toLowerCase() === 'si' ? '🪴' : null,
-          p.patio?.toLowerCase() === 'si' ? '🌳' : null,
-          p.cocheras && p.cocheras !== '0' ? '🚗' : null,
-          p.banos && p.banos !== '0' ? '🚿' + p.banos : null,
-          p.amb ? '🚪' + p.amb : null,
+        // Border color based on status
+        const borderColor = isInactivo
+          ? 'border-red-300'
+          : !p._ok
+            ? 'border-amber-400'
+            : aptoCredito === 'si'
+              ? 'border-green-500'
+              : 'border-blue-400';
+
+        const cardBg = isInactivo
+          ? 'bg-red-50/70'
+          : p._ok
+            ? 'bg-white'
+            : 'bg-amber-50/50';
+
+        // Antigüedad formateada
+        const antiguedad = p.antiguedad
+          ? (p.antiguedad === '0' ? 'A estrenar' : p.antiguedad + 'a')
+          : null;
+
+        // m² con descubiertos
+        const m2Desc = parseFloat(p.m2_desc) || 0;
+        const m2Display = p._m2
+          ? (m2Desc > 0 ? `${p._m2}m² <span class="text-green-600">+${m2Desc}</span>` : `${p._m2}m²`)
+          : null;
+
+        // Amenities compactos con check/cross
+        const terraza = p.terraza?.toLowerCase();
+        const balcon = p.balcon?.toLowerCase();
+        const patio = p.patio?.toLowerCase();
+        const cochera = p.cocheras && p.cocheras !== '0';
+
+        const amenityChecks = [
+          terraza === 'si' ? '<span class="text-green-600">T✓</span>' : terraza === 'no' ? '<span class="text-slate-300">T✗</span>' : null,
+          balcon === 'si' ? '<span class="text-green-600">B✓</span>' : balcon === 'no' ? '<span class="text-slate-300">B✗</span>' : null,
+          patio === 'si' ? '<span class="text-green-600">P✓</span>' : patio === 'no' ? '<span class="text-slate-300">P✗</span>' : null,
+          cochera ? '<span class="text-green-600">🚗</span>' : '<span class="text-slate-300">🚗✗</span>',
         ].filter(Boolean);
 
+        // Tiempo publicado
+        const diasPub = diasHace(p.fecha_publicado);
+        const tiempoPub = diasPub !== null ? formatTiempoHace(diasPub) : null;
+
         return `
-          <div class="${cardStyle} rounded-xl p-4 shadow-sm cursor-pointer hover:shadow-md transition-shadow" onclick="showDetail(${p._idx})">
-            <!-- Header: Tier + Score + Status + Apto -->
-            <div class="flex items-center justify-between mb-2">
+          <div class="${cardBg} rounded-xl border-l-4 ${borderColor} shadow-sm cursor-pointer hover:shadow-md active:scale-[0.99] transition-all" onclick="showDetail(${p._idx})">
+
+            <!-- Row 1: Barrio + Tier + Badge temporal -->
+            <div class="flex items-center justify-between px-4 pt-3 pb-1">
               <div class="flex items-center gap-2">
-                ${tierBadge(p._tier)}
-                <span class="text-xs font-mono px-1.5 py-0.5 rounded ${p._score > 50 ? 'bg-green-100 text-green-700 font-bold' : p._score > 0 ? 'bg-green-50 text-green-600' : 'bg-slate-100 text-slate-400'}">⭐${p._score}</span>
-                ${statusBadge(p.status)}
+                <span class="font-semibold text-slate-700">${p.barrio || '<span class="text-slate-300">Sin barrio</span>'}</span>
+                ${p.tipo ? `<span class="text-xs text-slate-400">${p.tipo.toUpperCase()}</span>` : ''}
               </div>
-              <div class="flex items-center gap-1">
-                ${aptoCredito === 'si' ? '<span class="text-xs bg-purple-100 text-purple-700 px-1.5 py-0.5 rounded">Apto</span>' : aptoCredito === 'no' ? '<span class="text-xs bg-red-100 text-red-600 px-1.5 py-0.5 rounded">No apto</span>' : '<span class="text-xs bg-yellow-100 text-yellow-700 px-1.5 py-0.5 rounded">?</span>'}
-                ${warningsBadge(p._warnings)}
+              <div class="flex items-center gap-1.5">
+                ${tierBadge(p._tier)}
+                ${p._esNueva ? '<span class="text-[10px] bg-green-500 text-white px-1.5 py-0.5 rounded font-medium">NUEVA</span>' : ''}
+                ${p._vendidaReciente ? '<span class="text-[10px] bg-purple-500 text-white px-1.5 py-0.5 rounded font-medium">VENDIDA</span>' : ''}
+              </div>
+            </div>
+
+            <!-- Row 2: Dirección -->
+            <div class="px-4 pb-2">
+              <div class="text-sm text-slate-600 leading-tight">${p.direccion || '<span class="text-slate-300 italic">sin dirección</span>'}</div>
+            </div>
+
+            <!-- Row 3: Precio + m² (prominente) -->
+            <div class="flex items-baseline justify-between px-4 pb-2">
+              <div>
+                ${p._precio > 0
+                  ? `<span class="text-xl font-bold text-slate-800">$${p._precio.toLocaleString()}</span>`
+                  : '<span class="text-slate-300 text-lg">$?</span>'}
+                ${p._expensas > 0 ? `<span class="text-xs text-slate-400 ml-1">+${Math.round(p._expensas/1000)}k</span>` : ''}
+              </div>
+              <div class="text-right">
+                ${m2Display ? `<span class="text-lg font-semibold text-slate-700">${m2Display}</span>` : '<span class="text-slate-300">-m²</span>'}
+              </div>
+            </div>
+
+            <!-- Row 4: Detalles secundarios -->
+            <div class="flex items-center gap-2 px-4 pb-2 text-xs text-slate-500 flex-wrap">
+              ${p._preciom2 > 0 ? `<span>$${p._preciom2.toLocaleString()}/m²</span>` : ''}
+              ${p._vsRef !== null ? `<span>${evalIcon(p._vsRef)}</span>` : ''}
+              ${antiguedad ? `<span class="${antiguedad === 'A estrenar' ? 'text-green-600' : ''}">✨${antiguedad}</span>` : ''}
+              ${p.disposicion?.toLowerCase() === 'frente' ? '<span class="text-blue-600">☀️ Frente</span>' : ''}
+            </div>
+
+            <!-- Row 5: Status chips (OK + Apto + Status) -->
+            <div class="flex items-center gap-2 px-4 pb-2 flex-wrap">
+              ${p._precio > 0 ? `
+                <span class="text-xs px-2 py-1 rounded-full font-medium ${p._ok
+                  ? 'bg-green-100 text-green-700'
+                  : 'bg-red-100 text-red-600'}">
+                  ${p._ok ? '✓' : '✗'} $${Math.round(p._total/1000)}k
+                </span>
+              ` : ''}
+              <span class="text-xs px-2 py-1 rounded-full font-medium ${
+                aptoCredito === 'si' ? 'bg-purple-100 text-purple-700' :
+                aptoCredito === 'no' ? 'bg-red-100 text-red-600' :
+                'bg-yellow-100 text-yellow-700'
+              }">
+                ${aptoCredito === 'si' ? '✓ Apto' : aptoCredito === 'no' ? '✗ Apto' : '? Apto'}
+              </span>
+              ${statusBadge(p.status)}
+              ${p._warnings?.length > 0 ? `<span class="text-amber-500 text-xs">⚠️${p._warnings.length}</span>` : ''}
+            </div>
+
+            <!-- Row 6: Features + Meta -->
+            <div class="flex items-center justify-between px-4 pb-3 text-xs border-t border-slate-100 pt-2 mt-1">
+              <div class="flex items-center gap-3 text-slate-600">
+                ${p.amb ? `<span>${p.amb} amb</span>` : ''}
+                ${p.banos && p.banos !== '0' ? `<span>${p.banos} ba</span>` : ''}
+                <span class="flex items-center gap-1">${amenityChecks.join(' ')}</span>
+              </div>
+              <div class="flex items-center gap-2 text-slate-400">
+                ${tiempoPub ? `<span>${tiempoPub}</span>` : ''}
                 ${printBadge(p.fecha_print)}
               </div>
             </div>
 
-            <!-- Dirección y Barrio -->
-            <div class="mb-2">
-              <div class="font-medium text-slate-800 leading-tight">${p.direccion ? escapeHtml(p.direccion) : '<span class="text-slate-300 italic">sin dirección</span>'}</div>
-              <div class="text-sm text-slate-500">${p.barrio ? escapeHtml(p.barrio) : '<span class="text-slate-300 italic">sin barrio</span>'} ${p.tipo ? '· ' + p.tipo.toUpperCase() : ''}</div>
-            </div>
-
-            <!-- Precio y Expensas -->
-            <div class="flex items-baseline gap-3 mb-2">
-              ${p._precio > 0 ? (p._hayNeg
-                ? '<span class="text-sm line-through text-slate-400">$' + p._precio.toLocaleString() + '</span><span class="text-lg font-bold text-orange-600">$' + p._precioNeg.toLocaleString() + '</span>'
-                : '<span class="text-lg font-bold text-slate-800">$' + p._precio.toLocaleString() + '</span>')
-              : '<span class="text-slate-300">$?</span>'}
-              ${p._expensas > 0 ? '<span class="text-xs text-slate-500">+ $' + Math.round(p._expensas/1000) + 'k exp</span>' : ''}
-            </div>
-
-            <!-- Stats: m², $/m², vs Ref -->
-            <div class="flex items-center gap-3 text-sm text-slate-600 mb-2">
-              <span>${p._m2 ? p._m2 + 'm²' : '<span class="text-slate-300">-</span>'}</span>
-              ${p._preciom2 > 0 ? '<span class="text-slate-400">·</span><span>$' + p._preciom2.toLocaleString() + '/m²</span>' : ''}
-              ${evalIcon(p._vsRef)}
-            </div>
-
-            <!-- A juntar + OK -->
-            <div class="flex items-center justify-between mb-2 py-2 px-3 rounded-lg ${p._ok ? 'bg-green-50' : 'bg-red-50'}">
-              <span class="text-xs text-slate-600">A juntar:</span>
-              <div class="flex items-center gap-2">
-                <span class="font-mono font-medium ${p._ok ? 'text-green-700' : 'text-red-600'}">$${p._precio > 0 ? p._total.toLocaleString() : '-'}</span>
-                ${p._precio > 0 ? okPill(p._ok) : ''}
-              </div>
-            </div>
-
-            <!-- Amenities -->
-            ${amenities.length > 0 ? '<div class="flex items-center gap-2 text-sm">' + amenities.join('<span class="text-slate-300">·</span>') + '</div>' : ''}
           </div>
         `;
       }).join('')}
