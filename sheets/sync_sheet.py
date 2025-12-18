@@ -15,10 +15,9 @@ Opciones de push:
 
 import argparse
 import json
-import re
 import subprocess
 import time
-from datetime import datetime, timedelta
+from datetime import datetime
 from pathlib import Path
 
 # Cargar variables de entorno desde .env
@@ -33,15 +32,12 @@ import httpx
 # =============================================================================
 from core import (
     # Constantes
-    SCOPES,
     SHEET_ID,
     WORKSHEET_NAME,
     LOCAL_FILE,
-    CACHE_FILE,
     PRINTS_DIR,
     PRINTS_INDEX,
     # Helpers
-    get_active_rows,
     calcular_m2_faltantes,
     inferir_valores_faltantes,
     # Sheets API
@@ -53,28 +49,20 @@ from core import (
     # Storage
     load_local_data,
     save_local_data,
-    require_local_data,
     load_cache,
     save_cache,
     # Scrapers
-    scrape_argenprop,
-    scrape_mercadolibre,
     scrape_link,
     get_rows_to_scrape,
     apply_scraped_data,
     is_offline_error,
     # Validation
-    add_warning,
     clear_warnings,
-    get_warnings,
     print_warnings_summary,
     validar_propiedad,
     get_properties_with_missing_data,
     # Prints
     PRINT_DIAS_VENCIMIENTO,
-    PRINT_PATTERN_ID,
-    PRINT_PATTERN_FILA,
-    generar_nombre_print,
     get_prints_index,
     sync_print_dates,
     build_property_index,
@@ -84,11 +72,8 @@ from core import (
     get_orphan_prints,
     save_prints_index,
     clasificar_prints,
-    extraer_datos_pdf,
     analizar_prints_vs_sheet,
     analizar_tres_fuentes,
-    # Storage adicional
-    get_cache_for_url,
     # Templates
     PREVIEW_SHOW_COLS,
     PREVIEW_DIFF_COLS,

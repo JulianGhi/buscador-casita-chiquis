@@ -36,6 +36,10 @@ PRINT_PATTERN_FILA = re.compile(
 # Extensiones de archivo validas para prints
 PRINT_EXTENSIONS = ['.pdf', '.png', '.jpg', '.jpeg']
 
+# Longitud mínima de contenido antes de cortar texto del PDF
+# Evita cortar prematuramente si hay secciones irrelevantes al inicio
+PDF_MIN_CONTENT_LENGTH = 500
+
 
 # =============================================================================
 # FUNCIONES HELPER
@@ -561,44 +565,13 @@ def extraer_numero(texto):
         return None
 
 
-def extraer_datos_pdf(filepath):
-    """
-    Extrae datos de propiedad de un PDF de aviso inmobiliario.
+# =============================================================================
+# EXTRACTORES DE DATOS PDF - Funciones auxiliares
+# =============================================================================
 
-    Busca patrones comunes de MercadoLibre, Argenprop y Zonaprop.
-
-    Args:
-        filepath: Path al archivo PDF
-
-    Returns:
-        dict: Datos extraídos {precio, moneda, m2_tot, m2_cub, m2_desc,
-              expensas, ambientes, banos, terraza, balcon, cochera, ...}
-    """
-    texto_completo = extraer_texto_pdf(filepath)
-    if not texto_completo:
-        return {}
-
-    # Filtrar texto: solo usar contenido ANTES del sidebar de propiedades sugeridas
-    # Esto evita capturar datos de otras propiedades
-    cortes = [
-        'estas propiedades también podrían interesarte',
-        'propiedades similares',
-        'te puede interesar',
-    ]
-    texto = texto_completo
-    texto_check = texto_completo.lower()
-    for corte in cortes:
-        idx = texto_check.find(corte)
-        if idx > 500:  # Solo cortar si hay suficiente contenido antes
-            texto = texto_completo[:idx]
-            break
-
+def _extraer_precio_pdf(texto_lower, texto_original):
+    """Extrae precio y moneda del texto del PDF."""
     data = {}
-    texto_lower = texto.lower()
-
-    # =========================================================================
-    # PRECIO
-    # =========================================================================
     # USD 180.000 / U$S 180000 / US$ 180.000
     precio_usd = re.search(
         r'(?:u[s$]+|usd)\s*[\$]?\s*([\d.,]+)',
@@ -609,16 +582,18 @@ def extraer_datos_pdf(filepath):
         data['moneda'] = 'USD'
     else:
         # $ 180.000.000 (pesos)
-        precio_ars = re.search(r'\$\s*([\d.,]+)', texto)
+        precio_ars = re.search(r'\$\s*([\d.,]+)', texto_original)
         if precio_ars:
             num = extraer_numero(precio_ars.group(1))
             if num and num > 50000:  # Probablemente pesos
                 data['precio'] = num
                 data['moneda'] = 'ARS'
+    return data
 
-    # =========================================================================
-    # METROS CUADRADOS
-    # =========================================================================
+
+def _extraer_m2_pdf(texto_lower):
+    """Extrae metros cuadrados (cubiertos, descubiertos, totales) del texto."""
+    data = {}
     # Sup. Cubierta: 58 m2 / Superficie cubierta: 58m²
     m2_cub_match = re.search(
         r'(?:sup(?:\.|erficie)?\.?\s*)?cubierta[:\s]*([\d.,]+)\s*m',
@@ -649,9 +624,11 @@ def extraer_datos_pdf(filepath):
         if m2_generico:
             data['m2_tot'] = float(m2_generico.group(1))
 
-    # =========================================================================
-    # EXPENSAS
-    # =========================================================================
+    return data
+
+
+def _extraer_expensas_pdf(texto_lower):
+    """Extrae valor de expensas del texto."""
     # Expensas: $ 107.000 / Expensas $107000
     exp_match = re.search(
         r'expensas[:\s]*\$?\s*([\d.,]+)',
@@ -663,19 +640,19 @@ def extraer_datos_pdf(filepath):
             # Normalizar a pesos completos
             if exp_val < 1000:
                 exp_val = exp_val * 1000
-            data['expensas'] = int(exp_val)
+            return {'expensas': int(exp_val)}
+    return {}
 
-    # =========================================================================
-    # AMBIENTES / HABITACIONES
-    # =========================================================================
-    # Priorizar dato estructurado de MercadoLibre: línea que empieza con "Ambientes" y tiene número
-    # Formato típico: "      Ambientes                   3"
-    # Usar newline antes de Ambientes para asegurar que es dato estructurado, no título
+
+def _extraer_ambientes_pdf(texto_lower):
+    """Extrae cantidad de ambientes y dormitorios del texto."""
+    data = {}
+    # Priorizar dato estructurado de MercadoLibre: línea con "Ambientes" y número
     amb_match = re.search(r'(?:^|\n)\s*ambientes\s+(\d{1,2})(?:\s|$)', texto_lower, re.MULTILINE)
     if amb_match:
         data['ambientes'] = int(amb_match.group(1))
-    elif not data.get('ambientes'):
-        # Fallback: "3 ambientes" o "3 amb" en descripción (número ANTES de "amb")
+    else:
+        # Fallback: "3 ambientes" o "3 amb" en descripción
         amb_match = re.search(r'(\d{1,2})\s*amb(?:ientes)?(?:\s|\.|\,|$)', texto_lower)
         if amb_match:
             data['ambientes'] = int(amb_match.group(1))
@@ -688,10 +665,12 @@ def extraer_datos_pdf(filepath):
     if dorm_match:
         data['dormitorios'] = int(dorm_match.group(1))
 
-    # =========================================================================
-    # BAÑOS
-    # =========================================================================
-    # Patrón más específico: "baños: 2" o "2 baños" (evita capturar m²)
+    return data
+
+
+def _extraer_banos_pdf(texto_lower):
+    """Extrae cantidad de baños del texto."""
+    # Patrón más específico: "baños: 2" o "2 baños"
     banos_match = re.search(r'baños?\s*[:\s]\s*(\d+)', texto_lower)
     if not banos_match:
         banos_match = re.search(r'(\d+)\s*baños?', texto_lower)
@@ -699,11 +678,13 @@ def extraer_datos_pdf(filepath):
         num_banos = int(banos_match.group(1))
         # Sanity check: máximo 10 baños (evita capturar m²)
         if num_banos <= 10:
-            data['banos'] = num_banos
+            return {'banos': num_banos}
+    return {}
 
-    # =========================================================================
-    # COCHERA
-    # =========================================================================
+
+def _extraer_cochera_pdf(texto_lower):
+    """Extrae información de cochera del texto."""
+    data = {}
     if re.search(r'cochera|garage|estacionamiento', texto_lower):
         # Primero buscar cantidad: "cocheras: 0" = no tiene
         coch_num = re.search(r'cocheras?[:\s]*(\d+)', texto_lower)
@@ -717,50 +698,53 @@ def extraer_datos_pdf(filepath):
         # Si menciona cochera sin número ni negación, asumir que tiene
         elif re.search(r'con\s+cochera|c/cochera|tiene\s+cochera', texto_lower):
             data['cochera'] = 'si'
+    return data
 
-    # =========================================================================
-    # TERRAZA / BALCÓN (usando detectar_atributo compartido)
-    # =========================================================================
+
+def _extraer_terraza_balcon_pdf(texto_lower, texto_original):
+    """Extrae información de terraza y balcón del texto."""
     from .helpers import detectar_atributo
 
+    data = {}
     # Tipo de balcón: Terraza → es balcón, no terraza
     if re.search(r'tipo\s+de\s+balc[oó]n[:\s]*terraza', texto_lower):
         data['balcon'] = 'si'
-        # No marcar terraza
     else:
         # Terraza real
-        result = detectar_atributo(texto, 'terraza')
+        result = detectar_atributo(texto_original, 'terraza')
         if result:
             data['terraza'] = result
 
         # Balcón
-        result = detectar_atributo(texto, 'balcon')
+        result = detectar_atributo(texto_original, 'balcon')
         if result:
             data['balcon'] = result
 
-    # =========================================================================
-    # ANTIGÜEDAD
-    # =========================================================================
-    # Buscar antigüedad explícita primero
+    return data
+
+
+def _extraer_antiguedad_pdf(texto_lower):
+    """Extrae antigüedad del inmueble del texto."""
     antig_match = re.search(r'antig[üu]edad[:\s]*(\d+)', texto_lower)
     if antig_match:
-        data['antiguedad'] = int(antig_match.group(1))
-    # Solo si dice explícitamente "a estrenar" como atributo, no en descripciones
-    elif re.search(r'(?:^|\n)\s*a\s+estrenar\s*(?:\n|$)|antig[üu]edad[:\s]*(?:a\s+estrenar|0)', texto_lower):
-        data['antiguedad'] = 0
+        return {'antiguedad': int(antig_match.group(1))}
+    # Solo si dice explícitamente "a estrenar" como atributo
+    if re.search(r'(?:^|\n)\s*a\s+estrenar\s*(?:\n|$)|antig[üu]edad[:\s]*(?:a\s+estrenar|0)', texto_lower):
+        return {'antiguedad': 0}
+    return {}
 
-    # =========================================================================
-    # DISPOSICIÓN
-    # =========================================================================
+
+def _extraer_disposicion_pdf(texto_lower):
+    """Extrae disposición (frente/contrafrente) del texto."""
     if re.search(r'disposici[oó]n[:\s]*frente|orientaci[oó]n[:\s]*frente', texto_lower):
-        data['disposicion'] = 'frente'
-    elif re.search(r'disposici[oó]n[:\s]*contrafrente', texto_lower):
-        data['disposicion'] = 'contrafrente'
+        return {'disposicion': 'frente'}
+    if re.search(r'disposici[oó]n[:\s]*contrafrente', texto_lower):
+        return {'disposicion': 'contrafrente'}
+    return {}
 
-    # =========================================================================
-    # ESTADO DEL INMUEBLE
-    # =========================================================================
-    # Buscar "Estado: Usado", "Estado del inmueble: Buen estado", etc.
+
+def _extraer_estado_pdf(texto_lower):
+    """Extrae estado del inmueble del texto."""
     estado_match = re.search(
         r'(?:estado(?:\s+del\s+inmueble)?|condici[oó]n)[:\s]*(a\s+estrenar|usado|buen(?:\s+estado)?|muy\s+buen(?:\s+estado)?|excelente|a\s+reciclar|a\s+refaccionar|reciclado|en\s+construcci[oó]n)',
         texto_lower
@@ -772,66 +756,111 @@ def extraer_datos_pdf(filepath):
             val = 'Buen Estado'
         elif val.lower() == 'muy buen':
             val = 'Muy Buen Estado'
-        data['estado'] = val
+        return {'estado': val}
+    return {}
 
-    # =========================================================================
-    # LUMINOSIDAD (usando detectar_atributo compartido)
-    # =========================================================================
-    result = detectar_atributo(texto, 'luminosidad')
+
+def _extraer_atributos_si_no_pdf(texto_lower, texto_original):
+    """Extrae atributos booleanos: luminosidad, apto crédito, ascensor."""
+    from .helpers import detectar_atributo
+
+    data = {}
+
+    # LUMINOSIDAD
+    result = detectar_atributo(texto_original, 'luminosidad')
     if result:
         data['luminoso'] = result
 
-    # =========================================================================
-    # APTO CRÉDITO - Buscar primero patrón estructurado "Apto crédito: Si/No"
-    # =========================================================================
-    # MercadoLibre muestra "Apto crédito    Si" o "Apto crédito    No" en tabla
-    apto_match = re.search(
-        r'apto\s+cr[eé]dito\s+([sn][ioí])',
-        texto_lower
-    )
+    # APTO CRÉDITO - Buscar primero patrón estructurado
+    apto_match = re.search(r'apto\s+cr[eé]dito\s+([sn][ioí])', texto_lower)
     if apto_match:
         val = apto_match.group(1).lower()
         data['apto_credito'] = 'si' if val.startswith('s') else 'no'
     else:
-        # Fallback a detectar_atributo solo si no encontró patrón estructurado
-        result = detectar_atributo(texto, 'apto_credito')
+        result = detectar_atributo(texto_original, 'apto_credito')
         if result:
             data['apto_credito'] = result
 
-    # =========================================================================
-    # ASCENSOR - Buscar primero patrón estructurado "Ascensor: Si/No"
-    # =========================================================================
-    asc_match = re.search(
-        r'ascensor\s+([sn][ioí])',
-        texto_lower
-    )
+    # ASCENSOR - Buscar primero patrón estructurado
+    asc_match = re.search(r'ascensor\s+([sn][ioí])', texto_lower)
     if asc_match:
         val = asc_match.group(1).lower()
         data['ascensor'] = 'si' if val.startswith('s') else 'no'
     else:
-        result = detectar_atributo(texto, 'ascensor')
+        result = detectar_atributo(texto_original, 'ascensor')
         if result:
             data['ascensor'] = result
 
-    # =========================================================================
-    # ID DE PROPIEDAD (para verificación)
-    # =========================================================================
+    return data
+
+
+def _extraer_id_propiedad_pdf(texto_original):
+    """Extrae ID de propiedad para verificación."""
     # MercadoLibre: MLA-123456789
-    meli_match = re.search(r'MLA-?(\d{8,12})', texto, re.IGNORECASE)
+    meli_match = re.search(r'MLA-?(\d{8,12})', texto_original, re.IGNORECASE)
     if meli_match:
-        data['_prop_id'] = f"MLA{meli_match.group(1)}"
+        return {'_prop_id': f"MLA{meli_match.group(1)}"}
 
     # MercadoLibre alternativo: "Publicación #2539332096"
-    if '_prop_id' not in data:
-        pub_match = re.search(r'[Pp]ublicaci[oó]n\s*#\s*(\d{8,12})', texto)
-        if pub_match:
-            data['_prop_id'] = f"MLA{pub_match.group(1)}"
+    pub_match = re.search(r'[Pp]ublicaci[oó]n\s*#\s*(\d{8,12})', texto_original)
+    if pub_match:
+        return {'_prop_id': f"MLA{pub_match.group(1)}"}
 
     # Argenprop
-    if '_prop_id' not in data:
-        argenprop_match = re.search(r'argenprop\.com[^\s]*--(\d+)', texto)
-        if argenprop_match:
-            data['_prop_id'] = f"AP{argenprop_match.group(1)}"
+    argenprop_match = re.search(r'argenprop\.com[^\s]*--(\d+)', texto_original)
+    if argenprop_match:
+        return {'_prop_id': f"AP{argenprop_match.group(1)}"}
+
+    return {}
+
+
+def extraer_datos_pdf(filepath):
+    """
+    Extrae datos de propiedad de un PDF de aviso inmobiliario.
+
+    Busca patrones comunes de MercadoLibre, Argenprop y Zonaprop.
+
+    Args:
+        filepath: Path al archivo PDF
+
+    Returns:
+        dict: Datos extraídos {precio, moneda, m2_tot, m2_cub, m2_desc,
+              expensas, ambientes, banos, terraza, balcon, cochera, ...}
+    """
+    texto_completo = extraer_texto_pdf(filepath)
+    if not texto_completo:
+        return {}
+
+    # Filtrar texto: solo usar contenido ANTES del sidebar de propiedades sugeridas
+    cortes = [
+        'estas propiedades también podrían interesarte',
+        'propiedades similares',
+        'te puede interesar',
+    ]
+    texto = texto_completo
+    texto_check = texto_completo.lower()
+    for corte in cortes:
+        idx = texto_check.find(corte)
+        if idx > PDF_MIN_CONTENT_LENGTH:
+            texto = texto_completo[:idx]
+            break
+
+    texto_lower = texto.lower()
+
+    # Extraer datos usando funciones auxiliares
+    data = {}
+    data.update(_extraer_precio_pdf(texto_lower, texto))
+    data.update(_extraer_m2_pdf(texto_lower))
+    data.update(_extraer_expensas_pdf(texto_lower))
+    data.update(_extraer_ambientes_pdf(texto_lower))
+    data.update(_extraer_banos_pdf(texto_lower))
+    data.update(_extraer_cochera_pdf(texto_lower))
+    data.update(_extraer_terraza_balcon_pdf(texto_lower, texto))
+    data.update(_extraer_antiguedad_pdf(texto_lower))
+    data.update(_extraer_disposicion_pdf(texto_lower))
+    data.update(_extraer_estado_pdf(texto_lower))
+    data.update(_extraer_atributos_si_no_pdf(texto_lower, texto))
+    data.update(_extraer_id_propiedad_pdf(texto))
 
     return data
 

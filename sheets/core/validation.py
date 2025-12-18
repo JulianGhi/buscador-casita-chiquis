@@ -10,6 +10,14 @@ Incluye:
 from .helpers import extraer_m2
 
 # =============================================================================
+# CONSTANTES DE VALIDACIÓN
+# =============================================================================
+
+# Umbrales de precio (USD) para detectar precios sospechosos
+PRECIO_MINIMO_RAZONABLE = 30000   # < este valor = muy bajo para CABA
+PRECIO_MAXIMO_RAZONABLE = 500000  # > este valor = muy alto para depto
+
+# =============================================================================
 # SISTEMA DE WARNINGS
 # =============================================================================
 
@@ -94,9 +102,9 @@ def validar_propiedad(data, contexto=None):
     # Validar precio sospechoso
     precio = int(data.get('precio') or 0)
     if precio > 0:
-        if precio < 30000:
+        if precio < PRECIO_MINIMO_RAZONABLE:
             add_warning('precio_bajo', f"Precio muy bajo: ${precio:,}", ctx)
-        elif precio > 500000:
+        elif precio > PRECIO_MAXIMO_RAZONABLE:
             add_warning('precio_alto', f"Precio muy alto: ${precio:,}", ctx)
 
     # Validar atributos inciertos

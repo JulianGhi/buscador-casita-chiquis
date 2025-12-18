@@ -44,11 +44,11 @@ from sync_sheet import (
     cmd_prints_validate,
     main,
     LOCAL_FILE,
-    CACHE_FILE,
     PRINTS_DIR,
     SCRAPEABLE_COLS,
     CAMPOS_IMPORTANTES,
 )
+from core import CACHE_FILE
 
 
 # =============================================================================
@@ -204,7 +204,7 @@ class TestCmdScrape:
         '''
 
         with patch('sync_sheet.LOCAL_FILE', local_file), \
-             patch('sync_sheet.CACHE_FILE', cache_file), \
+             patch('core.storage.CACHE_FILE', cache_file), \
              patch('sync_sheet.load_cache', return_value={}), \
              patch('sync_sheet.save_cache'), \
              patch('httpx.get', return_value=mock_response):
