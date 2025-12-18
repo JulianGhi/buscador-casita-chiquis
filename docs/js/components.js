@@ -4,22 +4,21 @@
 
 function renderStatusBar(stats) {
   return `
-    <div class="bg-slate-800 text-white">
-      <div class="max-w-7xl mx-auto px-4 py-1 flex items-center justify-between text-xs">
-        <div class="flex items-center gap-3">
-          <div class="flex items-center gap-1.5">
-            ${state.loading
-              ? '<span class="w-2 h-2 bg-yellow-400 rounded-full animate-pulse"></span><span class="text-yellow-300">Cargando...</span>'
-              : state.error
-                ? '<span class="w-2 h-2 bg-red-400 rounded-full"></span><span class="text-red-300">Error</span>'
-                : '<span class="w-2 h-2 bg-green-400 rounded-full"></span><span class="text-green-300">OK</span>'
-            }
-          </div>
-          ${state.lastUpdate ? `<span class="text-slate-400">· ${state.lastUpdate.toLocaleTimeString()}</span>` : ''}
-          <span class="text-slate-500">${state.autoRefreshEnabled ? '· Auto ●' : ''}</span>
+    <div class="bg-slate-800 text-white mobile-status-bar">
+      <div class="max-w-7xl mx-auto flex items-center justify-between">
+        <div class="flex items-center gap-2">
+          ${state.loading
+            ? '<span class="w-2 h-2 bg-yellow-400 rounded-full animate-pulse"></span><span class="text-yellow-300">...</span>'
+            : state.error
+              ? '<span class="w-2 h-2 bg-red-400 rounded-full"></span><span class="text-red-300">Error</span>'
+              : '<span class="w-2 h-2 bg-green-400 rounded-full"></span><span class="text-green-300 hide-mobile">OK</span>'
+          }
+          ${state.autoRefreshEnabled ? '<span class="text-green-400">●</span>' : ''}
         </div>
-        <div class="text-slate-400">
-          ${stats.total} props · ${stats.activos} activas · ${stats.entran} entran · <span class="text-slate-600">v6-modular</span>
+        <div class="text-slate-400 flex items-center gap-1">
+          <span class="font-medium text-slate-300">${stats.activos}</span><span class="hide-mobile"> activas</span>
+          <span class="text-slate-600">·</span>
+          <span class="text-green-400 font-medium">${stats.entran}</span><span class="hide-mobile"> entran</span>
         </div>
       </div>
     </div>
@@ -30,25 +29,21 @@ function renderDolarBar() {
   const formatVariacion = (v) => (parseFloat(v) > 0 ? '+' : '') + (v || '0') + '%';
 
   return `
-    <div class="bg-slate-700 text-white">
-      <div class="max-w-7xl mx-auto px-4 py-1 flex items-center justify-between">
-        <div class="flex items-center gap-3">
-          <span class="text-slate-400 text-xs">💵 Dólar BNA</span>
-          ${state.dolarBNA ? `
-            <span class="font-bold text-emerald-400">$${state.dolarBNA.venta}</span>
-            <span class="text-slate-500">|</span>
-            ${state.dolarBNA.variaciones ? `
-              <span class="text-xs ${variacionColor(state.dolarBNA.variaciones.dia)}">1d: ${formatVariacion(state.dolarBNA.variaciones.dia)}</span>
-              <span class="text-slate-600">|</span>
-              <span class="text-xs ${variacionColor(state.dolarBNA.variaciones.semana)}">7d: ${formatVariacion(state.dolarBNA.variaciones.semana)}</span>
-              <span class="text-slate-600">|</span>
-              <span class="text-xs ${variacionColor(state.dolarBNA.variaciones.mes)}">30d: ${formatVariacion(state.dolarBNA.variaciones.mes)}</span>
-            ` : ''}
-          ` : `
-            <span class="text-slate-500 text-xs">Cargando...</span>
-          `}
-        </div>
-        <button onclick="cargarDolarHoy()" class="text-xs text-slate-400 hover:text-white transition-colors" ${state.loadingDolar ? 'disabled' : ''}>
+    <div class="bg-slate-700 text-white dolar-bar">
+      <div class="max-w-7xl mx-auto flex items-center gap-2 w-full">
+        <span class="text-slate-400">💵</span>
+        ${state.dolarBNA ? `
+          <span class="font-bold text-emerald-400">$${state.dolarBNA.venta}</span>
+          ${state.dolarBNA.variaciones ? `
+            <div class="variaciones flex items-center gap-2 text-xs">
+              <span class="text-slate-500">|</span>
+              <span class="${variacionColor(state.dolarBNA.variaciones.dia)}">${formatVariacion(state.dolarBNA.variaciones.dia)}</span>
+              <span class="${variacionColor(state.dolarBNA.variaciones.semana)}">${formatVariacion(state.dolarBNA.variaciones.semana)}</span>
+              <span class="${variacionColor(state.dolarBNA.variaciones.mes)}">${formatVariacion(state.dolarBNA.variaciones.mes)}</span>
+            </div>
+          ` : ''}
+        ` : '<span class="text-slate-500">...</span>'}
+        <button onclick="cargarDolarHoy()" class="ml-auto text-slate-400 hover:text-white btn-icon" ${state.loadingDolar ? 'disabled' : ''}>
           ${state.loadingDolar ? '...' : '↻'}
         </button>
       </div>
@@ -61,31 +56,29 @@ function renderMainHeader(activePage = 'buscador') {
   const isStats = activePage === 'stats';
 
   return `
-    <div class="max-w-7xl mx-auto px-4 py-3">
-      <div class="flex flex-wrap items-center justify-between gap-3">
-        <div class="flex items-center gap-4">
-          <h1 class="text-xl font-bold text-slate-800">🏠 Casita Chiquis ${isBuscador ? '<span class="emoji-float text-sm">👩❤️🧔‍♂️🐱🐈</span>' : ''}</h1>
-          <nav class="flex bg-slate-100 rounded-lg p-1">
+    <div class="header-main max-w-7xl mx-auto">
+      <div class="flex items-center justify-between gap-2">
+        <div class="flex items-center gap-2 sm:gap-3 min-w-0">
+          <h1 class="header-title font-bold text-slate-800 truncate">🏠 <span class="hide-mobile">Casita </span>Chiquis</h1>
+          <nav class="nav-pills shrink-0">
             ${isBuscador
-              ? '<span class="px-3 py-1.5 text-sm rounded-md bg-white shadow-sm text-slate-700 font-medium">Buscador</span>'
-              : '<a href="index.html" class="px-3 py-1.5 text-sm rounded-md text-slate-600 hover:bg-white/50">Buscador</a>'
+              ? '<span class="nav-pill bg-white shadow-sm text-slate-700 font-medium">🔍</span>'
+              : '<a href="index.html" class="nav-pill text-slate-600 hover:bg-white/50">🔍</a>'
             }
             ${isStats
-              ? '<span class="px-3 py-1.5 text-sm rounded-md bg-white shadow-sm text-slate-700 font-medium">📊 Stats</span>'
-              : '<a href="stats.html" class="px-3 py-1.5 text-sm rounded-md text-slate-600 hover:bg-white/50">📊 Stats</a>'
+              ? '<span class="nav-pill bg-white shadow-sm text-slate-700 font-medium">📊</span>'
+              : '<a href="stats.html" class="nav-pill text-slate-600 hover:bg-white/50">📊</a>'
             }
           </nav>
         </div>
-        <div class="flex items-center gap-2">
-          <a href="https://docs.google.com/spreadsheets/d/${SHEET_ID}" target="_blank" class="px-3 py-1.5 bg-green-600 text-white text-sm rounded-lg hover:bg-green-700" title="Abrir Google Sheet">📝 Sheet</a>
-          <button onclick="fetchData()" class="px-3 py-1.5 bg-blue-500 text-white text-sm rounded-lg hover:bg-blue-600 disabled:opacity-50" ${state.loading ? 'disabled' : ''} title="Actualizar datos">${state.loading ? '...' : '↻'}</button>
-          <button onclick="toggleAutoRefresh()" class="px-3 py-1.5 ${state.autoRefreshEnabled ? 'bg-green-500 text-white' : 'bg-slate-200 text-slate-700'} text-sm rounded-lg hover:opacity-80" title="Auto-refresh">${state.autoRefreshEnabled ? '⏸' : '▶'}</button>
-          <span class="w-px h-6 bg-slate-200"></span>
-          <button onclick="state.showHelp=!state.showHelp;render()" class="px-3 py-1.5 ${state.showHelp ? 'bg-purple-500 text-white' : 'bg-slate-200 text-slate-700'} text-sm rounded-lg hover:opacity-80" title="Ayuda">?</button>
-          <button onclick="state.showConfig=!state.showConfig;render()" class="px-3 py-1.5 ${state.showConfig ? 'bg-blue-500 text-white' : 'bg-slate-200 text-slate-700'} text-sm rounded-lg hover:opacity-80" title="Config">⚙️</button>
+        <div class="btn-group shrink-0">
+          <a href="https://docs.google.com/spreadsheets/d/${SHEET_ID}" target="_blank" class="btn-icon bg-green-600 text-white hover:bg-green-700" title="Sheet">📝</a>
+          <button onclick="fetchData()" class="btn-icon bg-blue-500 text-white hover:bg-blue-600 disabled:opacity-50" ${state.loading ? 'disabled' : ''} title="Actualizar">${state.loading ? '...' : '↻'}</button>
+          <button onclick="state.showHelp=!state.showHelp;render()" class="btn-icon ${state.showHelp ? 'bg-purple-500 text-white' : 'bg-slate-200 text-slate-700'}" title="Ayuda">?</button>
+          <button onclick="state.showConfig=!state.showConfig;render()" class="btn-icon ${state.showConfig ? 'bg-blue-500 text-white' : 'bg-slate-200 text-slate-700'}" title="Config">⚙️</button>
         </div>
       </div>
-      <p class="text-xs text-slate-500 mt-1">Crédito $${getCreditoUSD().toLocaleString()} USD · Tengo $${CONFIG.PRESUPUESTO.toLocaleString()} · Busco $${getPrecioRange().min.toLocaleString()} - $${getPrecioRange().max.toLocaleString()}${CONFIG.NEGOCIACION > 0 ? ' · <span class="text-orange-600 font-medium">🤝 Neg. -' + CONFIG.NEGOCIACION + '%</span>' : ''}</p>
+      <p class="text-xs text-slate-500 mt-1 truncate">$${getCreditoUSD().toLocaleString()} <span class="hide-mobile">crédito</span> · $${getPrecioRange().min.toLocaleString()}-${getPrecioRange().max.toLocaleString()}${CONFIG.NEGOCIACION > 0 ? ' · <span class="text-orange-600">-' + CONFIG.NEGOCIACION + '%</span>' : ''}</p>
     </div>
   `;
 }
@@ -108,61 +101,57 @@ function renderHeader(stats, activePage = 'buscador') {
 
 function renderStatsCards(stats) {
   return `
-    <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-2 md:gap-3 mb-4">
-      <div class="bg-white rounded-xl p-3 shadow-sm"><div class="text-xl md:text-2xl font-bold text-blue-600">${stats.total}</div><div class="text-xs text-slate-500">Total</div></div>
-      <div class="bg-white rounded-xl p-3 shadow-sm"><div class="text-xl md:text-2xl font-bold text-green-600">${stats.entran}</div><div class="text-xs text-slate-500">Entran</div></div>
-      <div class="bg-white rounded-xl p-3 shadow-sm"><div class="text-xl md:text-2xl font-bold text-red-600">${stats.total - stats.entran}</div><div class="text-xs text-slate-500">No entran</div></div>
-      <div class="bg-white rounded-xl p-3 shadow-sm"><div class="text-xl md:text-2xl font-bold text-teal-600">${stats.activos}</div><div class="text-xs text-slate-500">Activos</div></div>
-      <div class="bg-white rounded-xl p-3 shadow-sm"><div class="text-xl md:text-2xl font-bold text-purple-600">$${stats.minPrecio > 0 ? (stats.minPrecio/1000).toFixed(0) + 'k' : '-'}</div><div class="text-xs text-slate-500">Min</div></div>
-      <div class="bg-white rounded-xl p-3 shadow-sm"><div class="text-xl md:text-2xl font-bold text-purple-600">$${stats.maxPrecio > 0 ? (stats.maxPrecio/1000).toFixed(0) + 'k' : '-'}</div><div class="text-xs text-slate-500">Max</div></div>
+    <div class="stats-grid mb-4">
+      <div class="stat-card"><div class="stat-value text-blue-600">${stats.total}</div><div class="stat-label">Total</div></div>
+      <div class="stat-card"><div class="stat-value text-green-600">${stats.entran}</div><div class="stat-label">Entran</div></div>
+      <div class="stat-card"><div class="stat-value text-red-600">${stats.total - stats.entran}</div><div class="stat-label">No entran</div></div>
+      <div class="stat-card"><div class="stat-value text-teal-600">${stats.activos}</div><div class="stat-label">Activos</div></div>
+      <div class="stat-card"><div class="stat-value text-purple-600">$${stats.minPrecio > 0 ? (stats.minPrecio/1000).toFixed(0) + 'k' : '-'}</div><div class="stat-label">Min</div></div>
+      <div class="stat-card"><div class="stat-value text-purple-600">$${stats.maxPrecio > 0 ? (stats.maxPrecio/1000).toFixed(0) + 'k' : '-'}</div><div class="stat-label">Max</div></div>
     </div>
   `;
 }
 
 function renderFilters(barrios, filtered, properties) {
   return `
-    <div class="bg-white rounded-xl p-3 shadow-sm mb-4">
-      <div class="flex flex-wrap gap-2 md:gap-3 items-center text-sm">
-        <select onchange="state.filterStatus=this.value;render()" class="border border-slate-200 rounded-lg px-2 py-1.5 text-sm bg-white">
-          <option value="todos" ${state.filterStatus === 'todos' ? 'selected' : ''}>Status: Todos</option>
+    <div class="bg-white rounded-xl shadow-sm mb-4">
+      <div class="filters-container">
+        <select onchange="state.filterStatus=this.value;render()" class="filter-select">
+          <option value="todos" ${state.filterStatus === 'todos' ? 'selected' : ''}>Status</option>
           <option value="por ver" ${state.filterStatus === 'por ver' ? 'selected' : ''}>Por ver</option>
           <option value="visitado" ${state.filterStatus === 'visitado' ? 'selected' : ''}>Visitado</option>
           <option value="interesado" ${state.filterStatus === 'interesado' ? 'selected' : ''}>Interesado</option>
           <option value="descartado" ${state.filterStatus === 'descartado' ? 'selected' : ''}>Descartado</option>
         </select>
-        <select onchange="state.filterOk=this.value;render()" class="border border-slate-200 rounded-lg px-2 py-1.5 text-sm bg-white">
-          <option value="todos" ${state.filterOk === 'todos' ? 'selected' : ''}>A juntar: Todos</option>
-          <option value="ok" ${state.filterOk === 'ok' ? 'selected' : ''}>✓ Me alcanza</option>
-          <option value="no" ${state.filterOk === 'no' ? 'selected' : ''}>✗ No me alcanza</option>
+        <select onchange="state.filterOk=this.value;render()" class="filter-select">
+          <option value="todos" ${state.filterOk === 'todos' ? 'selected' : ''}>$ Todos</option>
+          <option value="ok" ${state.filterOk === 'ok' ? 'selected' : ''}>✓ Alcanza</option>
+          <option value="no" ${state.filterOk === 'no' ? 'selected' : ''}>✗ No alcanza</option>
         </select>
-        <select onchange="state.filterBarrio=this.value;render()" class="border border-slate-200 rounded-lg px-2 py-1.5 text-sm bg-white">
-          <option value="todos" ${state.filterBarrio === 'todos' ? 'selected' : ''}>Barrio: Todos</option>
+        <select onchange="state.filterBarrio=this.value;render()" class="filter-select">
+          <option value="todos" ${state.filterBarrio === 'todos' ? 'selected' : ''}>Barrio</option>
           ${barrios.map(b => `<option value="${escapeHtml(b)}" ${state.filterBarrio === b ? 'selected' : ''}>${escapeHtml(b)}</option>`).join('')}
         </select>
-        <select onchange="state.filterActivo=this.value;render()" class="border border-slate-200 rounded-lg px-2 py-1.5 text-sm bg-white">
-          <option value="todos" ${state.filterActivo === 'todos' ? 'selected' : ''}>Aviso: Todos</option>
+        <select onchange="state.filterActivo=this.value;render()" class="filter-select">
+          <option value="todos" ${state.filterActivo === 'todos' ? 'selected' : ''}>Aviso</option>
           <option value="si" ${state.filterActivo === 'si' ? 'selected' : ''}>✓ Activo</option>
           <option value="no" ${state.filterActivo === 'no' ? 'selected' : ''}>✗ Baja</option>
         </select>
-        <div class="flex items-center gap-1 ml-auto">
-          <select onchange="state.sortBy=this.value;render()" class="border border-slate-200 rounded-lg px-2 py-1.5 text-sm bg-white">
-            <option value="score" ${state.sortBy === 'score' ? 'selected' : ''}>⭐ Mejor candidato</option>
-            <option value="completeness" ${state.sortBy === 'completeness' ? 'selected' : ''}>Completitud</option>
+        <div class="flex items-center gap-1 ml-auto shrink-0">
+          <select onchange="state.sortBy=this.value;render()" class="filter-select">
+            <option value="score" ${state.sortBy === 'score' ? 'selected' : ''}>⭐ Mejor</option>
             <option value="precio" ${state.sortBy === 'precio' ? 'selected' : ''}>Precio</option>
-            <option value="total" ${state.sortBy === 'total' ? 'selected' : ''}>A juntar</option>
-            <option value="dif" ${state.sortBy === 'dif' ? 'selected' : ''}>Diferencia</option>
             <option value="preciom2" ${state.sortBy === 'preciom2' ? 'selected' : ''}>$/m²</option>
-            <option value="expensas" ${state.sortBy === 'expensas' ? 'selected' : ''}>💵 Expensas</option>
-            <option value="antiguedad" ${state.sortBy === 'antiguedad' ? 'selected' : ''}>✨ Antigüedad</option>
+            <option value="total" ${state.sortBy === 'total' ? 'selected' : ''}>Total</option>
+            <option value="expensas" ${state.sortBy === 'expensas' ? 'selected' : ''}>Exp.</option>
           </select>
-          <button onclick="state.sortDir=state.sortDir==='asc'?'desc':'asc';render()" class="px-2 py-1.5 border border-slate-200 rounded-lg bg-white hover:bg-slate-50">${state.sortDir === 'asc' ? '↑' : '↓'}</button>
+          <button onclick="state.sortDir=state.sortDir==='asc'?'desc':'asc';render()" class="btn-icon border border-slate-200 bg-white">${state.sortDir === 'asc' ? '↑' : '↓'}</button>
         </div>
-        <div class="flex items-center border border-slate-200 rounded-lg overflow-hidden">
-          <button onclick="state.viewMode='cards';render()" class="px-2 py-1.5 text-sm ${state.viewMode === 'cards' ? 'bg-blue-500 text-white' : 'bg-white hover:bg-slate-50'}" title="Vista cards">📱</button>
-          <button onclick="state.viewMode='auto';render()" class="px-2 py-1.5 text-sm ${state.viewMode === 'auto' ? 'bg-blue-500 text-white' : 'bg-white hover:bg-slate-50'}" title="Auto (cards en móvil, tabla en desktop)">Auto</button>
-          <button onclick="state.viewMode='table';render()" class="px-2 py-1.5 text-sm ${state.viewMode === 'table' ? 'bg-blue-500 text-white' : 'bg-white hover:bg-slate-50'}" title="Vista tabla">📊</button>
+        <div class="flex items-center border border-slate-200 rounded-lg overflow-hidden shrink-0">
+          <button onclick="state.viewMode='cards';render()" class="px-2 py-1.5 text-sm ${state.viewMode === 'cards' ? 'bg-blue-500 text-white' : 'bg-white'}" title="Cards">📱</button>
+          <button onclick="state.viewMode='table';render()" class="px-2 py-1.5 text-sm ${state.viewMode === 'table' ? 'bg-blue-500 text-white' : 'bg-white'}" title="Tabla">📊</button>
         </div>
-        <span class="text-slate-400 text-xs">${filtered.length}/${properties.length}</span>
+        <span class="text-slate-400 text-xs font-medium shrink-0">${filtered.length}</span>
       </div>
     </div>
   `;
@@ -500,18 +489,18 @@ function renderConfigTab_Pesos() {
 
 function renderConfigPanel() {
   const tabClass = (tab) => state.configTab === tab
-    ? 'px-3 py-1.5 text-sm font-medium text-blue-600 border-b-2 border-blue-600'
-    : 'px-3 py-1.5 text-sm text-slate-500 hover:text-slate-700 cursor-pointer';
+    ? 'config-tab active'
+    : 'config-tab cursor-pointer';
 
   const tabs = [
-    { id: 'general', label: 'General' },
-    { id: 'gastos', label: 'Costos' },
-    { id: 'barrios', label: 'Barrios $/m²' },
-    { id: 'pesos', label: `${ICONS.config} Ponderación` }
+    { id: 'general', label: '⚙️', fullLabel: 'General' },
+    { id: 'gastos', label: '💰', fullLabel: 'Costos' },
+    { id: 'barrios', label: '📍', fullLabel: 'Barrios' },
+    { id: 'pesos', label: '⚖️', fullLabel: 'Pesos' }
   ];
 
   const tabButtons = tabs.map(t =>
-    `<button onclick="state.configTab='${t.id}';render()" class="${tabClass(t.id)}">${t.label}</button>`
+    `<button onclick="state.configTab='${t.id}';render()" class="${tabClass(t.id)}"><span class="sm:hidden">${t.label}</span><span class="hidden sm:inline">${t.fullLabel}</span></button>`
   ).join('');
 
   const tabContent = {
@@ -522,15 +511,12 @@ function renderConfigPanel() {
   };
 
   return `
-    <div>
-      <div class="config-header flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-3 pb-1">
-        <div class="config-tabs flex items-center gap-2 sm:gap-4">
-          <h3 class="font-medium ${THEME.neutral.text} whitespace-nowrap">${ICONS.config} Config</h3>
-          <div class="flex border-b ${THEME.neutral.border}">${tabButtons}</div>
-        </div>
-        <div class="flex items-center gap-3 shrink-0">
-          <button onclick="resetConfig()" class="text-xs text-slate-400 hover:${THEME.error.textLight}">Reset</button>
-          <button onclick="state.showConfig=false;render()" class="p-1 text-slate-400 hover:text-slate-600 hover:bg-slate-200 rounded" title="Cerrar">${ICONS.cross}</button>
+    <div class="config-panel">
+      <div class="config-header">
+        <div class="config-tabs">${tabButtons}</div>
+        <div class="flex items-center gap-2 shrink-0">
+          <button onclick="resetConfig()" class="text-xs text-slate-400 hover:text-red-500 touch-feedback">Reset</button>
+          <button onclick="state.showConfig=false;render()" class="btn-icon text-slate-400 hover:text-slate-600 hover:bg-slate-200" title="Cerrar">${ICONS.cross}</button>
         </div>
       </div>
       ${tabContent[state.configTab]()}
@@ -866,17 +852,18 @@ function renderDetailModal(p) {
   const quita = calculateQuitaNecesaria(p._precio, tieneInmob, dolarActual);
 
   return `
-    <div class="fixed inset-0 modal-backdrop z-50 flex items-center justify-center p-4" onclick="if(event.target===this)closeDetail()">
-      <div class="bg-white rounded-2xl shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
-        <div class="sticky top-0 bg-white border-b px-6 py-4 flex justify-between items-start z-10">
-          <div>
-            <h2 class="text-xl font-bold ${THEME.neutral.textDark}">${escapeHtml(p.direccion) || '<span class="text-slate-400">Sin dirección</span>'}</h2>
-            <p class="text-slate-500">${escapeHtml(p.barrio) || 'Sin barrio'} ${p.tipo ? '· ' + p.tipo.toUpperCase() : ''}</p>
+    <div class="fixed inset-0 modal-backdrop z-50 flex items-end sm:items-center justify-center sm:p-4" onclick="if(event.target===this)closeDetail()">
+      <div class="modal-content w-full">
+        <div class="modal-handle show-mobile"></div>
+        <div class="sticky top-0 bg-white border-b px-4 sm:px-6 py-3 sm:py-4 flex justify-between items-start z-10">
+          <div class="min-w-0 flex-1 pr-2">
+            <h2 class="text-lg sm:text-xl font-bold ${THEME.neutral.textDark} truncate">${escapeHtml(p.direccion) || '<span class="text-slate-400">Sin dirección</span>'}</h2>
+            <p class="text-slate-500 text-sm truncate">${escapeHtml(p.barrio) || 'Sin barrio'} ${p.tipo ? '· ' + p.tipo.toUpperCase() : ''}</p>
           </div>
-          <button onclick="closeDetail()" class="text-slate-400 hover:text-slate-600 text-2xl">${ICONS.close}</button>
+          <button onclick="closeDetail()" class="btn-icon text-slate-400 hover:text-slate-600 hover:bg-slate-100 text-xl shrink-0">${ICONS.close}</button>
         </div>
 
-        <div class="p-6 space-y-5">
+        <div class="p-4 sm:p-6 space-y-4 sm:space-y-5 safe-bottom">
           ${renderModalBadges(p)}
           ${renderMissingData(p)}
           ${renderCaracteristicas(p)}
