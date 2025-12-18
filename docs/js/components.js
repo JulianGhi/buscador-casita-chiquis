@@ -917,10 +917,10 @@ function renderSimulationSliders(dolarActual, hayAjusteDolar, diferenciaCredito,
       <div class="bg-gradient-to-r from-orange-50 to-amber-50 rounded-xl p-4 border ${THEME.negociar.border}">
         <div class="flex items-center justify-between mb-2">
           <span class="text-sm font-medium text-orange-800">${ICONS.handshake} Negociar</span>
-          <span id="neg-display" class="text-lg font-bold ${negPct > 0 ? THEME.negociar.textLight : 'text-slate-400'}">${negDisplay}</span>
+          <span class="text-lg font-bold ${negPct > 0 ? THEME.negociar.textLight : 'text-slate-400'}">${negDisplay}</span>
         </div>
         <input type="range" min="0" max="15" step="0.5" value="${negPct}"
-          onchange="updateNegotiation(this.value)" oninput="updateNegotiationDisplay(this.value)"
+          oninput="updateNegotiation(this.value)"
           class="w-full h-2 bg-orange-200 rounded-lg appearance-none cursor-pointer accent-orange-500" />
         <div class="flex justify-between text-xs ${THEME.negociar.textLight} mt-1"><span>Publicado</span><span>-15%</span></div>
       </div>
@@ -928,10 +928,10 @@ function renderSimulationSliders(dolarActual, hayAjusteDolar, diferenciaCredito,
       <div class="bg-gradient-to-r from-green-50 to-emerald-50 rounded-xl p-4 border ${THEME.success.border}">
         <div class="flex items-center justify-between mb-2">
           <span class="text-sm font-medium text-green-800">${ICONS.dolar} Dólar estimado</span>
-          <span id="dolar-display" class="text-lg font-bold ${hayAjusteDolar ? THEME.success.textLight : 'text-slate-400'}">$${dolarActual}</span>
+          <span class="text-lg font-bold ${hayAjusteDolar ? THEME.success.textLight : 'text-slate-400'}">$${dolarActual}</span>
         </div>
         <input type="range" min="900" max="2000" step="10" value="${dolarActual}"
-          onchange="updateDolarEstimado(this.value)" oninput="updateDolarEstimadoDisplay(this.value)"
+          oninput="updateDolarEstimado(this.value)"
           class="w-full h-2 bg-green-200 rounded-lg appearance-none cursor-pointer accent-green-500" />
         <div class="flex justify-between text-xs ${THEME.success.textLight} mt-1">
           <span>$900</span>
@@ -1088,10 +1088,10 @@ function renderModalFooter(p) {
 // MODAL PRINCIPAL
 // ============================================
 
-function renderDetailModal(p) {
-  if (!p) return '';
+// Renderiza la sección de simulación (sliders + quita + costos)
+function renderSimulationSection(p) {
+  if (!p || p._precio <= 0) return '';
 
-  // Calcular datos
   const dolarActual = state.dolarEstimado || CONFIG.DOLAR_BASE;
   const creditoBase = getCreditoUSD();
   const creditoEstimado = getCreditoUSD(dolarActual);
@@ -1110,6 +1110,17 @@ function renderDetailModal(p) {
   const quita = calculateQuitaNecesaria(p._precio, tieneInmob, dolarActual);
 
   return `
+    ${renderPriceStats(p, costsNeg, hayAjuste)}
+    ${renderSimulationSliders(dolarActual, hayAjusteDolar, diferenciaCredito, creditoEstimado)}
+    ${!costsNeg.ok ? renderQuitaSugerencia(quita, dolarActual, creditoEstimado) : ''}
+    ${renderCostsBreakdown(p, costsNeg, hayAjuste, ahorro)}
+  `;
+}
+
+function renderDetailModal(p) {
+  if (!p) return '';
+
+  return `
     <div class="fixed inset-0 modal-backdrop z-50 flex items-end sm:items-center justify-center sm:p-4" onclick="if(event.target===this)closeDetail()">
       <div class="modal-content w-full">
         <div class="modal-handle show-mobile"></div>
@@ -1126,13 +1137,10 @@ function renderDetailModal(p) {
           ${renderWarnings(p)}
           ${renderMissingData(p)}
           ${renderCaracteristicas(p)}
-          ${renderPriceStats(p, costsNeg, hayAjuste)}
 
-          ${p._precio > 0 ? `
-            ${renderSimulationSliders(dolarActual, hayAjusteDolar, diferenciaCredito, creditoEstimado)}
-            ${!costsNeg.ok ? renderQuitaSugerencia(quita, dolarActual, creditoEstimado) : ''}
-            ${renderCostsBreakdown(p, costsNeg, hayAjuste, ahorro)}
-          ` : ''}
+          <div id="simulation-section" class="space-y-4">
+            ${renderSimulationSection(p)}
+          </div>
 
           ${renderModalFooter(p)}
         </div>
