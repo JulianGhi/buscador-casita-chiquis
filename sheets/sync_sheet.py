@@ -1186,6 +1186,9 @@ def cmd_nuevos(scrape_after=True):
     if agregados > 0 and scrape_after:
         print(f"\n🔄 Scrapeando nuevos links...")
         cmd_scrape()
+        # Push automático para que aparezcan en el dashboard
+        print(f"\n📤 Pusheando al Sheet...")
+        cmd_push(force=True)
 
 
 # =============================================================================
