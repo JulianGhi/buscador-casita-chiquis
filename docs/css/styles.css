@@ -8,6 +8,34 @@ body {
   background: rgba(0,0,0,0.5);
 }
 
+/* Mobile: Config panel header scroll */
+.config-header {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: thin;
+}
+
+.config-tabs {
+  min-width: max-content;
+}
+
+/* Mobile: Tabla scroll horizontal */
+.table-scroll {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Ocultar scrollbar en mobile pero permitir scroll */
+@media (max-width: 640px) {
+  .config-header::-webkit-scrollbar {
+    height: 4px;
+  }
+  .config-header::-webkit-scrollbar-thumb {
+    background: #cbd5e1;
+    border-radius: 2px;
+  }
+}
+
 @keyframes float {
   0%, 100% { transform: translateY(0); }
   50% { transform: translateY(-4px); }

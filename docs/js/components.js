@@ -523,13 +523,13 @@ function renderConfigPanel() {
 
   return `
     <div>
-      <div class="flex items-center justify-between mb-3">
-        <div class="flex items-center gap-4">
-          <h3 class="font-medium ${THEME.neutral.text}">${ICONS.config} Configuración</h3>
+      <div class="config-header flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-3 pb-1">
+        <div class="config-tabs flex items-center gap-2 sm:gap-4">
+          <h3 class="font-medium ${THEME.neutral.text} whitespace-nowrap">${ICONS.config} Config</h3>
           <div class="flex border-b ${THEME.neutral.border}">${tabButtons}</div>
         </div>
-        <div class="flex items-center gap-3">
-          <button onclick="resetConfig()" class="text-xs text-slate-400 hover:${THEME.error.textLight}">Reset todo</button>
+        <div class="flex items-center gap-3 shrink-0">
+          <button onclick="resetConfig()" class="text-xs text-slate-400 hover:${THEME.error.textLight}">Reset</button>
           <button onclick="state.showConfig=false;render()" class="p-1 text-slate-400 hover:text-slate-600 hover:bg-slate-200 rounded" title="Cerrar">${ICONS.cross}</button>
         </div>
       </div>
