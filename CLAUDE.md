@@ -698,3 +698,68 @@ d373581 Integrar inferencia automática de valores al flujo
 71d1480 Arreglar bugs del PDF extractor
 aabe837 Agregar status='Por ver' por defecto en add_links.py
 ```
+
+## Notas de Sesión (2025-12-18)
+
+### Campo `patio` agregado
+
+Nuevo campo booleano similar a `balcon` y `terraza`. Agregado en:
+- **Backend**: `helpers.py` (ATTR_PATTERNS), `scrapers.py`, `validation.py`, `prints.py`, `sync_sheet.py`
+- **Dashboard**: `config.js` (ICONS, WEIGHTS), `utils.js` (scoring), `components.js` (tabla, cards, modal)
+- **Tests**: 4 tests nuevos en `test_sync_sheet.py`
+
+**Diferencia clave**: Patio es a nivel de suelo, no requiere m²_desc (a diferencia de balcón/terraza que son elevados).
+
+### Sistema de validaciones (_warnings)
+
+Nuevo campo calculado `_warnings` en `calculateProperty()` que detecta inconsistencias:
+
+| Tipo | Descripción | Severidad |
+|------|-------------|-----------|
+| `m2_math` | cub + desc ≠ tot | warning |
+| `m2_cub_tot` | cub > tot (ilógico) | error |
+| `exterior_sin_m2` | Tiene balcón/terraza pero m²_desc = 0 | warning |
+| `m2_sin_exterior` | Tiene m²_desc pero sin exterior marcado | warning/info |
+
+Visualización:
+- **Tabla**: Nueva columna ⚠ con badge
+- **Cards**: Badge de warnings
+- **Modal**: Sección detallada con cada warning
+
+### Rediseño UX/UI de Cards Mobile
+
+Análisis profundo y rediseño basado en principios UX mobile:
+
+**Cambios de jerarquía visual:**
+- Barrio ahora es prominente (decisión #1 del usuario)
+- Precio y m² grandes y enfrentados
+- Border color indica status de un vistazo
+
+**Datos agregados a las cards:**
+- Badge `NUEVA`/`VENDIDA` (temporal awareness)
+- Antigüedad (`✨ A estrenar` o `✨15a`)
+- m² descubiertos en verde (`+8`)
+- Disposición `☀️ Frente` cuando aplica
+- Tiempo desde publicación (`hace 5d`)
+
+**Simplificaciones:**
+- "A juntar" ahora es chip inline (`✓ $42k`)
+- Tier + Score unificados en un badge (`T1-85`)
+- Amenities con checks claros: `T✓ B✗ P✓ 🚗`
+
+**Colores de borde según status:**
+- Verde: OK + Apto crédito
+- Azul: OK + Sin confirmar crédito
+- Ámbar: No entra en presupuesto
+- Rojo: Inactivo
+
+### Commits de la sesión
+
+```
+9207616 Unificar tier y score en badge único (T1-85)
+3085a1d Hacer score más visible en cards (debug)
+e3c60f0 Restaurar score numérico junto al tier en cards
+9bbe90a Rediseño UX/UI de cards para mobile
+9ccc56b Agregar validaciones de m² y exterior con warnings visuales
+161e571 Agregar campo patio al sistema completo
+```
