@@ -519,8 +519,8 @@ function renderConfigTab_General() {
       ${configInput('Negociación base (%)', CONFIG.NEGOCIACION, "updateConfig('NEGOCIACION', parseFloat(this.value))", { step: '0.5' })}
       ${configDisplay('= Rango de precios', '$' + getPrecioRange().min.toLocaleString() + ' - $' + getPrecioRange().max.toLocaleString())}
       ${configInput('Auto-refresh (seg, 0=off)', CONFIG.AUTO_REFRESH, "updateConfig('AUTO_REFRESH', parseInt(this.value)); startAutoRefresh();")}
-      ${configInput('Días "Nueva" (badge)', CONFIG.DIAS_NUEVA || 7, "updateConfig('DIAS_NUEVA', parseInt(this.value))")}
-      ${configInput('Días "Vendida reciente"', CONFIG.DIAS_VENDIDA_RECIENTE || 7, "updateConfig('DIAS_VENDIDA_RECIENTE', parseInt(this.value))")}
+      ${configInput('Días "Nueva" (badge)', CONFIG.DIAS_NUEVA || 3, "updateConfig('DIAS_NUEVA', parseInt(this.value))")}
+      ${configInput('Días "Vendida reciente"', CONFIG.DIAS_VENDIDA_RECIENTE || 3, "updateConfig('DIAS_VENDIDA_RECIENTE', parseInt(this.value))")}
     </div>
   `;
 }

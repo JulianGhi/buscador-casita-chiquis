@@ -231,11 +231,11 @@ function calculateProperty(p) {
 
   // Calcular si es nueva (agregada en últimos N días - configurable)
   const diasAgregado = diasHace(p.fecha_agregado);
-  const esNueva = diasAgregado !== null && diasAgregado <= (CONFIG.DIAS_NUEVA || 7);
+  const esNueva = diasAgregado !== null && diasAgregado <= (CONFIG.DIAS_NUEVA || 3);
 
   // Calcular si se vendió recientemente (inactiva + fecha_inactivo en últimos N días)
   const diasInactivo = diasHace(p.fecha_inactivo);
-  const vendidaReciente = (p.activo || '').toLowerCase() === 'no' && diasInactivo !== null && diasInactivo <= (CONFIG.DIAS_VENDIDA_RECIENTE || 7);
+  const vendidaReciente = (p.activo || '').toLowerCase() === 'no' && diasInactivo !== null && diasInactivo <= (CONFIG.DIAS_VENDIDA_RECIENTE || 3);
 
   const calc = {
     ...p,

@@ -114,8 +114,8 @@ const DEFAULT_CONFIG = {
   HIPOTECA: 0.01,
   CERTIFICADOS: 300,
   AUTO_REFRESH: 10,
-  DIAS_NUEVA: 7,           // Días para considerar propiedad como "Nueva"
-  DIAS_VENDIDA_RECIENTE: 7, // Días para mostrar badge "Vendida recientemente"
+  DIAS_NUEVA: 3,           // Días para considerar propiedad como "Nueva"
+  DIAS_VENDIDA_RECIENTE: 3, // Días para mostrar badge "Vendida recientemente"
 };
 
 const DEFAULT_REF_M2 = {
