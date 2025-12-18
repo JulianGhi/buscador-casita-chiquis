@@ -117,10 +117,11 @@ const DEFAULT_CONFIG = {
 };
 
 const DEFAULT_REF_M2 = {
-  "Flores": 1953, "Parque Chacabuco": 1951, "Liniers": 1857, "Monte Castro": 1854,
-  "Floresta": 1683, "Parque Avellaneda": 1750, "Villa Luro": 1785, "Vélez Sarsfield": 1663,
-  "Mataderos": 1629, "Paternal": 1897, "Caballito": 2357, "Villa Crespo": 2150,
-  "Villa del Parque": 2063, "Villa Devoto": 2348, "Boedo": 1876
+  "Almagro": 2000, "Boedo": 1876, "Caballito": 2357, "Flores": 1953,
+  "Floresta": 1683, "Liniers": 1857, "Mataderos": 1629, "Monte Castro": 1854,
+  "Parque Avellaneda": 1750, "Parque Chacabuco": 1951, "Paternal": 1897,
+  "Villa Crespo": 2150, "Villa del Parque": 2063, "Villa Devoto": 2348,
+  "Villa Luro": 1785, "Villa Santa Rita": 1750, "Vélez Sarsfield": 1663
 };
 
 const DEFAULT_CONDITIONS = {
@@ -249,11 +250,11 @@ const SCORING_RULES = {
   expensas: {
     type: 'range',
     ranges: [
-      { max: 0, score: 8 },    // Sin expensas
-      { max: 80, score: 5 },   // Bajas
-      { max: 150, score: 2 },  // Medias
-      { max: 250, score: 0 },  // Altas
-      { min: 251, score: -4 }, // Muy altas
+      { max: 0, score: 8 },       // Sin expensas
+      { max: 80000, score: 5 },   // Bajas (<$80k)
+      { max: 150000, score: 2 },  // Medias ($80-150k)
+      { max: 250000, score: 0 },  // Altas ($150-250k)
+      { min: 250001, score: -4 }, // Muy altas (>$250k)
     ],
     penaltyMissing: 2
   },
