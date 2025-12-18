@@ -124,7 +124,6 @@ function render() {
     <div class="main-content min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 p-3 md:p-6">
       <div class="max-w-7xl mx-auto">
         ${state.error ? `<div class="bg-red-50 border border-red-200 text-red-700 px-4 py-2 rounded-lg mb-4 text-sm">${escapeHtml(state.error)}</div>` : ''}
-        ${renderStatsCards(stats)}
         ${renderFilters(barrios, filtered, properties)}
 
         <!-- Cards view (mobile or forced) -->
