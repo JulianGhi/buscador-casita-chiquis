@@ -917,7 +917,7 @@ function renderSimulationSliders(dolarActual, hayAjusteDolar, diferenciaCredito,
       <div class="bg-gradient-to-r from-orange-50 to-amber-50 rounded-xl p-4 border ${THEME.negociar.border}">
         <div class="flex items-center justify-between mb-2">
           <span class="text-sm font-medium text-orange-800">${ICONS.handshake} Negociar</span>
-          <span class="text-lg font-bold ${negPct > 0 ? THEME.negociar.textLight : 'text-slate-400'}">${negDisplay}</span>
+          <span id="neg-display" class="text-lg font-bold ${negPct > 0 ? THEME.negociar.textLight : 'text-slate-400'}">${negDisplay}</span>
         </div>
         <input type="range" min="0" max="15" step="0.5" value="${negPct}"
           oninput="updateNegotiation(this.value)"
@@ -928,7 +928,7 @@ function renderSimulationSliders(dolarActual, hayAjusteDolar, diferenciaCredito,
       <div class="bg-gradient-to-r from-green-50 to-emerald-50 rounded-xl p-4 border ${THEME.success.border}">
         <div class="flex items-center justify-between mb-2">
           <span class="text-sm font-medium text-green-800">${ICONS.dolar} Dólar estimado</span>
-          <span class="text-lg font-bold ${hayAjusteDolar ? THEME.success.textLight : 'text-slate-400'}">$${dolarActual}</span>
+          <span id="dolar-display" class="text-lg font-bold ${hayAjusteDolar ? THEME.success.textLight : 'text-slate-400'}">$${dolarActual}</span>
         </div>
         <input type="range" min="900" max="2000" step="10" value="${dolarActual}"
           oninput="updateDolarEstimado(this.value)"
@@ -938,7 +938,7 @@ function renderSimulationSliders(dolarActual, hayAjusteDolar, diferenciaCredito,
           <span>Base: $${CONFIG.DOLAR_BASE}</span>
           <span>$2000</span>
         </div>
-        ${hayAjusteDolar ? `<div class="text-xs text-center mt-2 ${diferenciaCredito > 0 ? THEME.error.textLight : THEME.success.textLight}">Crédito: $${creditoEstimado.toLocaleString()} (${diferenciaCredito > 0 ? '-' : '+'}$${Math.abs(diferenciaCredito).toLocaleString()})</div>` : ''}
+        <div id="dolar-credito-info" class="text-xs text-center mt-2 ${hayAjusteDolar ? '' : 'hidden'} ${diferenciaCredito > 0 ? THEME.error.textLight : THEME.success.textLight}">Crédito: $${creditoEstimado.toLocaleString()} (${diferenciaCredito > 0 ? '-' : '+'}$${Math.abs(diferenciaCredito).toLocaleString()})</div>
       </div>
     </div>
   `;
@@ -1003,7 +1003,9 @@ function renderCostsBreakdown(p, costsNeg, hayAjuste, ahorro) {
     { label: `Registrales (${(CONFIG.REGISTRALES * 100).toFixed(1)}%)`, value: hayAjuste ? costsNeg.reg : p._reg },
   ];
 
-  if (p.inmobiliaria) {
+  // Mostrar inmobiliaria si se calculó (tieneInmob = !esVentaDirecta)
+  const tieneInmob = !esVentaDirecta(p.inmobiliaria);
+  if (tieneInmob) {
     costItems.push({ label: `Inmobiliaria (${(CONFIG.INMOB * 100).toFixed(2)}%)`, value: hayAjuste ? costsNeg.inmob : p._inmob });
   }
 

@@ -34,11 +34,46 @@ function updateSimulation() {
 
 function updateNegotiation(pct) {
   state.negotiationPct = parseFloat(pct);
+
+  // Actualizar display del slider
+  const display = document.getElementById('neg-display');
+  if (display) {
+    const val = parseFloat(pct);
+    display.textContent = val > 0 ? '-' + (val % 1 === 0 ? val : val.toFixed(1)) + '%' : '0%';
+    display.className = val > 0 ? 'text-lg font-bold text-orange-600' : 'text-lg font-bold text-slate-400';
+  }
+
   updateSimulation();
 }
 
 function updateDolarEstimado(valor) {
   state.dolarEstimado = valor ? parseInt(valor) : null;
+
+  // Actualizar display del slider
+  const display = document.getElementById('dolar-display');
+  if (display) {
+    display.textContent = '$' + valor;
+    display.className = valor != CONFIG.DOLAR_BASE ? 'text-lg font-bold text-green-600' : 'text-lg font-bold text-slate-400';
+  }
+
+  // Actualizar info del crédito
+  const creditoInfo = document.getElementById('dolar-credito-info');
+  if (creditoInfo) {
+    const dolar = parseInt(valor);
+    const creditoBase = getCreditoUSD();
+    const creditoEstimado = getCreditoUSD(dolar);
+    const diferencia = creditoBase - creditoEstimado;
+    const hayAjuste = dolar !== CONFIG.DOLAR_BASE;
+
+    if (hayAjuste) {
+      creditoInfo.classList.remove('hidden');
+      creditoInfo.className = `text-xs text-center mt-2 ${diferencia > 0 ? 'text-red-600' : 'text-green-600'}`;
+      creditoInfo.textContent = `Crédito: $${creditoEstimado.toLocaleString()} (${diferencia > 0 ? '-' : '+'}$${Math.abs(diferencia).toLocaleString()})`;
+    } else {
+      creditoInfo.classList.add('hidden');
+    }
+  }
+
   updateSimulation();
 }
 
