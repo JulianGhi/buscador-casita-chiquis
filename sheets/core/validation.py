@@ -108,7 +108,7 @@ def validar_propiedad(data, contexto=None):
             add_warning('precio_alto', f"Precio muy alto: ${precio:,}", ctx)
 
     # Validar atributos inciertos
-    for attr in ['terraza', 'balcon', 'apto_credito', 'ascensor']:
+    for attr in ['terraza', 'balcon', 'patio', 'apto_credito', 'ascensor']:
         if data.get(attr) == '?':
             add_warning('atributo_incierto', f"{attr}=? (revisar manualmente)", ctx)
 
@@ -118,16 +118,19 @@ def validar_propiedad(data, contexto=None):
     if not data.get('m2_cub') and not data.get('m2_tot'):
         add_warning('dato_faltante', "Sin m²", ctx)
 
-    # Validar balcón/terraza vs m2_desc
+    # Validar balcón/terraza/patio vs m2_desc
     balcon = (data.get('balcon') or '').lower()
     terraza = (data.get('terraza') or '').lower()
-    tiene_exterior = balcon == 'si' or terraza == 'si'
+    patio = (data.get('patio') or '').lower()
+    tiene_exterior = balcon == 'si' or terraza == 'si' or patio == 'si'
     if tiene_exterior and m2_desc <= 0:
         exterior = []
         if balcon == 'si':
             exterior.append('balcón')
         if terraza == 'si':
             exterior.append('terraza')
+        if patio == 'si':
+            exterior.append('patio')
         add_warning('m2_desc_inconsistente', f"Tiene {'+'.join(exterior)} pero m²_desc={m2_desc}", ctx)
 
 

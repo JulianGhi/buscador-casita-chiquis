@@ -304,6 +304,7 @@ function calculateProperty(p) {
     expensas: p.expensas,
     terraza: p.terraza,
     balcon: p.balcon,
+    patio: p.patio,
     cochera: p.cocheras,
     luminosidad: p.luminosidad,
     frente: p.disposicion
@@ -357,6 +358,7 @@ function getFiltered(properties) {
   };
   if (state.filterTerraza !== 'todos') result = result.filter(boolFilter('terraza', state.filterTerraza));
   if (state.filterBalcon !== 'todos') result = result.filter(boolFilter('balcon', state.filterBalcon));
+  if (state.filterPatio !== 'todos') result = result.filter(boolFilter('patio', state.filterPatio));
   if (state.filterCochera !== 'todos') result = result.filter(boolFilter('cochera', state.filterCochera));
   if (state.filterLuminoso !== 'todos') result = result.filter(boolFilter('luminosidad', state.filterLuminoso));
 

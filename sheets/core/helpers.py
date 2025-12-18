@@ -48,6 +48,11 @@ ATTR_PATTERNS = {
         'no': ['balcon: no', 'balcón: no', 'sin balcon', 'sin balcón', 'no tiene balcon', 'no tiene balcón'],
         'solo_label': True,
     },
+    'patio': {
+        'si': ['patio: si', 'patio: sí', 'patio:si', 'patio:sí', 'con patio', 'tiene patio'],
+        'no': ['patio: no', 'patio:no', 'sin patio', 'no tiene patio'],
+        'solo_label': True,
+    },
     'cochera': {
         'si': ['cochera: si', 'cochera: sí', 'con cochera', 'tiene cochera'],
         'no': ['cochera: no', 'sin cochera', 'no tiene cochera', 'cocheras: 0', 'cochera: 0'],
@@ -405,6 +410,8 @@ def generar_nota_auto(row, ref_m2=None):
         extras.append('terraza')
     if row.get('balcon', '').lower() == 'si':
         extras.append('balcón')
+    if row.get('patio', '').lower() == 'si':
+        extras.append('patio')
     if row.get('luminosidad', '').lower() in ['si', 'buena', 'muy buena']:
         extras.append('luminoso')
     if int(row.get('cocheras') or 0) > 0:

@@ -57,6 +57,7 @@ const ICONS = {
   // Propiedades
   terraza: '🌿',
   balcon: '🪴',
+  patio: '🌳',
   cochera: '🚗',
   banos: '🚿',
   ambientes: '🚪',
@@ -150,6 +151,7 @@ const DEFAULT_WEIGHTS = {
   expensas:      { label: '💵 Exp. bajas',   weight: 2,  enabled: true, desc: '↑ peso = prioriza expensas bajas (<$80k)' },
   terraza:       { label: '🌿 Terraza',      weight: 5,  enabled: true, desc: '↑ peso = prioriza con terraza' },
   balcon:        { label: '🏠 Balcón',       weight: 3,  enabled: true, desc: '↑ peso = prioriza con balcón' },
+  patio:         { label: '🌳 Patio',        weight: 5,  enabled: true, desc: '↑ peso = prioriza con patio' },
   cochera:       { label: '🚗 Cochera',      weight: 4,  enabled: true, desc: '↑ peso = prioriza con cochera' },
   luminosidad:   { label: '☀️ Luminoso',     weight: 4,  enabled: true, desc: '↑ peso = prioriza luminosidad' },
   frente:        { label: '🪟 Al frente',    weight: 3,  enabled: true, desc: '↑ peso = prioriza disposición frente' },
@@ -223,6 +225,7 @@ const SCORING_RULES = {
   // Atributos booleanos: si/no/missing
   terraza:     { type: 'boolean', bonus: 10, penaltyMissing: 5 },
   balcon:      { type: 'boolean', bonus: 10, penaltyMissing: 5 },
+  patio:       { type: 'boolean', bonus: 10, penaltyMissing: 5 },
   luminosidad: { type: 'boolean', bonus: 10, penaltyMissing: 5 },
 
   // Atributos numéricos (cocheras)
@@ -427,6 +430,7 @@ let state = {
   // Filtros booleanos (todos/si/no)
   filterTerraza: 'todos',
   filterBalcon: 'todos',
+  filterPatio: 'todos',
   filterCochera: 'todos',
   filterLuminoso: 'todos',
   showFiltersExpanded: false,  // Filtros de atributos colapsados en mobile

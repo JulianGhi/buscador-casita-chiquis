@@ -95,12 +95,12 @@ if not SHEET_ID:
 # Constantes específicas de este CLI (no están en core/)
 PENDIENTES_FILE = Path('data/prints/pendientes.json')
 
-CAMPOS_IMPORTANTES = ['terraza', 'balcon', 'cocheras', 'luminosidad', 'disposicion',
+CAMPOS_IMPORTANTES = ['terraza', 'balcon', 'patio', 'cocheras', 'luminosidad', 'disposicion',
                       'ascensor', 'antiguedad', 'expensas', 'banos', 'apto_credito']
 
 SCRAPEABLE_COLS = ['precio', 'm2_cub', 'm2_tot', 'm2_desc', 'm2_terr', 'amb', 'barrio', 'direccion',
                    'expensas', 'terraza', 'antiguedad', 'apto_credito', 'tipo', 'activo',
-                   'cocheras', 'disposicion', 'piso', 'ascensor', 'balcon', 'luminosidad',
+                   'cocheras', 'disposicion', 'piso', 'ascensor', 'balcon', 'patio', 'luminosidad',
                    'fecha_publicado', 'banos', 'inmobiliaria', 'dormitorios', 'fecha_print', 'estado']
 
 

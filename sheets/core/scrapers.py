@@ -89,6 +89,10 @@ def _argenprop_extract_features(soup):
                 result = detectar_atributo(txt, 'terraza')
                 if result:
                     data['terraza'] = result
+        elif 'patio' in txt:
+            result = detectar_atributo(txt, 'patio')
+            if result:
+                data['patio'] = result
         elif 'cochera' in txt:
             result = detectar_atributo(txt, 'cochera')
             if result == 'no':
@@ -350,6 +354,12 @@ def _meli_extract_table_data(soup):
                 data['terraza'] = result
             else:
                 data['terraza'] = 'si' if 'sí' in v.lower() or v.lower() == 'si' else 'no'
+        elif h == 'patio':
+            result = detectar_atributo(f"{h}: {v}", 'patio')
+            if result:
+                data['patio'] = result
+            else:
+                data['patio'] = 'si' if 'sí' in v.lower() or v.lower() == 'si' else 'no'
         elif 'estado' in h or 'condición' in h or 'condicion' in h:
             if v and v.lower() not in ['si', 'sí', 'no']:
                 data['estado'] = v.title()
@@ -399,6 +409,9 @@ def _meli_extract_from_text(title_lower, desc_text, current_data):
         result_balcon = detectar_atributo(title_lower, 'balcon')
         if result_balcon == 'si':
             data['balcon'] = 'si'
+        result_patio = detectar_atributo(title_lower, 'patio')
+        if result_patio == 'si':
+            data['patio'] = 'si'
         if 'sin expensas' in title_lower or 'sin exp' in title_lower:
             data['expensas'] = '0'
 

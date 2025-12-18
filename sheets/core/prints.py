@@ -699,8 +699,8 @@ def _extraer_cochera_pdf(texto_lower):
     return data
 
 
-def _extraer_terraza_balcon_pdf(texto_lower, texto_original):
-    """Extrae información de terraza y balcón del texto."""
+def _extraer_terraza_balcon_patio_pdf(texto_lower, texto_original):
+    """Extrae información de terraza, balcón y patio del texto."""
     from .helpers import detectar_atributo
 
     data = {}
@@ -717,6 +717,11 @@ def _extraer_terraza_balcon_pdf(texto_lower, texto_original):
         result = detectar_atributo(texto_original, 'balcon')
         if result:
             data['balcon'] = result
+
+    # Patio
+    result = detectar_atributo(texto_original, 'patio')
+    if result:
+        data['patio'] = result
 
     return data
 
@@ -823,7 +828,7 @@ def extraer_datos_pdf(filepath):
 
     Returns:
         dict: Datos extraídos {precio, moneda, m2_tot, m2_cub, m2_desc,
-              expensas, ambientes, banos, terraza, balcon, cochera, ...}
+              expensas, ambientes, banos, terraza, balcon, patio, cochera, ...}
     """
     texto_completo = extraer_texto_pdf(filepath)
     if not texto_completo:
@@ -853,7 +858,7 @@ def extraer_datos_pdf(filepath):
     data.update(_extraer_ambientes_pdf(texto_lower))
     data.update(_extraer_banos_pdf(texto_lower))
     data.update(_extraer_cochera_pdf(texto_lower))
-    data.update(_extraer_terraza_balcon_pdf(texto_lower, texto))
+    data.update(_extraer_terraza_balcon_patio_pdf(texto_lower, texto))
     data.update(_extraer_antiguedad_pdf(texto_lower))
     data.update(_extraer_disposicion_pdf(texto_lower))
     data.update(_extraer_estado_pdf(texto_lower))
@@ -894,7 +899,7 @@ def validar_datos_pdf_vs_sheet(datos_pdf, datos_sheet):
         'cocheras': 0,
     }
 
-    campos_texto = ['terraza', 'balcon', 'luminosidad', 'disposicion']
+    campos_texto = ['terraza', 'balcon', 'patio', 'luminosidad', 'disposicion']
 
     # Comparar campos numéricos
     for campo, tolerancia in campos_numericos.items():
@@ -1107,7 +1112,7 @@ def analizar_tres_fuentes(rows, prints_dir=None, cache=None):
     resultados = []
 
     # Campos a comparar (nombres del sheet)
-    campos = ['terraza', 'balcon', 'cocheras', 'luminosidad', 'amb',
+    campos = ['terraza', 'balcon', 'patio', 'cocheras', 'luminosidad', 'amb',
               'banos', 'antiguedad', 'expensas', 'disposicion', 'ascensor', 'apto_credito']
 
     # Mapeo de nombres: todos los scrapers ahora usan los mismos nombres que el sheet

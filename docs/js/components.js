@@ -122,6 +122,7 @@ function countActiveFilters() {
   if (state.filterCredito !== 'todos') count++;
   if (state.filterTerraza !== 'todos') count++;
   if (state.filterBalcon !== 'todos') count++;
+  if (state.filterPatio !== 'todos') count++;
   if (state.filterCochera !== 'todos') count++;
   if (state.filterLuminoso !== 'todos') count++;
   if (state.searchText?.trim()) count++;
@@ -132,6 +133,7 @@ function countAttrFilters() {
   let count = 0;
   if (state.filterTerraza !== 'todos') count++;
   if (state.filterBalcon !== 'todos') count++;
+  if (state.filterPatio !== 'todos') count++;
   if (state.filterCochera !== 'todos') count++;
   if (state.filterLuminoso !== 'todos') count++;
   if (state.filterCredito !== 'todos') count++;
@@ -147,6 +149,7 @@ function clearAllFilters() {
   state.filterCredito = 'todos';
   state.filterTerraza = 'todos';
   state.filterBalcon = 'todos';
+  state.filterPatio = 'todos';
   state.filterCochera = 'todos';
   state.filterLuminoso = 'todos';
   state.searchText = '';
@@ -253,6 +256,7 @@ function renderFilters(barrios, filtered, properties) {
         <div class="${state.showFiltersExpanded ? '' : 'hidden'} md:flex flex-wrap items-center gap-2">
           ${renderBoolChip('Terraza', '🌿', 'terraza', 'filterTerraza')}
           ${renderBoolChip('Balcón', '🪴', 'balcon', 'filterBalcon')}
+          ${renderBoolChip('Patio', '🌳', 'patio', 'filterPatio')}
           ${renderBoolChip('Cochera', '🚗', 'cochera', 'filterCochera')}
           ${renderBoolChip('Luminoso', '☀️', 'luminosidad', 'filterLuminoso')}
 
@@ -307,8 +311,9 @@ function renderTable(filtered) {
               <th class="px-3 py-2.5 text-right font-medium text-slate-600">A juntar</th>
               <th class="px-2 py-2.5 text-center font-medium text-slate-600">OK</th>
               <th class="px-2 py-2.5 text-center font-medium text-slate-600" title="Cocheras">🚗</th>
-              <th class="px-2 py-2.5 text-center font-medium text-slate-600" title="Terraza">🌿</th>
-              <th class="px-2 py-2.5 text-center font-medium text-slate-600" title="Balcón">🪴</th>
+              <th class="px-2 py-2.5 text-center font-medium text-slate-600" title="Terraza">T</th>
+              <th class="px-2 py-2.5 text-center font-medium text-slate-600" title="Balcón">B</th>
+              <th class="px-2 py-2.5 text-center font-medium text-slate-600" title="Patio">P</th>
               <th class="px-2 py-2.5 text-center font-medium text-slate-600" title="Baños">🚿</th>
               <th class="px-2 py-2.5 text-center font-medium text-slate-600" title="Antigüedad (años)">✨</th>
             </tr>
@@ -337,6 +342,7 @@ function renderTable(filtered) {
                 <td class="px-2 py-2.5 text-center">${p.cocheras ? (p.cocheras !== '0' ? '<span class="text-green-600">✓</span>' : '<span class="text-slate-300">-</span>') : '<span class="text-slate-300">-</span>'}</td>
                 <td class="px-2 py-2.5 text-center">${p.terraza?.toLowerCase() === 'si' ? '<span class="text-green-600">✓</span>' : p.terraza?.toLowerCase() === 'no' ? '<span class="text-red-400">✗</span>' : '<span class="text-slate-300">-</span>'}</td>
                 <td class="px-2 py-2.5 text-center">${p.balcon?.toLowerCase() === 'si' ? '<span class="text-green-600">✓</span>' : p.balcon?.toLowerCase() === 'no' ? '<span class="text-red-400">✗</span>' : '<span class="text-slate-300">-</span>'}</td>
+                <td class="px-2 py-2.5 text-center">${p.patio?.toLowerCase() === 'si' ? '<span class="text-green-600">✓</span>' : p.patio?.toLowerCase() === 'no' ? '<span class="text-red-400">✗</span>' : '<span class="text-slate-300">-</span>'}</td>
                 <td class="px-2 py-2.5 text-center text-xs">${p.banos && p.banos !== '0' ? p.banos : '<span class="text-slate-300">-</span>'}</td>
                 <td class="px-2 py-2.5 text-center text-xs">${p.antiguedad ? (p.antiguedad === '0' ? '<span class="text-green-600">Nuevo</span>' : p.antiguedad + 'a') : '<span class="text-slate-300">-</span>'}</td>
               </tr>
@@ -368,6 +374,7 @@ function renderCards(filtered) {
         const amenities = [
           p.terraza?.toLowerCase() === 'si' ? '🌿' : null,
           p.balcon?.toLowerCase() === 'si' ? '🪴' : null,
+          p.patio?.toLowerCase() === 'si' ? '🌳' : null,
           p.cocheras && p.cocheras !== '0' ? '🚗' : null,
           p.banos && p.banos !== '0' ? '🚿' + p.banos : null,
           p.amb ? '🚪' + p.amb : null,
@@ -665,6 +672,7 @@ const MISSING_ATTRS = [
   { key: 'expensas', label: 'Expensas' },
   { key: 'terraza', label: 'Terraza' },
   { key: 'balcon', label: 'Balcón' },
+  { key: 'patio', label: 'Patio' },
   { key: 'cochera', label: 'Cochera' },
   { key: 'luminosidad', label: 'Luminosidad' },
   { key: 'frente', label: 'Disposición' }
@@ -730,6 +738,7 @@ function renderCaracteristicas(p) {
   const amenities = [
     p.terraza?.toLowerCase() === 'si' ? `${ICONS.terraza} Terraza` : null,
     p.balcon?.toLowerCase() === 'si' ? `${ICONS.house} Balcón` : null,
+    p.patio?.toLowerCase() === 'si' ? `${ICONS.patio} Patio` : null,
     p.cocheras && p.cocheras !== '0' ? `${ICONS.cochera} Cochera` : null,
     p.ascensor?.toLowerCase() === 'si' ? '🛗 Ascensor' : null,
     p.luminosidad?.toLowerCase() === 'si' || p.luminosidad?.toLowerCase() === 'buena' ? `${ICONS.luminosidad} Luminoso` : null,

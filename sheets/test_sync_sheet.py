@@ -341,6 +341,32 @@ class TestDetectarAtributo:
         assert detectar_atributo('balcón al frente', 'balcon') == 'si'  # con tilde
         assert detectar_atributo('BALCÓN GRANDE', 'balcon') == 'si'  # mayúsculas + tilde
 
+    # --- Patio ---
+
+    def test_patio_si_explicito(self):
+        """Detecta 'patio: si' como positivo"""
+        assert detectar_atributo('patio: si', 'patio') == 'si'
+        assert detectar_atributo('patio: sí', 'patio') == 'si'
+        assert detectar_atributo('Patio: Si', 'patio') == 'si'
+        assert detectar_atributo('con patio', 'patio') == 'si'
+        assert detectar_atributo('tiene patio', 'patio') == 'si'
+
+    def test_patio_no_explicito(self):
+        """Detecta 'patio: no' como negativo"""
+        assert detectar_atributo('patio: no', 'patio') == 'no'
+        assert detectar_atributo('sin patio', 'patio') == 'no'
+        assert detectar_atributo('no tiene patio', 'patio') == 'no'
+
+    def test_patio_solo_label(self):
+        """'patio' solo (sin valor) cuenta como positivo (solo_label=True)"""
+        assert detectar_atributo('patio interno', 'patio') == 'si'
+        assert detectar_atributo('amplio patio', 'patio') == 'si'
+        assert detectar_atributo('PATIO GRANDE', 'patio') == 'si'
+
+    def test_patio_prioridad_no_sobre_si(self):
+        """'no' tiene prioridad sobre menciones positivas"""
+        assert detectar_atributo('patio: no, pero tiene terraza', 'patio') == 'no'
+
     # --- Apto crédito ---
 
     def test_apto_credito_si(self):
