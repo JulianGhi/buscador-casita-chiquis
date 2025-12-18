@@ -11,30 +11,31 @@ function debounce(fn, delay) {
   };
 }
 
-// Handler de búsqueda con debounce (evita perder foco del input)
+// Handler de búsqueda con debounce - NO hace render completo
 let searchTimeout;
-function handleSearch(value) {
-  state.searchText = value;
+function handleSearchDebounced(value) {
   clearTimeout(searchTimeout);
   searchTimeout = setTimeout(() => {
-    // Guardar posición del cursor y elemento activo
-    const activeEl = document.activeElement;
-    const isSearchInput = activeEl?.id === 'search-input';
-    const cursorPos = isSearchInput ? activeEl.selectionStart : 0;
-
-    render();
-
-    // Restaurar foco si estaba en el search input
-    if (isSearchInput) {
+    if (state.searchText !== value) {
+      state.searchText = value;
+      render();
+      // Restaurar valor y foco del input después del render
       requestAnimationFrame(() => {
-        const newInput = document.getElementById('search-input');
-        if (newInput) {
-          newInput.focus();
-          newInput.setSelectionRange(cursorPos, cursorPos);
+        const input = document.getElementById('search-input');
+        if (input) {
+          input.value = value;
+          input.focus();
+          input.setSelectionRange(value.length, value.length);
         }
       });
     }
   }, 300);
+}
+
+// Limpia búsqueda
+function clearSearch() {
+  state.searchText = '';
+  render();
 }
 
 // Ajusta el padding del contenido para compensar el header fijo

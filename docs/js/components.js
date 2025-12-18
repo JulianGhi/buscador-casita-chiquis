@@ -173,16 +173,15 @@ function renderFilters(barrios, filtered, properties) {
     <div class="bg-white rounded-xl shadow-sm mb-4">
       <!-- Fila principal de filtros -->
       <div class="filters-container">
-        <!-- Búsqueda -->
+        <!-- Búsqueda (input no controlado para evitar problemas de foco) -->
         <div class="relative">
           <input type="text"
             id="search-input"
             placeholder="🔍 Buscar..."
-            value="${escapeHtml(state.searchText || '')}"
-            oninput="handleSearch(this.value)"
+            oninput="handleSearchDebounced(this.value)"
             class="filter-select pl-2 pr-6 w-28"
           />
-          ${state.searchText ? `<button onclick="state.searchText='';render()" class="absolute right-1 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 text-xs">✕</button>` : ''}
+          ${state.searchText ? `<button onclick="clearSearch()" class="absolute right-1 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 text-xs">✕</button>` : ''}
         </div>
 
         <!-- Tier con descripciones -->
@@ -231,8 +230,6 @@ function renderFilters(barrios, filtered, properties) {
           <button onclick="state.viewMode='cards';render()" class="px-2 py-1.5 text-sm ${state.viewMode === 'cards' ? 'bg-blue-500 text-white' : 'bg-white'}" title="Cards">📱</button>
           <button onclick="state.viewMode='table';render()" class="px-2 py-1.5 text-sm ${state.viewMode === 'table' ? 'bg-blue-500 text-white' : 'bg-white'}" title="Tabla">📊</button>
         </div>
-
-        <span class="text-slate-500 text-sm font-medium shrink-0">${filtered.length}</span>
       </div>
 
       <!-- Fila de chips de atributos (colapsable en mobile) -->
