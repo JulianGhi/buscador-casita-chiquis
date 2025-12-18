@@ -128,6 +128,16 @@ function countActiveFilters() {
   return count;
 }
 
+function countAttrFilters() {
+  let count = 0;
+  if (state.filterTerraza !== 'todos') count++;
+  if (state.filterBalcon !== 'todos') count++;
+  if (state.filterCochera !== 'todos') count++;
+  if (state.filterLuminoso !== 'todos') count++;
+  if (state.filterCredito !== 'todos') count++;
+  return count;
+}
+
 function clearAllFilters() {
   state.filterStatus = 'todos';
   state.filterOk = 'todos';
@@ -166,9 +176,10 @@ function renderFilters(barrios, filtered, properties) {
         <!-- Búsqueda -->
         <div class="relative">
           <input type="text"
+            id="search-input"
             placeholder="🔍 Buscar..."
             value="${escapeHtml(state.searchText || '')}"
-            onkeyup="state.searchText=this.value;render()"
+            oninput="handleSearch(this.value)"
             class="filter-select pl-2 pr-6 w-28"
           />
           ${state.searchText ? `<button onclick="state.searchText='';render()" class="absolute right-1 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 text-xs">✕</button>` : ''}
@@ -224,28 +235,45 @@ function renderFilters(barrios, filtered, properties) {
         <span class="text-slate-500 text-sm font-medium shrink-0">${filtered.length}</span>
       </div>
 
-      <!-- Fila de chips de atributos -->
-      <div class="px-3 py-2 border-t border-slate-100 flex flex-wrap items-center gap-2">
-        <span class="text-xs text-slate-400 mr-1">Atributos:</span>
-        ${renderBoolChip('Terraza', '🌿', 'terraza', 'filterTerraza')}
-        ${renderBoolChip('Balcón', '🪴', 'balcon', 'filterBalcon')}
-        ${renderBoolChip('Cochera', '🚗', 'cochera', 'filterCochera')}
-        ${renderBoolChip('Luminoso', '☀️', 'luminosidad', 'filterLuminoso')}
-
-        <span class="text-slate-300 mx-1">|</span>
-
-        <select onchange="state.filterCredito=this.value;render()" class="text-xs px-2 py-1 rounded border border-slate-200 bg-white">
-          <option value="todos" ${state.filterCredito === 'todos' ? 'selected' : ''}>💳 Crédito</option>
-          <option value="si" ${state.filterCredito === 'si' ? 'selected' : ''}>💳 ✓ Apto</option>
-          <option value="no" ${state.filterCredito === 'no' ? 'selected' : ''}>💳 ✗ No apto</option>
-          <option value="?" ${state.filterCredito === '?' ? 'selected' : ''}>💳 ? Sin dato</option>
-        </select>
-
-        ${activeCount > 0 ? `
-          <button onclick="clearAllFilters()" class="ml-auto text-xs px-2 py-1 rounded bg-slate-100 text-slate-600 hover:bg-slate-200 transition-colors">
-            ✕ Limpiar (${activeCount})
+      <!-- Fila de chips de atributos (colapsable en mobile) -->
+      <div class="px-3 py-2 border-t border-slate-100">
+        <!-- Toggle para mobile -->
+        <div class="flex items-center justify-between md:hidden mb-2">
+          <button onclick="state.showFiltersExpanded=!state.showFiltersExpanded;render()"
+            class="text-xs text-slate-500 flex items-center gap-1">
+            <span>${state.showFiltersExpanded ? '▼' : '▶'}</span>
+            Más filtros
+            ${countAttrFilters() > 0 ? `<span class="bg-blue-500 text-white text-[10px] px-1.5 rounded-full">${countAttrFilters()}</span>` : ''}
           </button>
-        ` : ''}
+          ${activeCount > 0 ? `
+            <button onclick="clearAllFilters()" class="text-xs px-2 py-1 rounded bg-slate-100 text-slate-600">
+              ✕ Limpiar (${activeCount})
+            </button>
+          ` : ''}
+        </div>
+
+        <!-- Contenido de filtros (visible en desktop, colapsable en mobile) -->
+        <div class="${state.showFiltersExpanded ? '' : 'hidden'} md:flex flex-wrap items-center gap-2">
+          ${renderBoolChip('Terraza', '🌿', 'terraza', 'filterTerraza')}
+          ${renderBoolChip('Balcón', '🪴', 'balcon', 'filterBalcon')}
+          ${renderBoolChip('Cochera', '🚗', 'cochera', 'filterCochera')}
+          ${renderBoolChip('Luminoso', '☀️', 'luminosidad', 'filterLuminoso')}
+
+          <span class="text-slate-300 mx-1 hidden md:inline">|</span>
+
+          <select onchange="state.filterCredito=this.value;render()" class="text-xs px-2 py-1 rounded border border-slate-200 bg-white">
+            <option value="todos" ${state.filterCredito === 'todos' ? 'selected' : ''}>💳 Crédito</option>
+            <option value="si" ${state.filterCredito === 'si' ? 'selected' : ''}>💳 ✓ Apto</option>
+            <option value="no" ${state.filterCredito === 'no' ? 'selected' : ''}>💳 ✗ No apto</option>
+            <option value="?" ${state.filterCredito === '?' ? 'selected' : ''}>💳 ? Sin dato</option>
+          </select>
+
+          ${activeCount > 0 ? `
+            <button onclick="clearAllFilters()" class="ml-auto text-xs px-2 py-1 rounded bg-slate-100 text-slate-600 hover:bg-slate-200 transition-colors hidden md:block">
+              ✕ Limpiar (${activeCount})
+            </button>
+          ` : ''}
+        </div>
       </div>
 
       <!-- Info del tier seleccionado -->
@@ -491,6 +519,8 @@ function renderConfigTab_General() {
       ${configInput('Negociación base (%)', CONFIG.NEGOCIACION, "updateConfig('NEGOCIACION', parseFloat(this.value))", { step: '0.5' })}
       ${configDisplay('= Rango de precios', '$' + getPrecioRange().min.toLocaleString() + ' - $' + getPrecioRange().max.toLocaleString())}
       ${configInput('Auto-refresh (seg, 0=off)', CONFIG.AUTO_REFRESH, "updateConfig('AUTO_REFRESH', parseInt(this.value)); startAutoRefresh();")}
+      ${configInput('Días "Nueva" (badge)', CONFIG.DIAS_NUEVA || 7, "updateConfig('DIAS_NUEVA', parseInt(this.value))")}
+      ${configInput('Días "Vendida reciente"', CONFIG.DIAS_VENDIDA_RECIENTE || 7, "updateConfig('DIAS_VENDIDA_RECIENTE', parseInt(this.value))")}
     </div>
   `;
 }

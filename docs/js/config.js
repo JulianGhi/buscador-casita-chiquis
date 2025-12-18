@@ -429,6 +429,7 @@ let state = {
   filterBalcon: 'todos',
   filterCochera: 'todos',
   filterLuminoso: 'todos',
+  showFiltersExpanded: false,  // Filtros de atributos colapsados en mobile
   showHelp: false,
   sortBy: 'score',
   sortDir: 'desc',

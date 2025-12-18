@@ -2,6 +2,41 @@
 // UTILIDADES
 // ============================================
 
+// Debounce para evitar renders excesivos
+function debounce(fn, delay) {
+  let timeoutId;
+  return function(...args) {
+    clearTimeout(timeoutId);
+    timeoutId = setTimeout(() => fn.apply(this, args), delay);
+  };
+}
+
+// Handler de búsqueda con debounce (evita perder foco del input)
+let searchTimeout;
+function handleSearch(value) {
+  state.searchText = value;
+  clearTimeout(searchTimeout);
+  searchTimeout = setTimeout(() => {
+    // Guardar posición del cursor y elemento activo
+    const activeEl = document.activeElement;
+    const isSearchInput = activeEl?.id === 'search-input';
+    const cursorPos = isSearchInput ? activeEl.selectionStart : 0;
+
+    render();
+
+    // Restaurar foco si estaba en el search input
+    if (isSearchInput) {
+      requestAnimationFrame(() => {
+        const newInput = document.getElementById('search-input');
+        if (newInput) {
+          newInput.focus();
+          newInput.setSelectionRange(cursorPos, cursorPos);
+        }
+      });
+    }
+  }, 300);
+}
+
 // Ajusta el padding del contenido para compensar el header fijo
 function updateContentPadding() {
   requestAnimationFrame(() => {
