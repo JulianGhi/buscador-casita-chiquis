@@ -22,9 +22,30 @@ function updateNegotiation(pct) {
   render();
 }
 
+// Actualiza solo el display durante el arrastre (sin re-render para mobile)
+function updateNegotiationDisplay(pct) {
+  state.negotiationPct = parseFloat(pct);
+  const display = document.getElementById('neg-display');
+  if (display) {
+    const val = parseFloat(pct);
+    display.textContent = val > 0 ? '-' + (val % 1 === 0 ? val : val.toFixed(1)) + '%' : '0%';
+    display.className = val > 0 ? 'text-lg font-bold text-orange-600' : 'text-lg font-bold text-slate-400';
+  }
+}
+
 function updateDolarEstimado(valor) {
   state.dolarEstimado = valor ? parseInt(valor) : null;
   render();
+}
+
+// Actualiza solo el display durante el arrastre (sin re-render para mobile)
+function updateDolarEstimadoDisplay(valor) {
+  state.dolarEstimado = valor ? parseInt(valor) : null;
+  const display = document.getElementById('dolar-display');
+  if (display) {
+    display.textContent = '$' + valor;
+    display.className = valor != CONFIG.DOLAR_BASE ? 'text-lg font-bold text-green-600' : 'text-lg font-bold text-slate-400';
+  }
 }
 
 function updateConfig(key, value) {
@@ -47,6 +68,15 @@ function updateWeight(key, value) {
   WEIGHTS[key].weight = parseInt(value);
   saveWeights(WEIGHTS);
   render();
+}
+
+// Actualiza solo el display durante el arrastre (sin re-render para mobile)
+function updateWeightDisplay(key, value) {
+  WEIGHTS[key].weight = parseInt(value);
+  const display = document.getElementById('weight-display-' + key);
+  if (display) {
+    display.textContent = value;
+  }
 }
 
 function toggleWeightEnabled(key, enabled) {
@@ -166,7 +196,7 @@ function render() {
 // ============================================
 
 function init() {
-  console.log('🏠 Casita Chiquis v6-modular iniciando...');
+  console.log(`🏠 Casita Chiquis ${APP_VERSION} iniciando...`);
 
   // Cargar datos
   fetchData();

@@ -14,6 +14,7 @@ function renderStatusBar(stats) {
               : '<span class="w-2 h-2 bg-green-400 rounded-full"></span><span class="text-green-300 hide-mobile">OK</span>'
           }
           ${state.autoRefreshEnabled ? '<span class="text-green-400">●</span>' : ''}
+          <span class="text-slate-500 text-[10px]">${APP_VERSION}</span>
         </div>
         <div class="text-slate-400 flex items-center gap-1">
           <span class="font-medium text-slate-300">${stats.activos}</span><span class="hide-mobile"> activas</span>
@@ -577,6 +578,9 @@ function renderHelpPanel() {
         </div>
 
       </div>
+      <div class="text-center text-[10px] text-slate-400 mt-3 pt-2 border-t border-slate-200">
+        Casita Chiquis ${APP_VERSION}
+      </div>
     </div>
   `;
 }
@@ -682,11 +686,11 @@ function renderConfigTab_Pesos() {
           onchange="toggleWeightEnabled('${key}', this.checked)"
           class="w-3.5 h-3.5 accent-blue-500 rounded" />
         <span class="${config.enabled ? THEME.neutral.text + ' font-medium' : 'text-slate-400'}">${config.label}</span>
-        <span class="font-bold ${config.enabled ? THEME.info.text : 'text-slate-400'} ml-auto text-sm">${config.weight}</span>
+        <span id="weight-display-${key}" class="font-bold ${config.enabled ? THEME.info.text : 'text-slate-400'} ml-auto text-sm">${config.weight}</span>
       </div>
       <input type="range" min="0" max="10" value="${config.weight}"
         onchange="updateWeight('${key}', this.value)"
-        oninput="updateWeight('${key}', this.value)"
+        oninput="updateWeightDisplay('${key}', this.value)"
         ${config.enabled ? '' : 'disabled'}
         class="w-full h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer ${config.enabled ? 'accent-blue-500' : 'accent-slate-300'}" />
     </div>
@@ -913,10 +917,10 @@ function renderSimulationSliders(dolarActual, hayAjusteDolar, diferenciaCredito,
       <div class="bg-gradient-to-r from-orange-50 to-amber-50 rounded-xl p-4 border ${THEME.negociar.border}">
         <div class="flex items-center justify-between mb-2">
           <span class="text-sm font-medium text-orange-800">${ICONS.handshake} Negociar</span>
-          <span class="text-lg font-bold ${negPct > 0 ? THEME.negociar.textLight : 'text-slate-400'}">${negDisplay}</span>
+          <span id="neg-display" class="text-lg font-bold ${negPct > 0 ? THEME.negociar.textLight : 'text-slate-400'}">${negDisplay}</span>
         </div>
         <input type="range" min="0" max="15" step="0.5" value="${negPct}"
-          onchange="updateNegotiation(this.value)" oninput="updateNegotiation(this.value)"
+          onchange="updateNegotiation(this.value)" oninput="updateNegotiationDisplay(this.value)"
           class="w-full h-2 bg-orange-200 rounded-lg appearance-none cursor-pointer accent-orange-500" />
         <div class="flex justify-between text-xs ${THEME.negociar.textLight} mt-1"><span>Publicado</span><span>-15%</span></div>
       </div>
@@ -924,10 +928,10 @@ function renderSimulationSliders(dolarActual, hayAjusteDolar, diferenciaCredito,
       <div class="bg-gradient-to-r from-green-50 to-emerald-50 rounded-xl p-4 border ${THEME.success.border}">
         <div class="flex items-center justify-between mb-2">
           <span class="text-sm font-medium text-green-800">${ICONS.dolar} Dólar estimado</span>
-          <span class="text-lg font-bold ${hayAjusteDolar ? THEME.success.textLight : 'text-slate-400'}">$${dolarActual}</span>
+          <span id="dolar-display" class="text-lg font-bold ${hayAjusteDolar ? THEME.success.textLight : 'text-slate-400'}">$${dolarActual}</span>
         </div>
         <input type="range" min="900" max="2000" step="10" value="${dolarActual}"
-          onchange="updateDolarEstimado(this.value)" oninput="updateDolarEstimado(this.value)"
+          onchange="updateDolarEstimado(this.value)" oninput="updateDolarEstimadoDisplay(this.value)"
           class="w-full h-2 bg-green-200 rounded-lg appearance-none cursor-pointer accent-green-500" />
         <div class="flex justify-between text-xs ${THEME.success.textLight} mt-1">
           <span>$900</span>
