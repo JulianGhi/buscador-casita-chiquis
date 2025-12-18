@@ -1088,14 +1088,11 @@ function renderModalFooter(p) {
 // MODAL PRINCIPAL
 // ============================================
 
-// Renderiza la sección de simulación (sliders + quita + costos)
-function renderSimulationSection(p) {
+// Renderiza solo los cálculos (sin sliders) - se actualiza al mover sliders
+function renderSimulationCalcs(p) {
   if (!p || p._precio <= 0) return '';
 
   const dolarActual = state.dolarEstimado || CONFIG.DOLAR_BASE;
-  const creditoBase = getCreditoUSD();
-  const creditoEstimado = getCreditoUSD(dolarActual);
-  const diferenciaCredito = creditoBase - creditoEstimado;
   const tieneInmob = !esVentaDirecta(p.inmobiliaria);
 
   const costsNeg = calculateCosts(p._precio, {
@@ -1106,14 +1103,30 @@ function renderSimulationSection(p) {
 
   const ahorro = p._total - costsNeg.total;
   const hayAjuste = state.negotiationPct > 0 || (state.dolarEstimado && state.dolarEstimado !== CONFIG.DOLAR_BASE);
-  const hayAjusteDolar = state.dolarEstimado && state.dolarEstimado !== CONFIG.DOLAR_BASE;
   const quita = calculateQuitaNecesaria(p._precio, tieneInmob, dolarActual);
 
   return `
     ${renderPriceStats(p, costsNeg, hayAjuste)}
-    ${renderSimulationSliders(dolarActual, hayAjusteDolar, diferenciaCredito, creditoEstimado)}
-    ${!costsNeg.ok ? renderQuitaSugerencia(quita, dolarActual, creditoEstimado) : ''}
+    ${!costsNeg.ok ? renderQuitaSugerencia(quita, dolarActual, costsNeg.creditoUSD) : ''}
     ${renderCostsBreakdown(p, costsNeg, hayAjuste, ahorro)}
+  `;
+}
+
+// Renderiza la sección completa de simulación (sliders + cálculos)
+function renderSimulationSection(p) {
+  if (!p || p._precio <= 0) return '';
+
+  const dolarActual = state.dolarEstimado || CONFIG.DOLAR_BASE;
+  const creditoBase = getCreditoUSD();
+  const creditoEstimado = getCreditoUSD(dolarActual);
+  const diferenciaCredito = creditoBase - creditoEstimado;
+  const hayAjusteDolar = state.dolarEstimado && state.dolarEstimado !== CONFIG.DOLAR_BASE;
+
+  return `
+    <div id="simulation-calcs" class="space-y-4">
+      ${renderSimulationCalcs(p)}
+    </div>
+    ${renderSimulationSliders(dolarActual, hayAjusteDolar, diferenciaCredito, creditoEstimado)}
   `;
 }
 

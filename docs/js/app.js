@@ -17,10 +17,10 @@ function closeDetail() {
   render();
 }
 
-// Actualiza solo la sección de simulación del modal (sin recrear todo)
+// Actualiza solo los cálculos del modal (sin recrear sliders)
 function updateSimulation() {
-  const section = document.getElementById('simulation-section');
-  if (!section) return;
+  const calcs = document.getElementById('simulation-calcs');
+  if (!calcs) return;
 
   const properties = getProperties();
   const selectedProp = state.selectedProperty !== null
@@ -28,7 +28,7 @@ function updateSimulation() {
     : null;
 
   if (selectedProp) {
-    section.innerHTML = renderSimulationSection(selectedProp);
+    calcs.innerHTML = renderSimulationCalcs(selectedProp);
   }
 }
 
