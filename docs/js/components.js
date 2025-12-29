@@ -298,8 +298,8 @@ function renderTable(filtered) {
               <th class="px-2 py-2.5 text-center font-medium text-slate-600" title="Tier + Score">⭐</th>
               <th class="px-2 py-2.5 text-center font-medium text-slate-600" title="Inconsistencias">⚠</th>
               <th class="px-2 py-2.5 text-center font-medium text-slate-600" title="Backup PDF">📄</th>
-              <th class="px-2 py-2.5 text-center font-medium text-slate-600">Activo</th>
-              <th class="px-2 py-2.5 text-center font-medium text-slate-600" title="Apto Crédito">Apto</th>
+              <th class="px-2 py-2.5 text-center font-medium text-slate-600 w-16">Activo</th>
+              <th class="px-2 py-2.5 text-center font-medium text-slate-600 w-14" title="Apto Crédito">Apto</th>
               <th class="px-2 py-2.5 text-center font-medium text-slate-600">Status</th>
               <th class="px-3 py-2.5 text-left font-medium text-slate-600">Dirección</th>
               <th class="px-3 py-2.5 text-left font-medium text-slate-600">Barrio</th>
