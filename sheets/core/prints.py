@@ -190,11 +190,17 @@ def get_prints_index(rows, prints_dir=None):
             elif prints_index[fila_asociada]['dias'] > dias_antiguedad:
                 prints_index[fila_asociada] = archivo_info
 
-    # Agregar historial al indice
+    # Agregar historial al indice (evitar referencia circular)
     for fila, info in prints_index.items():
         historial = prints_historial.get(fila, [])
         if len(historial) > 1:
-            info['historial'] = sorted(historial, key=lambda x: x['fecha'], reverse=True)
+            # Copiar historial sin el item actual para evitar ref circular
+            historial_otros = [
+                {k: v for k, v in h.items() if k != 'historial'}
+                for h in historial if h['archivo'] != info['archivo']
+            ]
+            if historial_otros:
+                info['historial'] = sorted(historial_otros, key=lambda x: x['fecha'], reverse=True)
             info['versiones'] = len(historial)
 
     return prints_index
