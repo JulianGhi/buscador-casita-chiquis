@@ -512,7 +512,7 @@ def save_prints_index(clasificacion, prints_index, huerfanos, prints_index_path)
 # EXTRACCIÓN DE DATOS DE PDFs
 # =============================================================================
 
-def extraer_texto_pdf(filepath, max_pages=3):
+def extraer_texto_pdf(filepath, max_pages=5):
     """
     Extrae texto de un PDF usando pdftotext.
 

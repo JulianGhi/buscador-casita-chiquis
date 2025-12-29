@@ -20,7 +20,8 @@ sys.path.insert(0, str(Path(__file__).parent))
 
 import gspread
 from google.oauth2.service_account import Credentials
-from sync_sheet import scrape_mercadolibre, scrape_argenprop, SCRAPEABLE_COLS
+from core.scrapers import scrape_mercadolibre, scrape_argenprop
+from sync_sheet import SCRAPEABLE_COLS
 
 SCOPES = ['https://www.googleapis.com/auth/spreadsheets']
 SHEET_ID = '16n92ghEe8Vr1tiLdqbccF3i97kiwhHin9OPWY-O50L4'
@@ -65,11 +66,11 @@ def add_links(links_with_notes):
     sh = gc.open_by_key(SHEET_ID)
     ws = sh.sheet1
 
-    # Get headers - use range A1:AD1 to get exactly 30 columns
-    headers = ws.row_values(1)[:30]  # Limit to first 30 headers
+    # Get all headers (dynamic, not hardcoded)
+    headers = ws.row_values(1)
 
-    # Get existing data (only first 30 columns)
-    all_data = ws.get('A:AD')
+    # Get existing data
+    all_data = ws.get_all_values()
     link_idx = headers.index('link') if 'link' in headers else 0
     existing_links = [row[link_idx] if len(row) > link_idx else ''
                       for row in all_data[1:] if row]
@@ -100,8 +101,9 @@ def add_links(links_with_notes):
             # Si scrapeó bien, el link está activo
             data['activo'] = 'si'
 
-        # Prepare row (exactly 30 columns)
-        new_row = [''] * 30
+        # Prepare row (match number of headers)
+        num_cols = len(headers)
+        new_row = [''] * num_cols
         new_row[col_idx.get('link', 0)] = url
 
         # Fill scraped data
@@ -124,8 +126,15 @@ def add_links(links_with_notes):
             new_row[col_idx['status']] = 'Por ver'
 
         # Write to specific row using update (more reliable than append_row)
-        # Range A{next_row}:AD{next_row} = columns 1-30
-        cell_range = f'A{next_row}:AD{next_row}'
+        # Convert num_cols to column letter (1=A, 26=Z, 27=AA, etc.)
+        def col_letter(n):
+            result = ""
+            while n > 0:
+                n, remainder = divmod(n - 1, 26)
+                result = chr(65 + remainder) + result
+            return result
+        last_col = col_letter(num_cols)
+        cell_range = f'A{next_row}:{last_col}{next_row}'
         ws.update(values=[new_row], range_name=cell_range, value_input_option='USER_ENTERED')
 
         existing_links.append(url)
