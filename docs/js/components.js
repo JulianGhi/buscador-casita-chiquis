@@ -298,8 +298,8 @@ function renderTable(filtered) {
               <th class="px-2 py-2.5 text-center font-medium text-slate-600" title="Tier + Score">⭐</th>
               <th class="px-2 py-2.5 text-center font-medium text-slate-600" title="Inconsistencias">⚠</th>
               <th class="px-2 py-2.5 text-center font-medium text-slate-600" title="Backup PDF">📄</th>
-              <th class="px-2 py-2.5 text-center font-medium text-slate-600 w-16">Activo</th>
-              <th class="px-2 py-2.5 text-center font-medium text-slate-600 w-14" title="Apto Crédito">Apto</th>
+              <th class="px-1 py-2.5 text-center font-medium text-slate-600 whitespace-nowrap">Activo</th>
+              <th class="px-1 py-2.5 text-center font-medium text-slate-600 whitespace-nowrap" title="Apto Crédito">Apto</th>
               <th class="px-2 py-2.5 text-center font-medium text-slate-600">Status</th>
               <th class="px-3 py-2.5 text-left font-medium text-slate-600">Dirección</th>
               <th class="px-3 py-2.5 text-left font-medium text-slate-600">Barrio</th>
@@ -329,8 +329,8 @@ function renderTable(filtered) {
                 <td class="px-2 py-2.5 text-center"><span class="inline-flex items-center gap-1">${tierBadge(p._tier)}<span class="text-xs font-mono ${p._score > 50 ? 'text-green-600 font-bold' : p._score > 0 ? 'text-green-500' : 'text-slate-400'}">${p._score}</span></span></td>
                 <td class="px-2 py-2.5 text-center">${warningsBadge(p._warnings)}</td>
                 <td class="px-2 py-2.5 text-center">${printBadge(p.fecha_print)}</td>
-                <td class="px-2 py-2.5 text-center">${activoBadge(p.activo)}</td>
-                <td class="px-2 py-2.5 text-center">${aptoCreditoBadge(p.apto_credito)}</td>
+                <td class="px-1 py-2.5 text-center">${activoBadge(p.activo)}</td>
+                <td class="px-1 py-2.5 text-center">${aptoCreditoBadge(p.apto_credito)}</td>
                 <td class="px-2 py-2.5 text-center">${statusBadge(p.status)}</td>
                 <td class="px-3 py-2.5"><span class="font-medium text-slate-800">${p.direccion ? escapeHtml(p.direccion) : '<span class="text-slate-300 text-xs italic">sin dir</span>'}</span>${fechaIndicators(p)}</td>
                 <td class="px-3 py-2.5 text-slate-600">${p.barrio ? escapeHtml(p.barrio) : '<span class="text-slate-300 text-xs italic">-</span>'}</td>
