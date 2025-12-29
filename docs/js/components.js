@@ -311,6 +311,7 @@ function renderTable(filtered) {
               <th class="px-3 py-2.5 text-right font-medium text-slate-600">$/m²</th>
               <th class="px-2 py-2.5 text-center font-medium text-slate-600" title="Diferencia vs precio promedio del barrio">vs Ref</th>
               <th class="px-3 py-2.5 text-right font-medium text-slate-600">A juntar</th>
+              <th class="px-3 py-2.5 text-right font-medium text-slate-600" title="Dinero que sobra para reparaciones">Sobra</th>
               <th class="px-2 py-2.5 text-center font-medium text-slate-600">OK</th>
               <th class="px-2 py-2.5 text-center font-medium text-slate-600" title="Cocheras">🚗</th>
               <th class="px-2 py-2.5 text-center font-medium text-slate-600" title="Terraza">T</th>
@@ -341,6 +342,7 @@ function renderTable(filtered) {
                 <td class="px-3 py-2.5 text-right font-mono text-slate-600">${p._preciom2 > 0 ? '$' + p._preciom2.toLocaleString() : '<span class="text-slate-300">-</span>'}</td>
                 <td class="px-2 py-2.5 text-center">${evalIcon(p._vsRef)}</td>
                 <td class="px-3 py-2.5 text-right font-mono text-slate-800">${p._precio > 0 ? '$' + p._total.toLocaleString() : '<span class="text-slate-300">-</span>'}</td>
+                <td class="px-3 py-2.5 text-right font-mono ${p._dif > 0 ? THEME.success.textLight : p._dif < 0 ? THEME.error.textLight : 'text-slate-400'}">${p._precio > 0 ? (p._dif >= 0 ? '+$' + p._dif.toLocaleString() : '-$' + Math.abs(p._dif).toLocaleString()) : '<span class="text-slate-300">-</span>'}</td>
                 <td class="px-2 py-2.5 text-center">${p._precio > 0 ? okPill(p._ok) : '<span class="text-slate-300">-</span>'}</td>
                 <td class="px-2 py-2.5 text-center">${p.cocheras ? (p.cocheras !== '0' ? '<span class="text-green-600">✓</span>' : '<span class="text-slate-300">-</span>') : '<span class="text-slate-300">-</span>'}</td>
                 <td class="px-2 py-2.5 text-center">${p.terraza?.toLowerCase() === 'si' ? '<span class="text-green-600">✓</span>' : p.terraza?.toLowerCase() === 'no' ? '<span class="text-red-400">✗</span>' : '<span class="text-slate-300">-</span>'}</td>
@@ -452,19 +454,24 @@ function renderCards(filtered) {
               ${p.disposicion?.toLowerCase() === 'frente' ? '<span class="text-blue-600">☀️ Frente</span>' : ''}
             </div>
 
-            <!-- Row 5: Status chips (OK + Apto + Status) -->
+            <!-- Row 5: Status chips (OK + Sobra + Apto + Status) -->
             <div class="flex items-center gap-2 px-4 pb-2 flex-wrap">
               ${p._precio > 0 ? `
                 <span class="text-xs px-2 py-1 rounded-full font-medium ${p._ok
-                  ? 'bg-green-100 text-green-700'
-                  : 'bg-red-100 text-red-600'}">
+                  ? THEME.success.bg + ' ' + THEME.success.text
+                  : THEME.error.bg + ' ' + THEME.error.text}">
                   ${p._ok ? '✓' : '✗'} $${Math.round(p._total/1000)}k
+                </span>
+                <span class="text-xs px-2 py-1 rounded-full font-mono ${p._dif >= 0
+                  ? THEME.success.bg + ' ' + THEME.success.text
+                  : THEME.error.bg + ' ' + THEME.error.text}">
+                  ${p._dif >= 0 ? '+' : ''}$${Math.round(p._dif/1000)}k
                 </span>
               ` : ''}
               <span class="text-xs px-2 py-1 rounded-full font-medium ${
-                aptoCredito === 'si' ? 'bg-purple-100 text-purple-700' :
-                aptoCredito === 'no' ? 'bg-red-100 text-red-600' :
-                'bg-yellow-100 text-yellow-700'
+                aptoCredito === 'si' ? THEME.purple.bg + ' ' + THEME.purple.text :
+                aptoCredito === 'no' ? THEME.error.bg + ' ' + THEME.error.text :
+                THEME.warning.bg + ' ' + THEME.warning.text
               }">
                 ${aptoCredito === 'si' ? '✓ Apto' : aptoCredito === 'no' ? '✗ Apto' : '? Apto'}
               </span>
