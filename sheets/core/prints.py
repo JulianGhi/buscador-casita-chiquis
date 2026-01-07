@@ -112,7 +112,7 @@ def get_prints_index(rows, prints_dir=None):
     props_by_fila = {}    # {fila: row}
 
     for row in rows:
-        fila = row.get('_row', 0)
+        fila = int(row.get('_row') or 0)
         if fila < 2:
             continue
 
@@ -222,7 +222,7 @@ def clasificar_prints(rows, prints_dir=None):
     # Filtrar propiedades activas
     activas = []
     for row in rows:
-        fila = row.get('_row', 0)
+        fila = int(row.get('_row') or 0)
         if fila < 2:
             continue
 
@@ -281,7 +281,7 @@ def sync_print_dates(rows, prints_dir=None):
     updated = 0
 
     for row in rows:
-        fila = row.get('_row', 0)
+        fila = int(row.get('_row') or 0)
         if fila in prints_index:
             fecha_print = prints_index[fila].get('fecha', '')
             if fecha_print and row.get('fecha_print', '') != fecha_print:
@@ -311,7 +311,7 @@ def build_property_index(rows):
     fila_to_info = {}
 
     for row in rows:
-        fila = row.get('_row', 0)
+        fila = int(row.get('_row') or 0)
         link = row.get('link', '')
         if fila >= 2 and link.startswith('http'):
             prop_id = extraer_id_propiedad(link)
@@ -1125,7 +1125,7 @@ def analizar_tres_fuentes(rows, prints_dir=None, cache=None):
     pdf_field_map = {}
 
     for row in rows:
-        fila = row.get('_row', 0)
+        fila = int(row.get('_row') or 0)
         if fila < 2:
             continue
 
@@ -1200,7 +1200,7 @@ def analizar_prints_vs_sheet(rows, prints_dir=None):
     resultados = []
 
     for row in rows:
-        fila = row.get('_row', 0)
+        fila = int(row.get('_row') or 0)
         if fila < 2:
             continue
 

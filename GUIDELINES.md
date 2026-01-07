@@ -441,4 +441,4 @@ except Exception:
 
 ---
 
-*Última actualización: 2025-12-17*
+*Última actualización: 2026-01-07*

@@ -31,10 +31,17 @@ Recorre las filas que tienen link, scrapea los datos y actualiza el JSON local.
 - `precio`, `m2_cub`, `m2_tot`, `m2_terr`, `amb`
 - `direccion`, `barrio`, `inmobiliaria`
 - `expensas`, `antiguedad`, `banos`, `dormitorios`
-- `terraza`, `balcon`, `cocheras`, `ascensor`, `luminosidad`
+- `terraza`, `balcon`, `patio`, `cocheras`, `ascensor`, `luminosidad`
 - `disposicion`, `piso`, `tipo`, `apto_credito`
 - `fecha_publicado`
 - `activo` (si/no según estado del link)
+
+**Campos manuales (no scrapeados):**
+- `status`: Por ver, Visitado, Interesado, Descartado
+- `fecha_visita`: Fecha de visita programada (YYYY-MM-DD)
+- `fecha_contacto`: Fecha de contacto con inmobiliaria
+- `notas`: Notas personales
+- `rating`: Valoración personal (1-5)
 
 **Sistema de validaciones:**
 

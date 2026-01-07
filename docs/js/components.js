@@ -196,6 +196,7 @@ function renderFilters(barrios, filtered, properties) {
 
         <select onchange="state.filterStatus=this.value;render()" class="filter-select">
           <option value="todos" ${state.filterStatus === 'todos' ? 'selected' : ''}>Status</option>
+          <option value="visita programada" ${state.filterStatus === 'visita programada' ? 'selected' : ''}>Visita programada</option>
           <option value="por ver" ${state.filterStatus === 'por ver' ? 'selected' : ''}>Por ver</option>
           <option value="visitado" ${state.filterStatus === 'visitado' ? 'selected' : ''}>Visitado</option>
           <option value="interesado" ${state.filterStatus === 'interesado' ? 'selected' : ''}>Interesado</option>
@@ -331,7 +332,7 @@ function renderTable(filtered) {
                 <td class="px-2 py-2.5 text-center">${printBadge(p.fecha_print)}</td>
                 <td class="px-1 py-2.5 text-center">${activoBadge(p.activo)}</td>
                 <td class="px-1 py-2.5 text-center">${aptoCreditoBadge(p.apto_credito)}</td>
-                <td class="px-2 py-2.5 text-center">${statusBadge(p.status)}</td>
+                <td class="px-2 py-2.5 text-center">${statusBadge(getEffectiveStatus(p))}</td>
                 <td class="px-3 py-2.5"><span class="font-medium text-slate-800">${p.direccion ? escapeHtml(p.direccion) : '<span class="text-slate-300 text-xs italic">sin dir</span>'}</span>${fechaIndicators(p)}</td>
                 <td class="px-3 py-2.5 text-slate-600">${p.barrio ? escapeHtml(p.barrio) : '<span class="text-slate-300 text-xs italic">-</span>'}</td>
                 <td class="px-2 py-2.5 text-center text-xs text-slate-600">${p.tipo ? escapeHtml(p.tipo.toUpperCase()) : '<span class="text-slate-300">-</span>'}</td>
@@ -475,7 +476,7 @@ function renderCards(filtered) {
               }">
                 ${aptoCredito === 'si' ? '✓ Apto' : aptoCredito === 'no' ? '✗ Apto' : '? Apto'}
               </span>
-              ${statusBadge(p.status)}
+              ${statusBadge(getEffectiveStatus(p))}
               ${p._warnings?.length > 0 ? `<span class="text-amber-500 text-xs">⚠️${p._warnings.length}</span>` : ''}
             </div>
 
@@ -797,7 +798,7 @@ function renderModalBadges(p) {
 
   return `
     <div class="flex flex-wrap gap-2 items-center">
-      ${statusBadge(p.status)}
+      ${statusBadge(getEffectiveStatus(p))}
       ${activoBadge(p.activo)}
       ${aptoBadge}
       ${evalIcon(p._vsRef)}

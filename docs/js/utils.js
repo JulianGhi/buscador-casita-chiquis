@@ -218,6 +218,10 @@ function calculateProperty(p) {
   const diasInactivo = diasHace(p.fecha_inactivo);
   const vendidaReciente = (p.activo || '').toLowerCase() === 'no' && diasInactivo !== null && diasInactivo <= (CONFIG.DIAS_VENDIDA_RECIENTE || 3);
 
+  // Calcular si tiene visita programada (fecha_visita >= hoy)
+  const diasVisita = diasHace(p.fecha_visita);
+  const visitaProgramada = diasVisita !== null && diasVisita <= 0; // dias <= 0 significa hoy o futuro
+
   const calc = {
     ...p,
     _precio: precio,
@@ -228,6 +232,7 @@ function calculateProperty(p) {
     _antiguedad: antiguedad,
     _esNueva: esNueva,
     _vendidaReciente: vendidaReciente,
+    _visitaProgramada: visitaProgramada,
     _preciom2: m2 > 0 ? Math.round(precio / m2) : 0,
     _ref: REF_M2[barrio] || 0,
     // Costos (de calculateCosts)
@@ -375,7 +380,13 @@ function getFiltered(properties) {
   let result = [...properties];
 
   // Filtros básicos
-  if (state.filterStatus !== 'todos') result = result.filter(p => p.status?.toLowerCase().includes(state.filterStatus.toLowerCase()));
+  if (state.filterStatus !== 'todos') {
+    if (state.filterStatus === 'visita programada') {
+      result = result.filter(p => p._visitaProgramada);
+    } else {
+      result = result.filter(p => p.status?.toLowerCase().includes(state.filterStatus.toLowerCase()));
+    }
+  }
   if (state.filterOk === 'ok') result = result.filter(p => p._ok);
   else if (state.filterOk === 'no') result = result.filter(p => !p._ok);
   if (state.filterBarrio !== 'todos') result = result.filter(p => p.barrio === state.filterBarrio);
@@ -540,6 +551,12 @@ function activoBadge(activo) {
 
 function aptoCreditoBadge(apto) {
   return booleanBadge(apto, { noColor: 'text-amber-600' });
+}
+
+// Obtener status efectivo (considera visita programada)
+function getEffectiveStatus(p) {
+  if (p._visitaProgramada) return 'Visita programada';
+  return p.status || '';
 }
 
 // Badge de status usando STATUS_CONFIG

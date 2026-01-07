@@ -155,6 +155,24 @@ docs/
 - **Página de stats** con gráfico precio vs m²
 - **Cotización dólar BNA** en tiempo real
 
+### Sistema de Status
+
+| Status | Descripción | Automático |
+|--------|-------------|------------|
+| `Visita programada` | Tiene fecha_visita ≥ hoy | ✓ (override automático) |
+| `Por ver` | Default al agregar | |
+| `Visitado` | Ya se visitó | |
+| `Interesado` | Candidato serio | |
+| `Descartado` | No interesa | |
+
+**Campos de fecha:**
+- `fecha_agregado`: Cuando se agregó al sheet
+- `fecha_visita`: Fecha de visita programada (si es futura, el status se muestra como "Visita programada")
+- `fecha_contacto`: Cuando se contactó a la inmobiliaria
+- `fecha_publicado`: Cuando se publicó el aviso
+- `fecha_inactivo`: Cuando se detectó que bajó el aviso
+- `fecha_print`: Cuando se guardó el PDF de backup
+
 ### Agregar propiedades (flujo completo)
 
 ```bash

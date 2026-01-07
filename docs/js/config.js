@@ -96,6 +96,7 @@ const ICONS = {
 // CONFIGURACIÓN DE STATUS
 // ============================================
 const STATUS_CONFIG = {
+  'visita programada': { theme: 'info', label: 'Visita programada' },
   'visitado':   { theme: 'info',    label: 'Visitado' },
   'interesado': { theme: 'success', label: 'Interesado' },
   'descartado': { theme: 'error',   label: 'Descartado' },
