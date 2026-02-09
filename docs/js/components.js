@@ -79,6 +79,7 @@ function renderHeaderSummary() {
 function renderMainHeader(activePage = 'buscador') {
   const isBuscador = activePage === 'buscador';
   const isStats = activePage === 'stats';
+  const isCompra = activePage === 'compra';
 
   return `
     <div class="header-main max-w-7xl mx-auto">
@@ -93,6 +94,10 @@ function renderMainHeader(activePage = 'buscador') {
             ${isStats
               ? '<span class="nav-pill bg-white shadow-sm text-slate-700 font-medium">📊</span>'
               : '<a href="stats.html" class="nav-pill text-slate-600 hover:bg-white/50">📊</a>'
+            }
+            ${isCompra
+              ? '<span class="nav-pill bg-white shadow-sm text-slate-700 font-medium">🔑</span>'
+              : '<a href="compra.html" class="nav-pill text-slate-600 hover:bg-white/50">🔑</a>'
             }
           </nav>
         </div>
@@ -137,62 +142,6 @@ function renderStatsCards(stats) {
   `;
 }
 
-function renderMiCompra() {
-  const data = calculateMiCompra();
-  if (!data) return '';
-
-  const fmtK = (n) => n >= 1000 ? '$' + (n / 1000).toFixed(1).replace(/\.0$/, '') + 'k' : '$' + n.toLocaleString();
-  const creditoCubreSaldo = data.faltanteCasa <= 0;
-
-  return `
-    <div class="bg-white rounded-xl shadow-sm mb-4 overflow-hidden">
-      <!-- Header -->
-      <div class="flex items-center justify-between px-4 pt-3 pb-2">
-        <span class="font-semibold text-slate-700">${ICONS.house} Mi compra</span>
-        <span class="text-lg font-bold text-slate-800">$${data.precio.toLocaleString()}</span>
-      </div>
-
-      <!-- Barra de progreso -->
-      <div class="px-4 pb-2">
-        <div class="w-full bg-slate-200 rounded-full h-3 overflow-hidden">
-          <div class="bg-green-500 h-3 rounded-full transition-all" style="width: ${data.progreso.toFixed(1)}%"></div>
-        </div>
-        <div class="flex justify-between text-xs text-slate-500 mt-1">
-          <span>Seña ${fmtK(data.sena)}</span>
-          <span class="font-medium">${data.progreso.toFixed(0)}%</span>
-          <span>Total ${fmtK(data.totalNecesario)}</span>
-        </div>
-      </div>
-
-      <!-- Dos columnas: faltante casa + gastos -->
-      <div class="grid grid-cols-2 gap-3 px-4 pb-3">
-        <div class="bg-blue-50 rounded-lg p-3 border border-blue-100">
-          <div class="text-xs text-blue-600 font-medium mb-1">Faltante casa</div>
-          ${creditoCubreSaldo
-            ? `<div class="text-lg font-bold text-green-600">${ICONS.check} $0</div>
-               <div class="text-xs text-green-600">Crédito cubre el saldo</div>`
-            : `<div class="text-lg font-bold text-blue-700">$${data.faltanteCasa.toLocaleString()}</div>
-               <div class="text-xs text-blue-500">anticipo − seña</div>`
-          }
-        </div>
-        <div class="bg-amber-50 rounded-lg p-3 border border-amber-100">
-          <div class="text-xs text-amber-600 font-medium mb-1">Gastos escritura</div>
-          <div class="text-lg font-bold text-amber-700">$${data.gastosTotal.toLocaleString()}</div>
-          <div class="text-xs text-amber-500">escr+sell+reg+inmob</div>
-        </div>
-      </div>
-
-      <!-- Total y contexto -->
-      <div class="border-t border-slate-100 px-4 py-2 flex items-center justify-between">
-        <span class="text-sm font-medium text-slate-600">Total a juntar</span>
-        <span class="text-lg font-bold text-slate-800">$${data.totalFaltante.toLocaleString()}</span>
-      </div>
-      <div class="px-4 pb-3 text-xs text-slate-400 text-right">
-        Crédito $${(data.creditoUSD / 1000).toFixed(0)}k · Dólar $${CONFIG.DOLAR_BASE}
-      </div>
-    </div>
-  `;
-}
 
 function countActiveFilters() {
   let count = 0;
@@ -715,8 +664,6 @@ function renderConfigTab_General() {
       ${configDisplay('= Valor UVA', '$' + uva.toLocaleString('es-AR', {minimumFractionDigits: 2}) + ' (' + uvaSource + ')')}
       ${configInput('Dólar base (ARS/USD)', CONFIG.DOLAR_BASE, "updateConfig('DOLAR_BASE', parseInt(this.value))")}
       ${configInput('Tengo para poner (USD)', CONFIG.PRESUPUESTO, "updateConfig('PRESUPUESTO', parseInt(this.value))")}
-      ${configInput('Precio compra (USD)', CONFIG.PRECIO_COMPRA || '', "updateConfig('PRECIO_COMPRA', parseInt(this.value) || 0)")}
-      ${configInput('Seña pagada (USD)', CONFIG.SENA_USD || '', "updateConfig('SENA_USD', parseInt(this.value) || 0)")}
       ${configInput('Negociación base (%)', CONFIG.NEGOCIACION, "updateConfig('NEGOCIACION', parseFloat(this.value))", { step: '0.5' })}
       ${configDisplay('= Rango de precios', '$' + getPrecioRange().min.toLocaleString() + ' - $' + getPrecioRange().max.toLocaleString())}
       ${configInput('Auto-refresh (seg, 0=off)', CONFIG.AUTO_REFRESH, "updateConfig('AUTO_REFRESH', parseInt(this.value)); startAutoRefresh();")}

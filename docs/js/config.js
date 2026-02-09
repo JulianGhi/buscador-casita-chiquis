@@ -123,8 +123,6 @@ const DEFAULT_CONFIG = {
   AUTO_REFRESH: 10,
   DIAS_NUEVA: 3,           // Días para considerar propiedad como "Nueva"
   DIAS_VENDIDA_RECIENTE: 3, // Días para mostrar badge "Vendida recientemente"
-  PRECIO_COMPRA: 0,        // USD. 0 = feature deshabilitada
-  SENA_USD: 0,             // Seña ya pagada en USD
 };
 
 const DEFAULT_REF_M2 = {
@@ -383,6 +381,9 @@ function loadConfig() {
     if (saved.CREDITO_ARS !== undefined) {
       delete saved.CREDITO_ARS;
     }
+    // Migración: PRECIO_COMPRA/SENA_USD movidos a casita_compra
+    delete saved.PRECIO_COMPRA;
+    delete saved.SENA_USD;
     return { ...DEFAULT_CONFIG, ...saved };
   }
   return { ...DEFAULT_CONFIG };

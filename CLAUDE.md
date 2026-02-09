@@ -128,6 +128,7 @@ Dashboard interactivo en GitHub Pages para visualizar y filtrar propiedades.
 docs/
 ├── index.html          # Entry point buscador
 ├── stats.html          # Página de estadísticas con gráfico
+├── compra.html         # Tracker de compra (seña, faltante, gastos)
 ├── css/styles.css      # Animaciones CSS
 └── js/
     ├── config.js       # Configuración, defaults, state, localStorage
@@ -135,7 +136,8 @@ docs/
     ├── api.js          # fetchData, fetchDolarBNA, auto-refresh
     ├── components.js   # Todos los render* (header, table, cards, modal)
     ├── app.js          # Event handlers, render(), init() del buscador
-    └── stats.js        # Lógica específica de stats (Chart.js)
+    ├── stats.js        # Lógica específica de stats (Chart.js)
+    └── compra.js       # Tracker de compra standalone
 ```
 
 ### Funcionalidades del dashboard
