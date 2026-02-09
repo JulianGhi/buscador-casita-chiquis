@@ -180,6 +180,48 @@ function calculateQuitaNecesaria(precio, tieneInmob = false, dolar = null) {
   };
 }
 
+// Calcula datos del tracker de compra (seña, faltante, gastos)
+// Retorna null si PRECIO_COMPRA <= 0 (feature deshabilitada)
+function calculateMiCompra(options = {}) {
+  const precio = CONFIG.PRECIO_COMPRA;
+  if (!precio || precio <= 0) return null;
+
+  const { dolar = null } = options;
+  const sena = CONFIG.SENA_USD || 0;
+  const creditoUSD = getCreditoUSD(dolar);
+
+  // Anticipo = lo que hay que poner en efectivo (mínimo 10%)
+  const anticipo = Math.max(precio - creditoUSD, precio * 0.1);
+
+  // Faltante de la casa = anticipo - seña ya pagada
+  const faltanteCasa = Math.max(0, anticipo - sena);
+
+  // Gastos de escrituración (misma lógica que calculateCosts)
+  const escr = Math.round(precio * CONFIG.ESCRIBANO);
+  const sell = precio <= CONFIG.SELLOS_EXENTO ? 0 : Math.round(precio * CONFIG.SELLOS);
+  const reg = Math.round(precio * CONFIG.REGISTRALES);
+  const inmob = Math.round(precio * CONFIG.INMOB);
+  const hip = Math.round(precio * CONFIG.HIPOTECA);
+  const cert = CONFIG.CERTIFICADOS;
+  const gastosTotal = escr + sell + reg + inmob + hip + cert;
+
+  // Totales
+  const totalFaltante = faltanteCasa + gastosTotal;
+  const totalNecesario = anticipo + gastosTotal;
+  const progreso = totalNecesario > 0 ? Math.min(100, (sena / totalNecesario) * 100) : 0;
+
+  return {
+    precio, sena, creditoUSD,
+    anticipo: Math.round(anticipo),
+    faltanteCasa: Math.round(faltanteCasa),
+    escr, sell, reg, inmob, hip, cert,
+    gastosTotal,
+    totalFaltante: Math.round(totalFaltante),
+    totalNecesario: Math.round(totalNecesario),
+    progreso,
+  };
+}
+
 function parseCSV(text) {
   const lines = text.trim().split('\n');
   if (lines.length < 2) return [];

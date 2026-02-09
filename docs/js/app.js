@@ -190,6 +190,7 @@ function render() {
       <div class="max-w-7xl mx-auto">
         ${state.error ? `<div class="bg-red-50 border border-red-200 text-red-700 px-4 py-2 rounded-lg mb-4 text-sm">${escapeHtml(state.error)}</div>` : ''}
         ${renderFilters(barrios, filtered, properties)}
+        ${renderMiCompra()}
 
         <!-- Cards view (mobile or forced) -->
         <div class="${state.viewMode === 'cards' ? '' : state.viewMode === 'table' ? 'hidden' : 'md:hidden'}">

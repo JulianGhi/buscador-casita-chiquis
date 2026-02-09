@@ -123,6 +123,8 @@ const DEFAULT_CONFIG = {
   AUTO_REFRESH: 10,
   DIAS_NUEVA: 3,           // Días para considerar propiedad como "Nueva"
   DIAS_VENDIDA_RECIENTE: 3, // Días para mostrar badge "Vendida recientemente"
+  PRECIO_COMPRA: 0,        // USD. 0 = feature deshabilitada
+  SENA_USD: 0,             // Seña ya pagada en USD
 };
 
 const DEFAULT_REF_M2 = {
