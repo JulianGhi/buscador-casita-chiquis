@@ -204,6 +204,41 @@ document.addEventListener('visibilitychange', () => {
   }
 });
 
+async function fetchUVA() {
+  try {
+    const hoy = new Date();
+    const hace7 = new Date(hoy);
+    hace7.setDate(hace7.getDate() - 7);
+    const fmtDate = (d) => d.toISOString().split('T')[0];
+    const url = `https://api.bcra.gob.ar/estadisticas/v4.0/Monetarias/31?desde=${fmtDate(hace7)}&hasta=${fmtDate(hoy)}`;
+    const response = await fetch(url, { headers: { 'Accept': 'application/json' } });
+    if (!response.ok) throw new Error(`BCRA API: HTTP ${response.status}`);
+    const data = await response.json();
+    const detalle = data.results?.[0]?.detalle;
+    if (!detalle || detalle.length === 0) throw new Error('Sin datos UVA');
+    // v4 devuelve ordenado desc por fecha, el primero es el más reciente
+    const ultimo = detalle[0];
+    return {
+      valor: ultimo.valor,
+      fecha: ultimo.fecha
+    };
+  } catch (err) {
+    console.error('Error fetching UVA:', err);
+    return null;
+  }
+}
+
+async function cargarUVAHoy() {
+  state.loadingUVA = true;
+  render();
+  const data = await fetchUVA();
+  state.loadingUVA = false;
+  if (data) {
+    state.uvaData = data;
+  }
+  render();
+}
+
 async function cargarDolarHoy() {
   state.loadingDolar = true;
   render();

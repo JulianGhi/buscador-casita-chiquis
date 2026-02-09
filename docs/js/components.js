@@ -28,6 +28,9 @@ function renderStatusBar(stats) {
 
 function renderDolarBar() {
   const formatVariacion = (v) => (parseFloat(v) > 0 ? '+' : '') + (v || '0') + '%';
+  const uva = getValorUVA();
+  const uvaOk = state.uvaData != null;
+  const dolarVenta = state.dolarBNA?.venta;
 
   return `
     <div class="bg-slate-700 text-white dolar-bar">
@@ -44,12 +47,33 @@ function renderDolarBar() {
             </div>
           ` : ''}
         ` : '<span class="text-slate-500">...</span>'}
-        <button onclick="cargarDolarHoy()" class="ml-auto text-slate-400 hover:text-white btn-icon" ${state.loadingDolar ? 'disabled' : ''}>
-          ${state.loadingDolar ? '...' : '↻'}
+        <span class="text-slate-500">·</span>
+        <span class="text-xs hide-mobile">UVA</span>
+        ${uva ? `
+          <span class="font-bold text-sky-400">$${uva.toLocaleString('es-AR', {minimumFractionDigits: 0, maximumFractionDigits: 0})}</span>
+          <span class="w-1.5 h-1.5 rounded-full ${uvaOk ? 'bg-green-400' : 'bg-red-400'}"></span>
+          ${dolarVenta ? `<span class="text-xs text-slate-400 hide-mobile">ratio ${(uva / dolarVenta).toFixed(2)}</span>` : ''}
+        ` : state.loadingUVA ? '<span class="text-slate-500">...</span>' : '<span class="text-red-400 text-xs">UVA?</span>'}
+        <button onclick="cargarDolarHoy();cargarUVAHoy()" class="ml-auto text-slate-400 hover:text-white btn-icon" ${state.loadingDolar || state.loadingUVA ? 'disabled' : ''}>
+          ${state.loadingDolar || state.loadingUVA ? '...' : '↻'}
         </button>
       </div>
     </div>
   `;
+}
+
+function renderHeaderSummary() {
+  const cuota = getCuotaInfo();
+  const range = getPrecioRange();
+  const parts = [
+    `$${(getCreditoUSD()/1000).toFixed(1)}k <span class="hide-mobile">crédito</span>`,
+    `<span class="hide-mobile">Cuota $${Math.round(cuota.ars/1000)}k (~USD ${cuota.usd.toLocaleString()})</span>`,
+    `$${range.min.toLocaleString()}-${range.max.toLocaleString()}`,
+  ];
+  if (CONFIG.NEGOCIACION > 0) {
+    parts.push(`<span class="text-orange-600">-${CONFIG.NEGOCIACION}%</span>`);
+  }
+  return parts.join(' · ');
 }
 
 function renderMainHeader(activePage = 'buscador') {
@@ -79,7 +103,7 @@ function renderMainHeader(activePage = 'buscador') {
           <button onclick="state.showConfig=!state.showConfig;render()" class="btn-icon ${state.showConfig ? 'bg-blue-500 text-white' : 'bg-slate-200 text-slate-700'}" title="Config">⚙️</button>
         </div>
       </div>
-      <p class="text-xs text-slate-500 mt-1 truncate">$${getCreditoUSD().toLocaleString()} <span class="hide-mobile">crédito</span> · $${getPrecioRange().min.toLocaleString()}-${getPrecioRange().max.toLocaleString()}${CONFIG.NEGOCIACION > 0 ? ' · <span class="text-orange-600">-' + CONFIG.NEGOCIACION + '%</span>' : ''}</p>
+      <p class="text-xs text-slate-500 mt-1 truncate">${renderHeaderSummary()}</p>
     </div>
   `;
 }
@@ -620,11 +644,19 @@ function configDisplay(label, value, colorClass = 'text-slate-700') {
 }
 
 function renderConfigTab_General() {
+  const uva = getValorUVA();
+  const cuota = getCuotaInfo();
+  const uvaSource = CONFIG.UVA_MANUAL ? 'manual' : state.uvaData ? 'API' : 'base';
+
   return `
     <div class="grid grid-cols-2 md:grid-cols-3 gap-4">
-      ${configInput('Crédito hipotecario (ARS)', CONFIG.CREDITO_ARS, "updateConfig('CREDITO_ARS', parseInt(this.value))")}
+      ${configInput('Capital (UVAs)', CONFIG.CREDITO_UVA, "updateConfig('CREDITO_UVA', parseFloat(this.value))", { step: '0.01' })}
+      ${configInput('Cuota mensual (UVAs)', CONFIG.CUOTA_UVA, "updateConfig('CUOTA_UVA', parseFloat(this.value))", { step: '0.01' })}
+      ${configInput('UVA manual (override)', CONFIG.UVA_MANUAL || '', "updateConfig('UVA_MANUAL', this.value ? parseFloat(this.value) : null)", { step: '0.01' })}
+      ${configDisplay('= Capital en USD', '$' + getCreditoUSD().toLocaleString(), 'font-bold ' + THEME.success.text)}
+      ${configDisplay('= Cuota hoy', `$${Math.round(cuota.ars).toLocaleString()} ARS ≈ USD ${cuota.usd.toLocaleString()}`)}
+      ${configDisplay('= Valor UVA', '$' + uva.toLocaleString('es-AR', {minimumFractionDigits: 2}) + ' (' + uvaSource + ')')}
       ${configInput('Dólar base (ARS/USD)', CONFIG.DOLAR_BASE, "updateConfig('DOLAR_BASE', parseInt(this.value))")}
-      ${configDisplay('= Crédito en USD', '$' + getCreditoUSD().toLocaleString(), 'font-bold ' + THEME.success.text)}
       ${configInput('Tengo para poner (USD)', CONFIG.PRESUPUESTO, "updateConfig('PRESUPUESTO', parseInt(this.value))")}
       ${configInput('Negociación base (%)', CONFIG.NEGOCIACION, "updateConfig('NEGOCIACION', parseFloat(this.value))", { step: '0.5' })}
       ${configDisplay('= Rango de precios', '$' + getPrecioRange().min.toLocaleString() + ' - $' + getPrecioRange().max.toLocaleString())}
@@ -1037,7 +1069,7 @@ function renderCostsBreakdown(p, costsNeg, hayAjuste, ahorro) {
       <div class="space-y-2 text-sm">
         <!-- Info del crédito -->
         <div class="flex justify-between items-center text-xs pb-2 border-b border-slate-200">
-          <span class="text-slate-500">Crédito: <span class="font-mono font-medium text-slate-700">$${creditoActual.toLocaleString()}</span></span>
+          <span class="text-slate-500">Crédito: <span class="font-mono font-medium text-slate-700">${getValorUVA() ? `${fmtNum(CONFIG.CREDITO_UVA)} UVAs = $${creditoActual.toLocaleString()}` : '⚠ Sin UVA'}</span></span>
           <span>${creditoInfo}</span>
         </div>
 

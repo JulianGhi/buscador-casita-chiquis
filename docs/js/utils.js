@@ -100,9 +100,23 @@ function scoreVsRef(vsRef, peso) {
   return 0;
 }
 
+function getValorUVA() {
+  return CONFIG.UVA_MANUAL || state.uvaData?.valor || CONFIG.UVA_BASE;
+}
+
+function getCreditoARS() {
+  return CONFIG.CREDITO_UVA * getValorUVA();
+}
+
+function getCuotaInfo(dolar = null) {
+  const tc = dolar || CONFIG.DOLAR_BASE;
+  const ars = CONFIG.CUOTA_UVA * getValorUVA();
+  return { uva: CONFIG.CUOTA_UVA, ars, usd: Math.round(ars / tc) };
+}
+
 function getCreditoUSD(dolar = null) {
   const tc = dolar || CONFIG.DOLAR_BASE;
-  return Math.round(CONFIG.CREDITO_ARS / tc);
+  return Math.round(getCreditoARS() / tc);
 }
 
 function getPrecioRange(dolar = null) {

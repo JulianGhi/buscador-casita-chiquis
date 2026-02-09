@@ -105,7 +105,10 @@ const STATUS_CONFIG = {
 };
 
 const DEFAULT_CONFIG = {
-  CREDITO_ARS: 126000000,
+  CREDITO_UVA: 75109.30,
+  CUOTA_UVA: 450.66,
+  UVA_BASE: 1764,       // Fallback hasta que cargue la API
+  UVA_MANUAL: null,      // Override manual (tiene prioridad sobre API)
   DOLAR_BASE: 1450,
   PRESUPUESTO: 35000,
   NEGOCIACION: 0,  // % de negociación base (0-15)
@@ -374,6 +377,10 @@ function loadConfig() {
   if (saved) {
     // Migración: valor viejo de auto-refresh
     if (saved.AUTO_REFRESH === 60) saved.AUTO_REFRESH = DEFAULT_CONFIG.AUTO_REFRESH;
+    // Migración: CREDITO_ARS viejo → usar defaults UVA nuevos
+    if (saved.CREDITO_ARS !== undefined) {
+      delete saved.CREDITO_ARS;
+    }
     return { ...DEFAULT_CONFIG, ...saved };
   }
   return { ...DEFAULT_CONFIG };
@@ -449,7 +456,9 @@ let state = {
   negotiationPct: 0,
   dolarEstimado: null,
   dolarBNA: null,
-  loadingDolar: false
+  loadingDolar: false,
+  uvaData: null,
+  loadingUVA: false
 };
 
 let autoRefreshInterval = null;
