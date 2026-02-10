@@ -18,8 +18,10 @@ function getSelectedProperty() {
   return allProperties.find(p => p.link === compraState.propertyLink) || null;
 }
 
-function selectProperty(link) {
-  compraState.propertyLink = link;
+function selectProperty(idx) {
+  const prop = allProperties.find(p => p._idx === parseInt(idx));
+  if (!prop) return;
+  compraState.propertyLink = prop.link;
   saveCompraState();
   renderCompraPage();
 }
@@ -115,7 +117,7 @@ function renderCompraPage() {
 function renderPropertySelector() {
   const activas = allProperties.filter(p => {
     const activo = (p.activo || '').toLowerCase();
-    return activo === 'si' && p._precio > 0;
+    return activo === 'si' && p._precio > 0 && p.link;
   });
 
   const options = activas
@@ -124,7 +126,7 @@ function renderPropertySelector() {
       const dir = p.direccion || 'Sin dirección';
       const barrio = p.barrio || '?';
       const precio = fmt(p._precio);
-      return `<option value="${escapeHtml(p.link)}">${barrio} · ${dir} · ${precio}</option>`;
+      return `<option value="${p._idx}">${barrio} · ${dir} · ${precio}</option>`;
     }).join('');
 
   return `
