@@ -178,7 +178,20 @@ function renderCompraDetail(property, data) {
       </div>
     </div>
 
-    <!-- Input seña + cálculos -->
+    <!-- Input seña (fuera de compra-calcs para no perder foco) -->
+    <div class="bg-white rounded-xl shadow-sm mb-4 p-4">
+      <div class="flex items-center justify-between">
+        <span class="text-sm font-medium text-slate-600">Seña pagada (USD)</span>
+        <div class="flex items-center gap-2">
+          <span class="text-xs text-slate-400">$</span>
+          <input type="number" id="sena-input" value="${data.sena || ''}" placeholder="0"
+                 oninput="updateSena(this.value)"
+                 class="w-28 px-3 py-1.5 text-right rounded-lg border border-slate-300 text-sm font-medium focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+        </div>
+      </div>
+    </div>
+
+    <!-- Cálculos (se actualizan sin destruir el input) -->
     <div id="compra-calcs">
       ${renderCompraCalcs(data, property)}
     </div>
@@ -197,19 +210,8 @@ function renderCompraCalcs(data, property) {
   const anticipoPct = data.precio > 0 ? ((data.anticipo / data.precio) * 100).toFixed(1) : 0;
 
   return `
-    <!-- Seña -->
+    <!-- Barra de progreso -->
     <div class="bg-white rounded-xl shadow-sm mb-4 p-4">
-      <div class="flex items-center justify-between mb-3">
-        <span class="text-sm font-medium text-slate-600">Seña pagada (USD)</span>
-        <div class="flex items-center gap-2">
-          <span class="text-xs text-slate-400">$</span>
-          <input type="number" value="${data.sena || ''}" placeholder="0"
-                 oninput="updateSena(this.value)"
-                 class="w-28 px-3 py-1.5 text-right rounded-lg border border-slate-300 text-sm font-medium focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
-        </div>
-      </div>
-
-      <!-- Barra de progreso -->
       <div class="w-full bg-slate-200 rounded-full h-3 overflow-hidden">
         <div class="bg-green-500 h-3 rounded-full transition-all" style="width: ${data.progreso.toFixed(1)}%"></div>
       </div>
