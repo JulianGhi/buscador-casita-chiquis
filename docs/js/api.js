@@ -239,6 +239,42 @@ async function cargarUVAHoy() {
   render();
 }
 
+// ============================================
+// COMPRA - CLOUD PERSISTENCE
+// ============================================
+
+async function fetchCompraData() {
+  try {
+    const url = `https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}/values/Compra!A:B?key=${API_KEY}`;
+    const data = await fetchJSON(url, { errorMessage: 'Compra tab' });
+    if (!data.values || data.values.length < 2) return null;
+    // Row 1 = headers, Row 2 = data
+    const row = data.values[1];
+    return {
+      propertyKey: row[0] || null,
+      senaUSD: parseInt(row[1]) || 0,
+    };
+  } catch (err) {
+    console.warn('fetchCompraData:', err.message);
+    return null;
+  }
+}
+
+async function saveCompraData(compra) {
+  if (!CONFIG.APPS_SCRIPT_URL) return;
+  try {
+    await fetch(CONFIG.APPS_SCRIPT_URL, {
+      method: 'POST',
+      body: JSON.stringify({
+        propertyKey: compra.propertyKey || '',
+        senaUSD: compra.senaUSD || 0,
+      }),
+    });
+  } catch (err) {
+    console.warn('saveCompraData:', err.message);
+  }
+}
+
 async function cargarDolarHoy() {
   state.loadingDolar = true;
   render();

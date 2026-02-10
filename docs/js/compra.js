@@ -21,6 +21,8 @@ function propertyKey(p) {
 
 function saveCompraState() {
   saveToStorage('casita_compra', compraState);
+  // Fire-and-forget: sync to cloud
+  saveCompraData(compraState);
 }
 
 function getSelectedProperty() {
@@ -329,7 +331,7 @@ async function initCompra() {
   state.loading = false;
   renderCompraPage();
 
-  // Cargar dólar y UVA
+  // Cargar dólar, UVA y datos de compra de la nube
   Promise.all([
     fetchDolarBNA().then(data => {
       if (data) {
@@ -339,6 +341,18 @@ async function initCompra() {
     }),
     fetchUVA().then(data => {
       if (data) state.uvaData = data;
+    }),
+    // Cloud sync: nube es source of truth
+    fetchCompraData().then(cloudData => {
+      if (cloudData && cloudData.propertyKey) {
+        // Nube tiene datos → usarlos
+        compraState.propertyKey = cloudData.propertyKey;
+        compraState.senaUSD = cloudData.senaUSD;
+        saveToStorage('casita_compra', compraState);
+      } else if (compraState.propertyKey && CONFIG.APPS_SCRIPT_URL) {
+        // Nube vacía, local tiene datos → subir a la nube
+        saveCompraData(compraState);
+      }
     })
   ]).then(() => renderCompraPage());
 

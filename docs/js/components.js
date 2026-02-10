@@ -670,6 +670,13 @@ function renderConfigTab_General() {
       ${configInput('Días "Nueva" (badge)', CONFIG.DIAS_NUEVA || 3, "updateConfig('DIAS_NUEVA', parseInt(this.value))")}
       ${configInput('Días "Vendida reciente"', CONFIG.DIAS_VENDIDA_RECIENTE || 3, "updateConfig('DIAS_VENDIDA_RECIENTE', parseInt(this.value))")}
     </div>
+    <div class="mt-4 border-t border-slate-200 pt-4">
+      <label class="block text-xs text-slate-500 mb-1">Apps Script URL (sync compra a la nube)</label>
+      <input type="text" value="${escapeHtml(CONFIG.APPS_SCRIPT_URL || '')}" placeholder="https://script.google.com/macros/s/..."
+        onchange="updateConfig('APPS_SCRIPT_URL', this.value.trim())"
+        class="w-full px-3 py-2 border rounded-lg text-sm font-mono text-slate-600" />
+      <p class="text-[10px] text-slate-400 mt-1">${CONFIG.APPS_SCRIPT_URL ? '☁️ Sync habilitado' : 'Sin configurar: datos solo en localStorage'}</p>
+    </div>
   `;
 }
 

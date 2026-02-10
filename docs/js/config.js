@@ -123,6 +123,7 @@ const DEFAULT_CONFIG = {
   AUTO_REFRESH: 10,
   DIAS_NUEVA: 3,           // Días para considerar propiedad como "Nueva"
   DIAS_VENDIDA_RECIENTE: 3, // Días para mostrar badge "Vendida recientemente"
+  APPS_SCRIPT_URL: 'https://script.google.com/macros/s/AKfycbyuZYsiMAY9ZMt0a1dLJMzbvayPU63903hWfYIlW-6HEIaO-YD7mk0kHOrXmxBZ-No5ZQ/exec',
 };
 
 const DEFAULT_REF_M2 = {
