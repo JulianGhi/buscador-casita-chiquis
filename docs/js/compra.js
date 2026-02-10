@@ -3,31 +3,41 @@
 // ============================================
 
 let allProperties = [];
-let compraState = loadFromStorage('casita_compra') || { propertyLink: null, senaUSD: 0 };
+let compraState = loadFromStorage('casita_compra') || { propertyKey: null, senaUSD: 0 };
+// Migración: propertyLink viejo → propertyKey
+if (compraState.propertyLink && !compraState.propertyKey) {
+  compraState.propertyKey = compraState.propertyLink;
+  delete compraState.propertyLink;
+  saveToStorage('casita_compra', compraState);
+}
 
 // ============================================
 // ESTADO Y PERSISTENCIA
 // ============================================
+
+function propertyKey(p) {
+  return p.link || ((p.direccion || '') + '|' + (p.barrio || ''));
+}
 
 function saveCompraState() {
   saveToStorage('casita_compra', compraState);
 }
 
 function getSelectedProperty() {
-  if (!compraState.propertyLink) return null;
-  return allProperties.find(p => p.link === compraState.propertyLink) || null;
+  if (!compraState.propertyKey) return null;
+  return allProperties.find(p => propertyKey(p) === compraState.propertyKey) || null;
 }
 
 function selectProperty(idx) {
   const prop = allProperties.find(p => p._idx === parseInt(idx));
   if (!prop) return;
-  compraState.propertyLink = prop.link;
+  compraState.propertyKey = propertyKey(prop);
   saveCompraState();
   renderCompraPage();
 }
 
 function clearSelection() {
-  compraState.propertyLink = null;
+  compraState.propertyKey = null;
   compraState.senaUSD = 0;
   saveCompraState();
   renderCompraPage();
@@ -117,7 +127,7 @@ function renderCompraPage() {
 function renderPropertySelector() {
   const activas = allProperties.filter(p => {
     const activo = (p.activo || '').toLowerCase();
-    return activo === 'si' && p._precio > 0 && p.link;
+    return activo === 'si' && p._precio > 0;
   });
 
   const options = activas
