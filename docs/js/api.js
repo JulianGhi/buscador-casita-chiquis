@@ -265,6 +265,7 @@ async function saveCompraData(compra) {
   try {
     await fetch(CONFIG.APPS_SCRIPT_URL, {
       method: 'POST',
+      mode: 'no-cors',
       body: JSON.stringify({
         propertyKey: compra.propertyKey || '',
         senaUSD: compra.senaUSD || 0,
